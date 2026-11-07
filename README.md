@@ -167,6 +167,53 @@ In `docker-compose.yml` set
 docker compose pull && docker compose up -d
 ```
 
+## Comparing proxy data with the cloud
+
+To find out which register is which, record what the cloud web API shows
+(via the [EstymaApi](https://github.com/Tabisch/EstymaApi) wrapper) while the
+proxy is logging, then let a script line the two up.
+
+```sh
+python3 -m venv .venv && . .venv/bin/activate     # Python 3.11+
+pip install -r compare/requirements.txt
+
+# 1. record the cloud values next to the proxy logs (Ctrl+C to stop)
+ESTYMA_EMAIL=you@example.com ESTYMA_PASSWORD=... \
+  python3 compare/cloud_recorder.py --out-dir logs --interval 30
+#   or: --credentials ~/estyma-credentials.json  ({"email": ..., "password": ...})
+
+# 2. propose register <-> field mappings
+python3 compare/compare_cloud_proxy.py logs
+python3 compare/compare_cloud_proxy.py logs --csv aligned.csv --json mapping.json
+```
+
+With Docker, the recorder is in the same image as the proxy and has its own
+opt-in compose service. Put the credentials in `.env` (see `.env.example`;
+`.env` is git-ignored), then:
+
+```sh
+docker compose --profile cloud up -d      # proxy + cloud recorder
+docker compose logs -f cloud-recorder
+```
+
+Both write into `./logs`, so the comparison can run straight on that folder.
+
+The recorder writes `logs/cloud-YYYY-MM-DD.jsonl`: one line per poll with the
+raw `info_panel_update` response (Polish names, e.g. `raw:kociol_temp_sub1`),
+the wrapper's `getDeviceData(textToValues=True)` output (English names) and
+`data_age_s`, the cloud's own idea of how old its data is.
+
+The comparison uses `time - data_age_s` to find the controller reports that
+the cloud was showing, then tries each register with a few transforms (`x1`,
+`/10`, `/10` rounded, `/100`, `x10`, low byte, bit 0) and prints, per cloud
+field, the registers that match most often. A field whose value never changed
+during the recording matches every register with the same constant, so it is
+marked ambiguous: change that setting in the web UI while both are recording
+and run the comparison again. `--csv` writes the aligned table for a look in
+a spreadsheet.
+
+Both log types contain device data; keep them private like the proxy logs.
+
 ## Log format
 
 One JSON object per line in `logs/exchanges-YYYY-MM-DD.jsonl` (UTC dates):
