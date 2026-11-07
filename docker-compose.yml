@@ -13,3 +13,23 @@ services:
       UPSTREAM_TIMEOUT: "30"
     volumes:
       - ./logs:/logs
+
+  # Polls the Estyma cloud through the EstymaApi wrapper and writes
+  # logs/cloud-YYYY-MM-DD.jsonl next to the proxy logs, for
+  # compare/compare_cloud_proxy.py. Remove this service if you don't need it.
+  # Opt-in: docker compose --profile cloud up -d
+  cloud-recorder:
+    profiles: ["cloud"]
+    image: ghcr.io/tabisch/estyma-local:latest
+    # build: .
+    restart: unless-stopped
+    command: ["python3", "/app/compare/cloud_recorder.py"]
+    # ESTYMA_EMAIL and ESTYMA_PASSWORD go in .env next to this file
+    # (not committed), see .env.example.
+    environment:
+      ESTYMA_EMAIL: "${ESTYMA_EMAIL:-}"
+      ESTYMA_PASSWORD: "${ESTYMA_PASSWORD:-}"
+      ESTYMA_DOMAIN: "igneo.pl"
+      INTERVAL: "30"
+    volumes:
+      - ./logs:/logs

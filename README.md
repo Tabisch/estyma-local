@@ -168,6 +168,17 @@ python3 compare/compare_cloud_proxy.py logs
 python3 compare/compare_cloud_proxy.py logs --csv aligned.csv --json mapping.json
 ```
 
+With Docker, the recorder is in the same image as the proxy and has its own
+opt-in compose service. Put the credentials in `.env` (see `.env.example`;
+`.env` is git-ignored), then:
+
+```sh
+docker compose --profile cloud up -d      # proxy + cloud recorder
+docker compose logs -f cloud-recorder
+```
+
+Both write into `./logs`, so the comparison can run straight on that folder.
+
 The recorder writes `logs/cloud-YYYY-MM-DD.jsonl`: one line per poll with the
 raw `info_panel_update` response (Polish names, e.g. `raw:kociol_temp_sub1`),
 the wrapper's `getDeviceData(textToValues=True)` output (English names) and
