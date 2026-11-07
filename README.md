@@ -77,6 +77,25 @@ UPSTREAM=http://203.0.113.10:80 LISTEN_PORT=80 python3 proxy/estyma_proxy.py
 | `LOG_DIR`          | `logs`     | Where the JSONL files go                        |
 | `MAX_BODY_LOG`     | `0`        | Max bytes per logged body, `0` = unlimited      |
 
+## Building the image on your own GitHub Actions runner
+
+`.github/workflows/docker.yml` builds the image and pushes it to
+`ghcr.io/tabisch/estyma-local` on every push to `main`. By default it runs on
+GitHub's hosted runners. To run it on your own machine instead:
+
+1. On GitHub: *Settings → Actions → Runners → New self-hosted runner*, pick
+   Linux and your CPU, and run the commands it shows on the machine (any
+   Linux box with Docker). Install it as a service so it survives reboots:
+   `sudo ./svc.sh install && sudo ./svc.sh start`.
+2. The runner's user must be able to use Docker: `sudo usermod -aG docker <runner-user>`,
+   then restart the service.
+3. *Settings → Secrets and variables → Actions → Variables*: add `RUNNER` with
+   the value `self-hosted`. Delete the variable to go back to GitHub's runners.
+4. Re-run the workflow (*Actions → Docker image → Run workflow*).
+
+The multi-arch build (amd64, arm64, armv7) uses QEMU, which the workflow sets
+up on the runner itself. On a Raspberry Pi this works but is slow.
+
 ## Local build pipeline (own registry, no GitHub Actions)
 
 Everything runs on your own machines: a private registry holds the image, and

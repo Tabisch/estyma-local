@@ -12,7 +12,9 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Repo variable RUNNER picks the runner: unset = GitHub-hosted,
+    # "self-hosted" = your own runner (see README).
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 
