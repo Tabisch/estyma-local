@@ -1,0 +1,13 @@
+# Minimal private Docker registry for the local build pipeline.
+# Start with: docker compose -f deploy/registry/docker-compose.yml up -d
+services:
+  registry:
+    image: registry:2
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      # Allow `docker image rm` + garbage collection to free space later.
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+    volumes:
+      - ./data:/var/lib/registry

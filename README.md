@@ -77,6 +77,77 @@ UPSTREAM=http://203.0.113.10:80 LISTEN_PORT=80 python3 proxy/estyma_proxy.py
 | `LOG_DIR`          | `logs`     | Where the JSONL files go                        |
 | `MAX_BODY_LOG`     | `0`        | Max bytes per logged body, `0` = unlimited      |
 
+## Local build pipeline (own registry, no GitHub Actions)
+
+Everything runs on your own machines: a private registry holds the image, and
+`scripts/build-and-push.sh` pulls the code from git, builds the image and pushes it.
+
+### 1. Run a registry (once)
+
+On the machine that should host it (NAS, server, Pi):
+
+```sh
+docker compose -f deploy/registry/docker-compose.yml up -d
+curl http://localhost:5000/v2/_catalog      # -> {"repositories":[]}
+```
+
+Images are stored in `deploy/registry/data/`. The registry speaks plain HTTP on
+port 5000 and has no login, so keep it on your LAN only.
+
+### 2. Allow plain HTTP on every Docker host that pushes or pulls
+
+Docker refuses HTTP registries except `localhost`. On every other machine
+(build machine, the box that runs the proxy), add the registry to
+`/etc/docker/daemon.json` and restart Docker:
+
+```json
+{ "insecure-registries": ["registry-host.lan:5000"] }
+```
+
+```sh
+sudo systemctl restart docker
+```
+
+If you would rather use HTTPS: put the registry behind a reverse proxy with a
+certificate (e.g. Caddy or Traefik with your own domain), then skip this step
+and run the script with `INSECURE=0`.
+
+### 3. Build and push
+
+```sh
+# on the build machine; only needs git and docker
+REGISTRY=registry-host.lan:5000 ./scripts/build-and-push.sh
+```
+
+This keeps a checkout in `~/.cache/estyma-local-src`, updates it to the latest
+`main`, builds, and pushes `registry-host.lan:5000/estyma-local:latest` plus a
+tag with the commit hash. You can also copy just the script to the build
+machine; it clones the repo itself.
+
+The default build is for the build machine's own CPU. If the proxy runs on a
+different one (e.g. building on x86 for a Raspberry Pi), build multi-arch:
+
+```sh
+# once per build machine: register QEMU emulators
+docker run --privileged --rm tonistiigi/binfmt --install all
+
+REGISTRY=registry-host.lan:5000 PLATFORMS=linux/amd64,linux/arm64,linux/arm/v7 \
+  ./scripts/build-and-push.sh
+```
+
+The script creates a buildx builder called `estyma-builder` configured for
+the HTTP registry. If you change `REGISTRY` later, remove it first with
+`docker buildx rm estyma-builder`.
+
+### 4. Run the proxy from your registry
+
+In `docker-compose.yml` set
+`image: registry-host.lan:5000/estyma-local:latest`, then on updates:
+
+```sh
+docker compose pull && docker compose up -d
+```
+
 ## Log format
 
 One JSON object per line in `logs/exchanges-YYYY-MM-DD.jsonl` (UTC dates):

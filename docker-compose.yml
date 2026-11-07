@@ -1,5 +1,6 @@
 services:
   estyma-proxy:
+    # GitHub image, or your own registry, e.g. registry-host.lan:5000/estyma-local:latest
     image: ghcr.io/tabisch/estyma-local:latest
     # build: .   # uncomment to build locally instead
     restart: unless-stopped
