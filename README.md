@@ -43,11 +43,21 @@ controller's settings or your router's DNS log, then `nslookup <hostname>`.
 
 ## Running
 
-With Docker:
+With Docker, using the prebuilt image (amd64, arm64, armv7), which GitHub
+Actions publishes to `ghcr.io/tabisch/estyma-local:latest` on every push to
+`main`:
+
+```sh
+docker run -d --name estyma-proxy -p 80:80 \
+  -e UPSTREAM=http://203.0.113.10:80 -v "$PWD/logs:/logs" \
+  ghcr.io/tabisch/estyma-local:latest
+```
+
+Or with compose:
 
 ```sh
 # edit UPSTREAM in docker-compose.yml first
-docker compose up -d --build
+docker compose up -d
 docker compose logs -f        # one line per exchange
 ```
 

@@ -1,6 +1,7 @@
 services:
   estyma-proxy:
-    build: .
+    image: ghcr.io/tabisch/estyma-local:latest
+    # build: .   # uncomment to build locally instead
     restart: unless-stopped
     ports:
       - "80:80"
