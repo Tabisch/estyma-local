@@ -1,0 +1,13 @@
+services:
+  estyma-proxy:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      # Real address of the provider's server. Use the IP if your DNS
+      # override points the provider's hostname at this machine.
+      UPSTREAM: "http://CHANGE-ME:80"
+      UPSTREAM_TIMEOUT: "30"
+    volumes:
+      - ./logs:/logs
