@@ -1,5 +1,4 @@
 logs/
 __pycache__/
 *.pyc
-deploy/registry/data/
 .env
