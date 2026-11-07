@@ -8,16 +8,22 @@ services:
       # Host port (port 80 is often taken). The router redirects the
       # controller's traffic for provider_ip:80 to this port.
       - "${PROXY_PORT:-8088}:80"
+      # Web UI to browse and download the logs: http://<host>:8089/
+      # Logs contain device data, keep this port on your LAN.
+      - "${UI_PORT:-8089}:8089"
     environment:
       # Real address of the provider's server. Use the IP if your DNS
       # override points the provider's hostname at this machine.
       UPSTREAM: "http://CHANGE-ME:80"
       UPSTREAM_TIMEOUT: "30"
+      # Optional basic auth for the log UI (set both in .env)
+      UI_USER: "${UI_USER:-}"
+      UI_PASSWORD: "${UI_PASSWORD:-}"
     volumes:
-      - ./logs:/logs
+      - estyma-logs:/logs
 
   # Polls the Estyma cloud through the EstymaApi wrapper and writes
-  # logs/cloud-YYYY-MM-DD.jsonl next to the proxy logs, for
+  # cloud-YYYY-MM-DD.jsonl into the same logs volume as the proxy, for
   # compare/compare_cloud_proxy.py. Remove this service if you don't need it.
   # Opt-in: docker compose --profile cloud up -d
   cloud-recorder:
@@ -34,4 +40,9 @@ services:
       ESTYMA_DOMAIN: "igneo.pl"
       INTERVAL: "30"
     volumes:
-      - ./logs:/logs
+      - estyma-logs:/logs
+
+volumes:
+  # Named volume shared by both services. Download the files via the log UI,
+  # or: docker run --rm -v estyma-local_estyma-logs:/logs alpine ls /logs
+  estyma-logs:

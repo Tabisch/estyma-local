@@ -20,6 +20,8 @@ Configuration (environment variables or CLI flags, flags win):
   LOG_DIR          directory for the logs        (default ./logs)
   MAX_BODY_LOG     max bytes of each body kept in the log, 0 = unlimited
                    (default 0)
+  UI_PORT          port of the log download web UI, 0 = off (default 8089)
+  UI_USER / UI_PASSWORD  enable HTTP basic auth on the log UI
 """
 
 from __future__ import annotations
@@ -282,6 +284,10 @@ def main(argv=None) -> int:
     p.add_argument("--upstream-timeout", type=float, default=float(env("UPSTREAM_TIMEOUT", "30")))
     p.add_argument("--log-dir", default=env("LOG_DIR", "logs"))
     p.add_argument("--max-body-log", type=int, default=int(env("MAX_BODY_LOG", "0")))
+    p.add_argument("--ui-port", type=int, default=int(env("UI_PORT", "8089")),
+                   help="port of the log download web UI, 0 = disabled")
+    p.add_argument("--ui-user", default=env("UI_USER"))
+    p.add_argument("--ui-password", default=env("UI_PASSWORD"))
     args = p.parse_args(argv)
 
     if not args.upstream:
@@ -293,6 +299,12 @@ def main(argv=None) -> int:
     print(f"estyma-proxy listening on {args.listen_host}:{args.listen_port}, "
           f"forwarding to {args.upstream}, logging to {os.path.abspath(args.log_dir)}",
           flush=True)
+    if args.ui_port:
+        from log_ui import start_log_ui
+        start_log_ui(args.listen_host, args.ui_port, args.log_dir,
+                     args.ui_user, args.ui_password)
+        auth = "basic auth on" if args.ui_user and args.ui_password else "no auth"
+        print(f"log UI on http://{args.listen_host}:{args.ui_port}/ ({auth})", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -63,8 +63,9 @@ Actions publishes to `ghcr.io/tabisch/estyma-local:latest` on every push to
 `main`:
 
 ```sh
-docker run -d --name estyma-proxy -p 8088:80 \
-  -e UPSTREAM=http://203.0.113.10:80 -v "$PWD/logs:/logs" \
+docker volume create estyma-logs
+docker run -d --name estyma-proxy -p 8088:80 -p 8089:8089 \
+  -e UPSTREAM=http://203.0.113.10:80 -v estyma-logs:/logs \
   ghcr.io/tabisch/estyma-local:latest
 ```
 
@@ -75,6 +76,18 @@ Or with compose:
 docker compose up -d
 docker compose logs -f        # one line per exchange
 ```
+
+Logs live in the named Docker volume `estyma-logs` (shared with the
+optional cloud recorder), not in a folder next to the compose file.
+
+### Downloading the logs
+
+The proxy also serves a small web UI on port **8089** (`UI_PORT`):
+`http://<proxy-host>:8089/` lists every log file with size and date, with a
+download link per file and a "Download all (zip)" button. It is read-only.
+The logs contain whatever the controller sends (device IDs, PINs, ...), so
+keep the port on your LAN, and set `UI_USER` / `UI_PASSWORD` (in `.env`) to
+turn on basic auth. `UI_PORT=0` disables it.
 
 Without Docker:
 
@@ -91,6 +104,8 @@ UPSTREAM=http://203.0.113.10:80 LISTEN_PORT=8088 python3 proxy/estyma_proxy.py
 | `UPSTREAM_TIMEOUT` | `30`       | Seconds to wait for the provider                |
 | `LOG_DIR`          | `logs`     | Where the JSONL files go                        |
 | `MAX_BODY_LOG`     | `0`        | Max bytes per logged body, `0` = unlimited      |
+| `UI_PORT`          | `8089`     | Log download web UI, `0` = off                  |
+| `UI_USER` / `UI_PASSWORD` | (unset) | Basic auth for the log UI when both are set |
 
 ## Building the image on your own GitHub Actions runner
 
