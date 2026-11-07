@@ -38,6 +38,9 @@ services:
       IDLE_IF_UNCONFIGURED: "1"
       ESTYMA_EMAIL: "${ESTYMA_EMAIL:-}"
       ESTYMA_PASSWORD: "${ESTYMA_PASSWORD:-}"
+      # Use instead of ESTYMA_PASSWORD if the password starts/ends with a
+      # space: base64 of the password, e.g. printf ' secret' | base64
+      ESTYMA_PASSWORD_B64: "${ESTYMA_PASSWORD_B64:-}"
       ESTYMA_DOMAIN: "igneo.pl"
       INTERVAL: "30"
     volumes:
