@@ -118,7 +118,11 @@ next to `docker-compose.yml` (it is git-ignored, start from `.env.example`).
 | `UI_USER`          | (unset)          | Basic auth user for the log UI |
 | `UI_PASSWORD`      | (unset)          | Basic auth password; auth is on only when user and password are both set |
 
-### Cloud recorder (`cloud-recorder` service, opt-in with `--profile cloud`)
+### Cloud recorder (`cloud-recorder` service)
+
+The service is always created. If `ESTYMA_EMAIL` / `ESTYMA_PASSWORD` are
+missing it logs `cloud recorder disabled` and idles; set both and redeploy to
+start recording.
 
 | Variable          | Default in image | Meaning |
 |-------------------|------------------|---------|
@@ -128,10 +132,12 @@ next to `docker-compose.yml` (it is git-ignored, start from `.env.example`).
 | `ESTYMA_LANGUAGE` | `english`        | Language for the wrapper's value names |
 | `INTERVAL`        | `30`             | Seconds between polls |
 | `LOG_DIR`         | `/logs`          | Where `cloud-YYYY-MM-DD.jsonl` is written (same volume as the proxy) |
+| `IDLE_IF_UNCONFIGURED` | (unset; `1` in compose) | Idle instead of exiting when credentials are missing |
 
 ### Compose / `.env` (host side)
 
-`docker-compose.yml` reads these from `.env` and passes them on:
+`docker-compose.yml` reads these from `.env` (CLI) or from the stack's
+*Environment variables* (Portainer) and passes them on:
 
 | Variable          | Default | Meaning |
 |-------------------|---------|---------|

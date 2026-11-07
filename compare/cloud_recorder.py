@@ -90,7 +90,16 @@ def load_credentials(args) -> tuple[str, str]:
             cred = json.load(fh)
         email, password = cred["email"], cred["password"]
     if not email or not password:
-        sys.exit("set ESTYMA_EMAIL and ESTYMA_PASSWORD, or pass --credentials FILE")
+        msg = "set ESTYMA_EMAIL and ESTYMA_PASSWORD, or pass --credentials FILE"
+        if os.environ.get("IDLE_IF_UNCONFIGURED"):
+            # In the compose stack the recorder always starts. Without
+            # credentials it waits instead of exiting, so restart policies
+            # don't turn it into a crash loop.
+            print(f"cloud recorder disabled: {msg}. Idling.", flush=True)
+            signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+            while True:
+                time.sleep(3600)
+        sys.exit(msg)
     return email, password
 
 
