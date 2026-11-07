@@ -1,15 +1,17 @@
+# Proxy stack. Works with `docker compose` and as a Portainer stack.
+# Set the variables in a .env file next to this file, or in Portainer's
+# "Environment variables" section of the stack.
 services:
   estyma-proxy:
-    # GitHub image, or your own registry, e.g. registry-host.lan:5000/estyma-local:latest
-    image: ghcr.io/tabisch/estyma-local:latest
-    # build: .   # uncomment to build locally instead
+    # Image built by scripts/build-and-push.sh and stored in your local registry.
+    image: ${REGISTRY:-localhost:5000}/estyma-local:${TAG:-latest}
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "${LISTEN_PORT:-80}:80"
     environment:
       # Real address of the provider's server. Use the IP if your DNS
       # override points the provider's hostname at this machine.
-      UPSTREAM: "http://CHANGE-ME:80"
-      UPSTREAM_TIMEOUT: "30"
+      UPSTREAM: ${UPSTREAM:?set UPSTREAM to the provider server, e.g. http://203.0.113.10:80}
+      UPSTREAM_TIMEOUT: ${UPSTREAM_TIMEOUT:-30}
     volumes:
-      - ./logs:/logs
+      - ${LOG_PATH:-./logs}:/logs
