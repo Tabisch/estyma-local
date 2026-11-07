@@ -174,8 +174,13 @@ directly in `docker-compose.yml`; edit them there.
 ## Image build
 
 `.github/workflows/docker.yml` builds the image for amd64, arm64 and armv7 and
-pushes it to `ghcr.io/tabisch/estyma-local` on every push to `main` (tags
-`latest` and the commit SHA) and on `v*` tags.
+pushes it to `ghcr.io/tabisch/estyma-local` (tags `latest` and the commit SHA,
+plus the tag name for `v*` tags). It builds when:
+
+- a push to `main` contains a commit whose message includes `[build]`, e.g.
+  `git commit -m "Add register decoding [build]"`; other pushes are skipped,
+- a `v*` tag is pushed,
+- it is started by hand: *Actions → Docker image → Run workflow*.
 
 | Repository variable | Default | Meaning |
 |---------------------|---------|---------|

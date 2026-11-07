@@ -12,6 +12,12 @@ permissions:
 
 jobs:
   build:
+    # Pushes to main only build when a pushed commit message contains "[build]".
+    # Tags (v*) and manual runs (Actions -> Docker image -> Run workflow) always build.
+    if: >-
+      github.event_name != 'push' ||
+      startsWith(github.ref, 'refs/tags/') ||
+      contains(join(github.event.commits.*.message, ' '), '[build]')
     # Repo variable RUNNER picks the runner: unset = GitHub-hosted,
     # "self-hosted" = your own runner (see README).
     runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
