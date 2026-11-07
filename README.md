@@ -96,16 +96,58 @@ UPSTREAM=http://203.0.113.10:80 LISTEN_PORT=8088 python3 proxy/estyma_proxy.py
 # or: python3 proxy/estyma_proxy.py --upstream http://203.0.113.10 --listen-port 8080
 ```
 
-| Variable           | Default    | Meaning                                         |
-|--------------------|------------|-------------------------------------------------|
-| `UPSTREAM`         | (required) | Provider server, e.g. `http://203.0.113.10:80`  |
-| `LISTEN_HOST`      | `0.0.0.0`  | Bind address                                    |
-| `LISTEN_PORT`      | `80`       | Bind port                                       |
-| `UPSTREAM_TIMEOUT` | `30`       | Seconds to wait for the provider                |
-| `LOG_DIR`          | `logs`     | Where the JSONL files go                        |
-| `MAX_BODY_LOG`     | `0`        | Max bytes per logged body, `0` = unlimited      |
-| `UI_PORT`          | `8089`     | Log download web UI, `0` = off                  |
-| `UI_USER` / `UI_PASSWORD` | (unset) | Basic auth for the log UI when both are set |
+The same environment variables apply (see below); every one also has a
+command-line flag (`--help`), and flags win over variables.
+
+## Environment variables
+
+All values below are examples or defaults; put your real ones in `.env`
+next to `docker-compose.yml` (it is git-ignored, start from `.env.example`).
+
+### Proxy (`estyma-proxy` service, default command of the image)
+
+| Variable           | Default in image | Meaning |
+|--------------------|------------------|---------|
+| `UPSTREAM`         | (required)       | Provider server the requests are forwarded to, e.g. `http://203.0.113.10:80` |
+| `UPSTREAM_TIMEOUT` | `30`             | Seconds to wait for the provider before answering `502` |
+| `LISTEN_HOST`      | `0.0.0.0`        | Bind address inside the container |
+| `LISTEN_PORT`      | `80`             | Proxy port inside the container (the host port is `PROXY_PORT`) |
+| `LOG_DIR`          | `/logs`          | Where the JSONL logs are written (the `estyma-logs` volume). `logs` when run without Docker |
+| `MAX_BODY_LOG`     | `0`              | Max bytes of each body kept in the log, `0` = unlimited |
+| `UI_PORT`          | `8089`           | Log web UI port inside the container, `0` = UI off |
+| `UI_USER`          | (unset)          | Basic auth user for the log UI |
+| `UI_PASSWORD`      | (unset)          | Basic auth password; auth is on only when user and password are both set |
+
+### Cloud recorder (`cloud-recorder` service, opt-in with `--profile cloud`)
+
+| Variable          | Default in image | Meaning |
+|-------------------|------------------|---------|
+| `ESTYMA_EMAIL`    | (required)       | Login e-mail of your Estyma cloud account |
+| `ESTYMA_PASSWORD` | (required)       | Password of that account |
+| `ESTYMA_DOMAIN`   | `igneo.pl`       | Which Estyma cloud to log in to |
+| `ESTYMA_LANGUAGE` | `english`        | Language for the wrapper's value names |
+| `INTERVAL`        | `30`             | Seconds between polls |
+| `LOG_DIR`         | `/logs`          | Where `cloud-YYYY-MM-DD.jsonl` is written (same volume as the proxy) |
+
+### Compose / `.env` (host side)
+
+`docker-compose.yml` reads these from `.env` and passes them on:
+
+| Variable          | Default | Meaning |
+|-------------------|---------|---------|
+| `PROXY_PORT`      | `8088`  | Host port of the proxy; the router's DNAT rule points here |
+| `UI_PORT`         | `8089`  | Host port of the log web UI (inside the container it stays 8089) |
+| `UI_USER` / `UI_PASSWORD` | (empty) | Passed to the proxy, see above |
+| `ESTYMA_EMAIL` / `ESTYMA_PASSWORD` | (empty) | Passed to the cloud recorder, see above |
+
+`UPSTREAM`, `UPSTREAM_TIMEOUT`, `ESTYMA_DOMAIN` and `INTERVAL` are set
+directly in `docker-compose.yml`; edit them there.
+
+### GitHub Actions
+
+| Repository variable | Default | Meaning |
+|---------------------|---------|---------|
+| `RUNNER`            | (unset) | Unset = build on GitHub's runners; `self-hosted` = build on your own runner (see next section) |
 
 ## Building the image on your own GitHub Actions runner
 
