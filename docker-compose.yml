@@ -14,7 +14,7 @@ services:
     environment:
       # Real address of the provider's server. Use the IP if your DNS
       # override points the provider's hostname at this machine.
-      UPSTREAM: "http://CHANGE-ME:80"
+      UPSTREAM: "http://igneo.pl:80"
       UPSTREAM_TIMEOUT: "30"
       # Optional basic auth for the log UI (set both in .env)
       UI_USER: "${UI_USER:-}"
