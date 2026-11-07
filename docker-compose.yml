@@ -12,8 +12,8 @@ services:
       # Logs contain device data, keep this port on your LAN.
       - "${UI_PORT:-8089}:8089"
     environment:
-      # Real address of the provider's server. Use the IP if your DNS
-      # override points the provider's hostname at this machine.
+      # Provider server to forward to. The firewall DNAT rule only matches the
+      # controller, so the provider's normal hostname works here.
       UPSTREAM: "http://igneo.pl:80"
       UPSTREAM_TIMEOUT: "30"
       # Optional basic auth for the log UI (set both in .env)
