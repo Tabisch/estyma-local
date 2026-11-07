@@ -5,7 +5,9 @@ services:
     # build: .   # uncomment to build locally instead
     restart: unless-stopped
     ports:
-      - "80:80"
+      # Host port (port 80 is often taken). The router redirects the
+      # controller's traffic for provider_ip:80 to this port.
+      - "${PROXY_PORT:-8088}:80"
     environment:
       # Real address of the provider's server. Use the IP if your DNS
       # override points the provider's hostname at this machine.

@@ -30,16 +30,31 @@ heating controller --HTTP--> estyma-proxy --HTTP--> provider server
 You need to know the provider's hostname and real IP first. Look at the
 controller's settings or your router's DNS log, then `nslookup <hostname>`.
 
-1. **DNS override (easiest).** In your router, Pi-hole, AdGuard Home, or
-   dnsmasq, point the provider's hostname at the machine running the proxy.
-   Set `UPSTREAM` to the provider's **IP address** (not the hostname, or the
-   proxy would loop back to itself). This only works if the controller uses
-   your DNS server and not a hard-coded one or a raw IP.
-2. **NAT / port-forward rule.** If the controller connects to an IP directly,
-   add a DNAT rule on the router (e.g. OpenWrt/iptables) that rewrites
-   `controller -> provider_ip:80` to `proxy_ip:80`. `UPSTREAM` is then the
-   provider IP as well; the rule must only match traffic from the controller,
-   not from the proxy.
+The proxy listens on host port **8088** by default (`PROXY_PORT` in
+`docker-compose.yml`), because port 80 is usually taken. The controller always
+connects to port 80, so the traffic has to be redirected *and* re-ported:
+
+1. **DNAT rule on the router (recommended).** Rewrite
+   `controller -> provider_ip:80` to `proxy_host:8088`. `UPSTREAM` is the
+   provider's IP. The rule must only match traffic coming from the controller,
+   not from the proxy, or the proxy's own upstream requests would loop.
+   Example for an iptables/OpenWrt router:
+
+   ```sh
+   iptables -t nat -A PREROUTING -s <controller_ip> -d <provider_ip> -p tcp --dport 80 \
+     -j DNAT --to-destination <proxy_host>:8088
+   # needed when controller and proxy are in the same subnet, so replies go back via the router
+   iptables -t nat -A POSTROUTING -s <controller_ip> -d <proxy_host> -p tcp --dport 8088 -j MASQUERADE
+   ```
+
+   On OpenWrt the same thing is a port forward / DNAT rule in
+   *Network → Firewall → Port Forwards* (source IP = controller, external IP =
+   provider IP, external port 80, internal IP = proxy host, internal port 8088).
+2. **DNS override.** Pointing the provider's hostname at the proxy host only
+   works if something on that host answers on port 80 and forwards to 8088
+   (e.g. an existing reverse proxy with a rule for that hostname), since the
+   controller cannot be told to use another port. It also requires the
+   controller to use your DNS server instead of a hard-coded IP.
 
 ## Running
 
@@ -48,7 +63,7 @@ Actions publishes to `ghcr.io/tabisch/estyma-local:latest` on every push to
 `main`:
 
 ```sh
-docker run -d --name estyma-proxy -p 80:80 \
+docker run -d --name estyma-proxy -p 8088:80 \
   -e UPSTREAM=http://203.0.113.10:80 -v "$PWD/logs:/logs" \
   ghcr.io/tabisch/estyma-local:latest
 ```
@@ -56,7 +71,7 @@ docker run -d --name estyma-proxy -p 80:80 \
 Or with compose:
 
 ```sh
-# edit UPSTREAM in docker-compose.yml first
+# edit UPSTREAM in docker-compose.yml first (host port: PROXY_PORT, default 8088)
 docker compose up -d
 docker compose logs -f        # one line per exchange
 ```
@@ -64,7 +79,7 @@ docker compose logs -f        # one line per exchange
 Without Docker:
 
 ```sh
-UPSTREAM=http://203.0.113.10:80 LISTEN_PORT=80 python3 proxy/estyma_proxy.py
+UPSTREAM=http://203.0.113.10:80 LISTEN_PORT=8088 python3 proxy/estyma_proxy.py
 # or: python3 proxy/estyma_proxy.py --upstream http://203.0.113.10 --listen-port 8080
 ```
 
