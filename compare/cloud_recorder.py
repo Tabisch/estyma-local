@@ -25,7 +25,10 @@ Credentials come from the environment or a JSON file, never from the repo:
     python3 compare/cloud_recorder.py --credentials ~/estyma-credentials.json
 
 The credentials file looks like ``{"email": "...", "password": "..."}`` (the
-same format the wrapper's own tests use). ``ESTYMA_DOMAIN`` / ``--domain``
+same format the wrapper's own tests use). If the password starts or ends with
+a space and your tooling trims env values, use ``ESTYMA_PASSWORD_B64``
+(base64 of the password) or ``ESTYMA_PASSWORD_FILE`` (path to a file holding
+it, e.g. a Docker secret) instead. ``ESTYMA_DOMAIN`` / ``--domain``
 selects the cloud (default ``igneo.pl``).
 """
 
@@ -85,6 +88,14 @@ def flatten(obj, prefix: str = "") -> dict:
 def load_credentials(args) -> tuple[str, str]:
     email = os.environ.get("ESTYMA_EMAIL")
     password = os.environ.get("ESTYMA_PASSWORD")
+    # Alternatives that survive tools which trim spaces from env values
+    # (compose .env files, some UIs): base64, or a file (e.g. a Docker secret).
+    if os.environ.get("ESTYMA_PASSWORD_B64"):
+        import base64
+        password = base64.b64decode(os.environ["ESTYMA_PASSWORD_B64"].strip()).decode("utf-8")
+    if os.environ.get("ESTYMA_PASSWORD_FILE"):
+        with open(os.environ["ESTYMA_PASSWORD_FILE"], encoding="utf-8") as fh:
+            password = fh.read().rstrip("\r\n")
     if args.credentials:
         with open(os.path.expanduser(args.credentials), encoding="utf-8") as fh:
             cred = json.load(fh)
@@ -159,11 +170,115 @@ class Recorder:
                   f"data age {record.get('data_age_s')} s", flush=True)
 
 
+def describe_secret(name: str, value: str) -> str:
+    """Hints about a credential without revealing it."""
+    notes = [f"{len(value)} chars"]
+    if value[:1].isspace():
+        notes.append("starts with whitespace")
+    if value[-1:].isspace():
+        notes.append("ends with whitespace")
+    if value[:1] in "\"'" and value[-1:] == value[:1]:
+        notes.append("is wrapped in quotes, which are sent as part of the value")
+    if "$" in value:
+        notes.append("contains '$' (in a compose .env file write it as '$$')")
+    return f"{name}: " + ", ".join(notes)
+
+
+def error_chain(exc: BaseException) -> str:
+    """The wrapper re-raises a bare Exception; show what was underneath."""
+    parts, seen = [], set()
+    while exc is not None and id(exc) not in seen:
+        seen.add(id(exc))
+        text = f"{type(exc).__name__}: {exc}".rstrip(": ")
+        if text != "Exception":
+            parts.append(text)
+        exc = exc.__cause__ or exc.__context__
+    return " <- ".join(parts) or "no detail from the wrapper"
+
+
+async def diagnose_login(domain: str, email: str, password: str) -> str:
+    """Repeat the wrapper's login request and explain the answer."""
+    import re
+    import urllib.parse
+
+    import aiohttp
+
+    url = EstymaApi.login_url.format(domain)
+    body = EstymaApi.loginDataBody.format(urllib.parse.quote(email), urllib.parse.quote(password))
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, data=body, headers=EstymaApi.headers,
+                                    allow_redirects=False, ssl=False,
+                                    timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                status = resp.status
+                location = resp.headers.get("Location", "")
+                text = await resp.text(errors="replace")
+    except Exception as exc:
+        return (f"could not reach {url} ({type(exc).__name__}: {exc}). Check DNS and "
+                f"outbound HTTPS from this container")
+
+    if status == 302:
+        return (f"the login itself works (302 -> {location or '?'}); a later setup "
+                f"step failed")
+    if 500 <= status < 600:
+        return f"the cloud answered {status}; it is probably down or overloaded, retrying"
+    if status == 200:
+        hint = ""
+        m = re.search(r'class="[^"]*(?:error|alert|warning)[^"]*"[^>]*>\s*([^<]{3,200})', text, re.I)
+        if m:
+            hint = f' The page says: "{m.group(1).strip()}".'
+        return (f"the cloud rejected the login (200 with the login page instead of a "
+                f"302 redirect). Most likely ESTYMA_EMAIL or ESTYMA_PASSWORD is wrong, or "
+                f"the account belongs to a different domain (ESTYMA_DOMAIN={domain}).{hint}")
+    return f"unexpected answer {status} from {url}" + (f" -> {location}" if location else "")
+
+
+async def close_api(api) -> None:
+    session = getattr(api, "_session", None)
+    if session is not None and not session.closed:
+        await session.close()
+
+
+async def login(args, email: str, password: str, stop: asyncio.Event):
+    """Log in, retrying with backoff instead of crash-looping the container."""
+    print(f"logging in to {args.domain} as {email[:2]}***. Check that these match what "
+          f"you expect: "
+          f"{describe_secret('email', email)}; {describe_secret('password', password)}",
+          flush=True)
+    delay = 30.0
+    while not stop.is_set():
+        api = EstymaApi(Email=email, Password=password, Domain=args.domain,
+                        scanInterval=0, language=args.language)
+        try:
+            await api.initialize()
+            return api
+        except Exception as exc:
+            await close_api(api)
+            reason = await diagnose_login(args.domain, email, password)
+            print(f"login failed: {reason}. Wrapper error: {error_chain(exc)}. "
+                  f"Retrying in {delay:.0f} s.", flush=True)
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=delay)
+        except asyncio.TimeoutError:
+            pass
+        delay = min(delay * 2, 900.0)
+    return None
+
+
 async def run(args) -> int:
     email, password = load_credentials(args)
-    api = EstymaApi(Email=email, Password=password, Domain=args.domain,
-                    scanInterval=0, language=args.language)
-    await api.initialize()
+
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, stop.set)
+        except NotImplementedError:  # Windows
+            pass
+
+    api = await login(args, email, password, stop)
+    if api is None:
+        return 0
     rec = Recorder(api, args.out_dir)
 
     devices = await api.getDevices()
@@ -176,14 +291,6 @@ async def run(args) -> int:
                    "devices": devices, "settings": await api.getAvailableSettings()})
     except Exception as exc:
         print(f"could not record settings: {exc}", flush=True)
-
-    stop = asyncio.Event()
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        try:
-            loop.add_signal_handler(sig, stop.set)
-        except NotImplementedError:  # Windows
-            pass
 
     count = 0
     try:
@@ -199,9 +306,10 @@ async def run(args) -> int:
             except asyncio.TimeoutError:
                 pass
     finally:
-        await api._logout()
-        if api._session and not api._session.closed:
-            await api._session.close()
+        try:
+            await api._logout()
+        finally:
+            await close_api(api)
     return 0
 
 

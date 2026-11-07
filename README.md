@@ -150,6 +150,8 @@ start recording.
 |-------------------|------------------|---------|
 | `ESTYMA_EMAIL`    | (required)       | Login e-mail of your Estyma cloud account |
 | `ESTYMA_PASSWORD` | (required)       | Password of that account |
+| `ESTYMA_PASSWORD_B64` | (empty)      | Base64 of the password, overrides `ESTYMA_PASSWORD`. Use it when the password starts or ends with a space, because `.env` files and some UIs trim those (`printf ' my password' \| base64`) |
+| `ESTYMA_PASSWORD_FILE` | (empty)     | Path to a file holding the password (e.g. a Docker secret); only a trailing newline is removed |
 | `ESTYMA_DOMAIN`   | `igneo.pl`       | Which Estyma cloud to log in to |
 | `ESTYMA_LANGUAGE` | `english`        | Language for the wrapper's value names |
 | `INTERVAL`        | `30`             | Seconds between polls |
