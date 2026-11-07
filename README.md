@@ -43,15 +43,44 @@ controller's settings or your router's DNS log, then `nslookup <hostname>`.
 
 ## Running
 
-Images are built on your own machines and kept in a private registry on your
-LAN, so nothing depends on GitHub Actions or a paid service. GitHub only hosts
-the code.
+With Docker, using the prebuilt image (amd64, arm64, armv7), which GitHub
+Actions publishes to `ghcr.io/tabisch/estyma-local:latest` on every push to
+`main`:
 
+```sh
+docker run -d --name estyma-proxy -p 80:80 \
+  -e UPSTREAM=http://203.0.113.10:80 -v "$PWD/logs:/logs" \
+  ghcr.io/tabisch/estyma-local:latest
 ```
-git (GitHub) --> build machine: scripts/build-and-push.sh --> local registry :5000
-                                                                   |
-                                         Docker / Portainer host <-+ pulls image
+
+Or with compose:
+
+```sh
+# edit UPSTREAM in docker-compose.yml first
+docker compose up -d
+docker compose logs -f        # one line per exchange
 ```
+
+Without Docker:
+
+```sh
+UPSTREAM=http://203.0.113.10:80 LISTEN_PORT=80 python3 proxy/estyma_proxy.py
+# or: python3 proxy/estyma_proxy.py --upstream http://203.0.113.10 --listen-port 8080
+```
+
+| Variable           | Default    | Meaning                                         |
+|--------------------|------------|-------------------------------------------------|
+| `UPSTREAM`         | (required) | Provider server, e.g. `http://203.0.113.10:80`  |
+| `LISTEN_HOST`      | `0.0.0.0`  | Bind address                                    |
+| `LISTEN_PORT`      | `80`       | Bind port                                       |
+| `UPSTREAM_TIMEOUT` | `30`       | Seconds to wait for the provider                |
+| `LOG_DIR`          | `logs`     | Where the JSONL files go                        |
+| `MAX_BODY_LOG`     | `0`        | Max bytes per logged body, `0` = unlimited      |
+
+## Local build pipeline (own registry, no GitHub Actions)
+
+Everything runs on your own machines: a private registry holds the image, and
+`scripts/build-and-push.sh` pulls the code from git, builds the image and pushes it.
 
 ### 1. Run a registry (once)
 
@@ -63,13 +92,12 @@ curl http://localhost:5000/v2/_catalog      # -> {"repositories":[]}
 ```
 
 Images are stored in `deploy/registry/data/`. The registry speaks plain HTTP on
-port 5000 and has no login, so keep it on your LAN only. In Portainer you can
-create it as a stack from the same file instead.
+port 5000 and has no login, so keep it on your LAN only.
 
 ### 2. Allow plain HTTP on every Docker host that pushes or pulls
 
 Docker refuses HTTP registries except `localhost`. On every other machine
-(build machine, the host that runs the proxy), add the registry to
+(build machine, the box that runs the proxy), add the registry to
 `/etc/docker/daemon.json` and restart Docker:
 
 ```json
@@ -79,8 +107,6 @@ Docker refuses HTTP registries except `localhost`. On every other machine
 ```sh
 sudo systemctl restart docker
 ```
-
-Portainer uses the host's Docker daemon, so this setting covers it too.
 
 If you would rather use HTTPS: put the registry behind a reverse proxy with a
 certificate (e.g. Caddy or Traefik with your own domain), then skip this step
@@ -96,7 +122,7 @@ REGISTRY=registry-host.lan:5000 ./scripts/build-and-push.sh
 This keeps a checkout in `~/.cache/estyma-local-src`, updates it to the latest
 `main`, builds, and pushes `registry-host.lan:5000/estyma-local:latest` plus a
 tag with the commit hash. You can also copy just the script to the build
-machine; it clones the repo itself. Run it again whenever `main` changes.
+machine; it clones the repo itself.
 
 The default build is for the build machine's own CPU. If the proxy runs on a
 different one (e.g. building on x86 for a Raspberry Pi), build multi-arch:
@@ -113,56 +139,14 @@ The script creates a buildx builder called `estyma-builder` configured for
 the HTTP registry. If you change `REGISTRY` later, remove it first with
 `docker buildx rm estyma-builder`.
 
-### 4. Run the proxy
+### 4. Run the proxy from your registry
 
-`docker-compose.yml` takes its settings from environment variables:
-
-| Variable           | Default          | Meaning                                         |
-|--------------------|------------------|-------------------------------------------------|
-| `UPSTREAM`         | (required)       | Provider server, e.g. `http://203.0.113.10:80`  |
-| `REGISTRY`         | `localhost:5000` | Registry the image is pulled from               |
-| `TAG`              | `latest`         | Image tag (or a commit hash to pin a build)     |
-| `LISTEN_PORT`      | `80`             | Port on the host                                |
-| `UPSTREAM_TIMEOUT` | `30`             | Seconds to wait for the provider                |
-| `LOG_PATH`         | `./logs`         | Host folder for the capture logs                |
-
-With the Docker CLI:
+In `docker-compose.yml` set
+`image: registry-host.lan:5000/estyma-local:latest`, then on updates:
 
 ```sh
-printf 'REGISTRY=registry-host.lan:5000\nUPSTREAM=http://203.0.113.10:80\n' > .env
 docker compose pull && docker compose up -d
-docker compose logs -f        # one line per exchange
 ```
-
-With Portainer:
-
-1. *Stacks → Add stack*, paste `docker-compose.yml` (or use *Repository* with
-   this repo's URL and `docker-compose.yml` as the compose path).
-2. Under *Environment variables* set `REGISTRY`, `UPSTREAM`, and `LOG_PATH` to
-   an absolute host path such as `/opt/estyma/logs` (relative paths are
-   resolved inside Portainer's own data folder).
-3. Deploy. After a new `build-and-push.sh` run, open the stack and click
-   *Update the stack* with *Re-pull image* enabled.
-
-Without a registry, you can also build straight on the Docker host with
-`docker build -t localhost:5000/estyma-local:latest .` and then
-`docker compose up -d`; compose uses the local image if it exists.
-
-### Without Docker
-
-```sh
-UPSTREAM=http://203.0.113.10:80 LISTEN_PORT=80 python3 proxy/estyma_proxy.py
-# or: python3 proxy/estyma_proxy.py --upstream http://203.0.113.10 --listen-port 8080
-```
-
-| Variable           | Default    | Meaning                                         |
-|--------------------|------------|-------------------------------------------------|
-| `UPSTREAM`         | (required) | Provider server, e.g. `http://203.0.113.10:80`  |
-| `LISTEN_HOST`      | `0.0.0.0`  | Bind address                                    |
-| `LISTEN_PORT`      | `80`       | Bind port                                       |
-| `UPSTREAM_TIMEOUT` | `30`       | Seconds to wait for the provider                |
-| `LOG_DIR`          | `logs`     | Where the JSONL files go                        |
-| `MAX_BODY_LOG`     | `0`        | Max bytes per logged body, `0` = unlimited      |
 
 ## Log format
 
