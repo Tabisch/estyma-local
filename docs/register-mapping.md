@@ -71,8 +71,8 @@ them.
 
 ## Settings (constant during recording, single fit or fixed by the sub->idx rule)
 
-Service-panel settings (burner, boiler, heating curves) are listed in
-[service-settings.md](service-settings.md).
+All registers with function and value range, including the service settings,
+are listed in [registers.md](registers.md).
 
 | Register | Transform | Cloud field | Value |
 |---|---|---|---|
