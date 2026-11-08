@@ -146,7 +146,7 @@ function render() {
     ["circuit1", 1], ["outside", 1], ["flue", 0], ["o2", 2], ["power", 0],
     ["burner_state", 0, null, (v) => BURNER_STATES[v] || "state " + v],
     ["boiler_pump", 0, null, (v) => v ? "On" : "Off"],
-    ["boiler_calc", 0], ["lambda_pwm", 0], ["fuel_counter", 0],
+    ["boiler_calc", 0], ["lambda_pwm", 0], ["fuel_counter", 1],
   ];
   $("tiles").innerHTML = T.map(([k, dec, sub, txt]) => {
     const c = cur[k], f = F[k];
