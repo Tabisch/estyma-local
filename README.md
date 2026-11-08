@@ -122,6 +122,9 @@ docker exec <proxy-container> python3 /app/summarize_logs.py /logs          # en
 docker exec <proxy-container> python3 /app/compare/compare_cloud_proxy.py /logs  # match cloud values to registers
 ```
 
+Register meanings found so far with this comparison are in
+[docs/register-mapping.md](docs/register-mapping.md).
+
 ## Environment variables
 
 Values below are defaults or placeholders.
