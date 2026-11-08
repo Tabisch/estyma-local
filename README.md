@@ -409,7 +409,7 @@ variables, plus `INTERVAL` (seconds between polls, default 30) and
 | `MQTT_PREFIX`     | `estyma` | First part of the topics |
 | `MQTT_DEVICE_ID`  | `boiler` | Second part of the topics and of the unique IDs; change only for a second boiler |
 | `HA_DISCOVERY_PREFIX` | `homeassistant` | Home Assistant's discovery prefix |
-| `MQTT_STALE_SECONDS` | `90` | Seconds without a controller report until the device is unavailable |
+| `MQTT_STALE_SECONDS` | `300` | Seconds without a controller report until the device is unavailable. Keep it well above 100 s: after a slow or failed cloud reply the controller waits about 100 s before its next report |
 | `FUEL_KWH_PER_KG` | (empty) | Calorific value for the energy sensor; empty = controller setting, else 4.8 |
 
 ### Compose / `.env` (host side)

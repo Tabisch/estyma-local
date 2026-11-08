@@ -27,7 +27,8 @@ Configuration (environment variables):
   MQTT_PREFIX          topic prefix (default estyma)
   MQTT_DEVICE_ID       device part of topics and unique IDs (default boiler)
   HA_DISCOVERY_PREFIX  Home Assistant discovery prefix (default homeassistant)
-  MQTT_STALE_SECONDS   seconds without a report until offline (default 90)
+  MQTT_STALE_SECONDS   seconds without a report until offline (default 300; the controller
+                       waits ~100 s after a slow or failed cloud reply)
   FUEL_KWH_PER_KG      calorific value for the energy sensor; default: the
                        controller's own setting (8850) if read, else 4.8
 """
@@ -221,7 +222,7 @@ class MqttPublisher:
     def __init__(self, ctl, host: str, port: int = 1883, *, user: str | None = None,
                  password: str | None = None, tls: bool = False, prefix: str = "estyma",
                  device_id: str = "boiler", disc_prefix: str = "homeassistant",
-                 stale: float = 90, kwh_per_kg: float | None = None, interval: float = 2,
+                 stale: float = 300, kwh_per_kg: float | None = None, interval: float = 2,
                  client_id: str | None = None) -> None:
         import paho.mqtt.client as mqtt   # optional dependency, only when configured
 
@@ -235,6 +236,7 @@ class MqttPublisher:
         self.builder = StateBuilder(kwh_per_kg)
         self.connected = False
         self._online: bool | None = None
+        self._seen_live = False          # a fresh report was seen since start
         self._published_report: float | None = None
         self._stop = threading.Event()
         self._lock = threading.Lock()
@@ -302,8 +304,15 @@ class MqttPublisher:
             if online != self._online:
                 self._online = online
                 self._pub(f"{self.base}/availability", "online" if online else "offline")
-                if not online and last is not None:
+                if online:
+                    print("mqtt: controller reporting, online", flush=True)
+                elif last is None or not self._seen_live:
+                    # Right after a start the saved last report is from before
+                    # the restart; the first new one switches to online.
+                    print("mqtt: offline until the controller's next report", flush=True)
+                else:
                     print(f"mqtt: no report for {now - last:.0f} s, offline", flush=True)
+                self._seen_live = self._seen_live or online
             if last is None or last == self._published_report:
                 return
             self._published_report = last
@@ -331,6 +340,7 @@ class MqttPublisher:
                 info.wait_for_publish(2)
             except Exception:
                 pass
+        self.connected = False
         self.client.disconnect()
         self.client.loop_stop()
 
@@ -347,7 +357,7 @@ def from_env(ctl, env=os.environ) -> MqttPublisher | None:
         user=env.get("MQTT_USER") or None, password=env.get("MQTT_PASSWORD") or None, tls=tls,
         prefix=env.get("MQTT_PREFIX") or "estyma", device_id=env.get("MQTT_DEVICE_ID") or "boiler",
         disc_prefix=env.get("HA_DISCOVERY_PREFIX") or "homeassistant",
-        stale=float(env.get("MQTT_STALE_SECONDS") or 90),
+        stale=float(env.get("MQTT_STALE_SECONDS") or 300),
         kwh_per_kg=float(kwh) if kwh else None)
     pub.start()
     return pub
