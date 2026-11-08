@@ -116,12 +116,21 @@ Open `http://<proxy_host>:8089/`.
   state, boiler pump, lambda PWM, fuel counter, the reported setpoints with
   their limits, and the connection state (last exchange, cloud status, last
   value the cloud wrote to the controller). Charts cover the last 1 to 48
-  hours. Values outside a plausible range (corrupted CAN reads) are dropped.
+  hours; click a name in the temperature chart's legend to hide or show its
+  line. Values outside a plausible range (corrupted CAN reads) are dropped.
+  An active alarm shows as a red banner at the top, and an *Alarms* table
+  lists the alarms seen in the reports (code, state, start and end time from
+  the controller's clock).
   The history is kept in memory and rebuilt from the logs in the volume when
   the container starts. The same data is available as JSON at
   `/api/monitor?hours=24`.
 - **Logs** (`/logs`): every log file in the volume with size and date, a
   download link per file and a "Download all (zip)" button. Read-only.
+
+The UI is available in English and German. It follows the browser language;
+the EN / DE switch at the top right overrides it and is remembered in the
+browser. To add a language, copy the `en` block of `I18N` in
+`proxy/monitor.html`, translate it and add a button to `#lang`.
 
 The logs contain whatever the controller sends (device IDs, PINs, ...). Keep
 port 8089 reachable from your LAN only and set `UI_USER` / `UI_PASSWORD`

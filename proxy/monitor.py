@@ -98,6 +98,41 @@ def parse_registers(value: str) -> dict:
     return regs
 
 
+# Alarm ring buffer (see docs/register-mapping.md): slot k has its code and
+# state in 16400+k (state in bits 16+, code in the low byte), start time in
+# 16420+k and end time in 16440+k (controller clock, 0 while active). The
+# counter 16460,1 (0x100 + n) points at slot (n - 1) % 20.
+ALARM_SLOTS = 20
+ALARM_CODE, ALARM_START, ALARM_END, ALARM_COUNTER = 16400, 16420, 16440, 16460
+ALARM_STATES = {0: "cleared", 3: "active", 7: "resetting"}
+MIN_TIME = 1_500_000_000  # anything older is a glitch
+
+
+def decode_alarms(regs: dict, now: float) -> tuple[dict, int | None]:
+    """Slot -> partial {code, state, start, end} from one report; plus the counter."""
+    slots: dict = {}
+    for (reg, idx), raw in regs.items():
+        if idx != 1 or not ALARM_CODE <= reg < ALARM_END + ALARM_SLOTS:
+            continue
+        k = (reg - ALARM_CODE) % ALARM_SLOTS
+        if reg < ALARM_START:
+            state = (raw >> 16) & 0xFFFF
+            if raw < 0 or state not in ALARM_STATES:
+                continue
+            slots.setdefault(k, {}).update(code=raw & 0xFF, state=ALARM_STATES[state])
+        else:
+            key = "start" if reg < ALARM_END else "end"
+            if raw == 0 and key == "end":
+                slots.setdefault(k, {})[key] = 0
+            elif MIN_TIME <= raw <= now + 2 * 86400:
+                slots.setdefault(k, {})[key] = raw
+    counter = None
+    raw = regs.get((ALARM_COUNTER, 1))
+    if raw is not None and raw >> 8 in (0, 1):
+        counter = raw & 0xFF
+    return slots, counter
+
+
 def parse_time(s: str) -> float:
     return datetime.fromisoformat(s).timestamp()
 
@@ -145,6 +180,8 @@ class Monitor:
         self.device: dict = {}
         self.last_exchange: dict | None = None
         self.last_write: dict | None = None     # last ZAPIS block from the server
+        self.alarms: dict = {}                  # slot -> {code, state, start, end, seen}
+        self.alarm_counter: tuple | None = None  # (ts, n)
         self.recent: deque = deque()            # (ts, ok) for error stats
         self.loading = False
 
@@ -197,6 +234,17 @@ class Monitor:
                 self.last_write = {"time": ts, "values": _between(resp_text, "ZAPIS&;", "&KONIEC"),
                                    "source": "local" if rec.get("local") or rec.get("injected")
                                    else "cloud"}
+            slots, counter = decode_alarms(regs, ts)
+            if counter is not None and (self.alarm_counter is None or ts >= self.alarm_counter[0]):
+                self.alarm_counter = (ts, counter)
+            for k, part in slots.items():
+                cur = self.alarms.setdefault(k, {"seen": ts})
+                if ts >= cur["seen"] or len(cur) == 1:
+                    # A new alarm in a reused slot: forget the old one's fields.
+                    if part.get("start") and cur.get("start") and part["start"] != cur["start"]:
+                        cur.clear()
+                    cur.update(part)
+                    cur["seen"] = ts
             for k, v in live.items():
                 if k not in self.current or ts >= self.current[k][0]:
                     self.current[k] = (ts, v)
@@ -250,6 +298,18 @@ class Monitor:
 
     # -- reading ------------------------------------------------------------
 
+    def _alarm_list(self) -> dict:
+        """Known alarm slots, newest first. Times are the controller clock
+        (local wall time encoded as Unix time). Call with the lock held."""
+        items = [dict(v, slot=k) for k, v in self.alarms.items() if "code" in v]
+        items.sort(key=lambda a: (a.get("start") or 0, a["seen"]), reverse=True)
+        active = any(a["state"] in ("active", "resetting") and not a.get("end") for a in items)
+        burner = self.current.get("burner_state")
+        if burner and burner[1] == 10 and time.time() - burner[0] < 300:
+            active = True
+        return {"active": active, "counter": self.alarm_counter[1] if self.alarm_counter else None,
+                "items": items}
+
     def snapshot(self, hours: float = 24, max_points: int = 1500) -> dict:
         now = time.time()
         with self._lock:
@@ -266,6 +326,7 @@ class Monitor:
                 "device": dict(self.device),
                 "last_exchange": self.last_exchange,
                 "last_write": self.last_write,
+                "alarms": self._alarm_list(),
             }
         # Downsample evenly so the page stays light over long ranges.
         if len(hist) > max_points:
