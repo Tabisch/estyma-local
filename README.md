@@ -124,11 +124,22 @@ Open `http://<proxy_host>:8089/`.
   The history is kept in memory and rebuilt from the logs in the volume when
   the container starts. The same data is available as JSON at
   `/api/monitor?hours=24`.
+- **Registers** (`/registers`): a raw table of every register the controller
+  reported or the server asked for: number (`reg,idx`), likely use (from
+  [docs/register-mapping.md](docs/register-mapping.md) and the burner
+  settings, with how sure the mapping is, or *unknown*), decoded value, raw
+  value and when it was last seen. A register that shows up for the first
+  time, for example one the cloud's service panel adds to the read list, gets
+  a new row on its own and is highlighted. A value only counts once two
+  reports in a row agree; a different raw value is flagged as a possible
+  glitch. The table is kept in `registers.json` in the log volume, so
+  registers read only once survive a restart. JSON at `/api/registers`.
 - **Logs** (`/logs`): every log file in the volume with size and date, a
   download link per file and a "Download all (zip)" button. Each `.jsonl`
   file has a *Delete* button, and *Delete all .jsonl* clears them all (both
   ask first). Deleting only works when `UI_USER` / `UI_PASSWORD` are set;
-  `state.json` (the server's register state) cannot be deleted from here.
+  `state.json` (the server's register state) and `registers.json` (the
+  register table) cannot be deleted from here.
   Charts already loaded in the monitor keep their data until the next restart.
 - **Cloud monitoring** (section on the monitor page): see below.
 
