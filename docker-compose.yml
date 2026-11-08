@@ -30,31 +30,7 @@ services:
     volumes:
       - estyma-logs:/logs
 
-  # Polls the Estyma cloud through the EstymaApi wrapper and writes
-  # cloud-YYYY-MM-DD.jsonl into the same logs volume as the proxy, for
-  # compare/compare_cloud_proxy.py. Without ESTYMA_EMAIL / ESTYMA_PASSWORD it
-  # starts but stays idle. Remove this service if you don't need it.
-  cloud-recorder:
-    image: ghcr.io/tabisch/estyma-local:latest
-    # build: .
-    restart: unless-stopped
-    command: ["python3", "/app/compare/cloud_recorder.py"]
-    # ESTYMA_EMAIL and ESTYMA_PASSWORD come from .env next to this file
-    # (not committed, see .env.example) or Portainer's stack environment
-    # variables.
-    environment:
-      IDLE_IF_UNCONFIGURED: "1"
-      ESTYMA_EMAIL: "${ESTYMA_EMAIL:-}"
-      ESTYMA_PASSWORD: "${ESTYMA_PASSWORD:-}"
-      # Use instead of ESTYMA_PASSWORD if the password starts/ends with a
-      # space: base64 of the password, e.g. printf ' secret' | base64
-      ESTYMA_PASSWORD_B64: "${ESTYMA_PASSWORD_B64:-}"
-      ESTYMA_DOMAIN: "igneo.pl"
-      INTERVAL: "30"
-    volumes:
-      - estyma-logs:/logs
-
 volumes:
-  # Named volume shared by both services. Download the files via the log UI,
+  # Named volume for the logs and state. Download the files via the log UI,
   # or: docker run --rm -v estyma-local_estyma-logs:/logs alpine ls /logs
   estyma-logs:
