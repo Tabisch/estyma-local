@@ -20,6 +20,9 @@ import time
 from collections import deque
 from datetime import datetime
 
+from protocol import parse_read_list
+from registers import RegisterTable
+
 # --------------------------------------------------------------------------
 # Register mapping
 # --------------------------------------------------------------------------
@@ -184,6 +187,7 @@ class Monitor:
         self.alarm_counter: tuple | None = None  # (ts, n)
         self.recent: deque = deque()            # (ts, ok) for error stats
         self.loading = False
+        self.registers = RegisterTable(log_dir)  # raw view of every register seen
 
     # -- feeding ------------------------------------------------------------
 
@@ -206,6 +210,7 @@ class Monitor:
 
         regs = parse_registers(form.get("ZAPISZ_ODCZYT", ""))
         live, settings = decode_registers(regs)
+        self.registers.observe(ts, regs, parse_read_list(resp_text) if resp_text else None)
 
         with self._lock:
             if live_rec:  # error stats count traffic since start only
@@ -292,6 +297,7 @@ class Monitor:
             pass
         finally:
             self.loading = False
+            self.registers.save(force=True)
 
     def start(self) -> None:
         threading.Thread(target=self.load_history, name="monitor-load", daemon=True).start()
