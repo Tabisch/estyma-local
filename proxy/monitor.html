@@ -124,7 +124,7 @@ const I18N = {
     "st.notraffic": "No traffic from the controller yet", "st.readinglogs": " (still reading logs)",
     "st.silent": "Controller silent", "st.online": "Online", "st.cloudanswered": "Online, cloud answered {s}", "st.error": "error",
     "st.lastreport": "last report {ago}", "st.lasthour": "Last hour: {ok}/{n} exchanges OK", "st.firmware": "Firmware {v}", "st.older": "Reading older logs…",
-    "tile.target": "target {v} °C", "tile.asof": "as of {ago}", "state": "state {v}", "on": "On", "off": "Off",
+    "bs.5": "Modulation", "tile.target": "target {v} °C", "tile.asof": "as of {ago}", "state": "state {v}", "on": "On", "off": "Off",
     "nothing": "Nothing reported yet.",
     "c.last": "Last exchange", "c.noresp": "no response", "c.regs": "Registers reported", "c.info": "Server info", "c.frame": "Frame number",
     "c.lastwrite": "Last write to the controller", "c.local": "local", "c.cloud": "cloud", "c.none": "none seen",
@@ -157,7 +157,7 @@ const I18N = {
     "st.notraffic": "Noch keine Daten vom Regler", "st.readinglogs": " (Logs werden noch gelesen)",
     "st.silent": "Regler meldet sich nicht", "st.online": "Online", "st.cloudanswered": "Online, Cloud antwortete {s}", "st.error": "Fehler",
     "st.lastreport": "letzte Meldung {ago}", "st.lasthour": "Letzte Stunde: {ok}/{n} Abfragen OK", "st.firmware": "Firmware {v}", "st.older": "Ältere Logs werden gelesen…",
-    "tile.target": "Soll {v} °C", "tile.asof": "Stand {ago}", "state": "Status {v}", "on": "An", "off": "Aus",
+    "bs.5": "Modulation", "tile.target": "Soll {v} °C", "tile.asof": "Stand {ago}", "state": "Status {v}", "on": "An", "off": "Aus",
     "nothing": "Noch nichts gemeldet.",
     "c.last": "Letzte Abfrage", "c.noresp": "keine Antwort", "c.regs": "Gemeldete Register", "c.info": "Server-Info", "c.frame": "Rahmennummer",
     "c.lastwrite": "Letzter Schreibbefehl an den Regler", "c.local": "lokal", "c.cloud": "Cloud", "c.none": "keiner gesehen",
@@ -235,7 +235,7 @@ const CHARTS = [
   { title: "ch.power", unit: "%", series: [["power", "--s1"]], min: 0, max: 100 },
   { title: "ch.o2", unit: "%", series: [["o2", "--s3"]], min: 0 },
 ];
-const BURNER_STATES = {}; // numeric meaning not confirmed yet
+// Burner state numbers (8199): add "bs.<n>" keys to I18N as they are identified.
 
 const $ = (id) => document.getElementById(id);
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
@@ -286,7 +286,7 @@ function render() {
     ["buffer_top", 1, S.buffer_top_set && T("tile.target", { v: fmt(S.buffer_top_set.value) })],
     ["buffer_bottom", 1, S.buffer_bottom_set && T("tile.target", { v: fmt(S.buffer_bottom_set.value) })],
     ["circuit1", 1], ["outside", 1], ["flue", 0], ["o2", 2], ["power", 0],
-    ["burner_state", 0, null, (v) => BURNER_STATES[v] || T("state", { v })],
+    ["burner_state", 0, null, (v) => (I18N[lang]["bs." + v] || I18N.en["bs." + v]) ? T("bs." + v) + " (" + v + ")" : T("state", { v })],
     ["boiler_pump", 0, null, (v) => v ? T("on") : T("off")],
     ["boiler_calc", 0], ["lambda_pwm", 0], ["fuel_counter", 1],
   ];
