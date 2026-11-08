@@ -27,7 +27,8 @@ Configuration (environment variables):
   MQTT_PREFIX          topic prefix (default estyma)
   MQTT_DEVICE_ID       device part of topics and unique IDs (default boiler)
   HA_DISCOVERY_PREFIX  Home Assistant discovery prefix (default homeassistant)
-  MQTT_STALE_SECONDS   seconds without a report until offline (default 90)
+  MQTT_STALE_SECONDS   seconds without a report until offline (default 300; the controller
+                       waits ~100 s after a slow or failed cloud reply)
   FUEL_KWH_PER_KG      calorific value for the energy sensor; default: the
                        controller's own setting (8850) if read, else 4.8
 """
@@ -221,7 +222,7 @@ class MqttPublisher:
     def __init__(self, ctl, host: str, port: int = 1883, *, user: str | None = None,
                  password: str | None = None, tls: bool = False, prefix: str = "estyma",
                  device_id: str = "boiler", disc_prefix: str = "homeassistant",
-                 stale: float = 90, kwh_per_kg: float | None = None, interval: float = 2,
+                 stale: float = 300, kwh_per_kg: float | None = None, interval: float = 2,
                  client_id: str | None = None) -> None:
         import paho.mqtt.client as mqtt   # optional dependency, only when configured
 
@@ -356,7 +357,7 @@ def from_env(ctl, env=os.environ) -> MqttPublisher | None:
         user=env.get("MQTT_USER") or None, password=env.get("MQTT_PASSWORD") or None, tls=tls,
         prefix=env.get("MQTT_PREFIX") or "estyma", device_id=env.get("MQTT_DEVICE_ID") or "boiler",
         disc_prefix=env.get("HA_DISCOVERY_PREFIX") or "homeassistant",
-        stale=float(env.get("MQTT_STALE_SECONDS") or 90),
+        stale=float(env.get("MQTT_STALE_SECONDS") or 300),
         kwh_per_kg=float(kwh) if kwh else None)
     pub.start()
     return pub
