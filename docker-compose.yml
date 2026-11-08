@@ -27,6 +27,13 @@ services:
       LOCAL_FALLBACK: "${LOCAL_FALLBACK:-0}"       # 1 = answer locally when the cloud fails
       CLOUD_MIRROR: "${CLOUD_MIRROR:-0}"           # local mode: still send reports to the cloud
       CONTROLLER_TZ: "${CONTROLLER_TZ:-Europe/Warsaw}"
+      # Optional cloud monitoring, switched on/off in the web UI. The cloud
+      # account only comes from here; the UI never sees the credentials.
+      ESTYMA_EMAIL: "${ESTYMA_EMAIL:-}"
+      ESTYMA_PASSWORD: "${ESTYMA_PASSWORD:-}"
+      ESTYMA_PASSWORD_B64: "${ESTYMA_PASSWORD_B64:-}"  # use if the password starts/ends with a space
+      CLOUD_MONITOR: "${CLOUD_MONITOR:-0}"         # initial state until switched in the UI
+      CLOUD_INTERVAL: "${CLOUD_INTERVAL:-30}"      # seconds between cloud polls
     volumes:
       - estyma-logs:/logs
 

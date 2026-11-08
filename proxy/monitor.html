@@ -78,6 +78,8 @@ code { font-size: .85em; word-break: break-all; }
 .pill { display: inline-block; padding: .05rem .5rem; border-radius: 999px; font-size: .8rem; border: 1px solid currentColor; }
 .pill.active, .pill.resetting { color: var(--bad); }
 .pill.cleared { color: var(--muted); }
+#cloud-box .row { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+#cloud-box .note { margin-top: 0; }
 </style></head><body><main>
 <header>
   <h1>Estyma monitor</h1>
@@ -96,6 +98,14 @@ code { font-size: .85em; word-break: break-all; }
 <div class="ctl" id="ctl" style="margin-top:.6rem"></div>
 <div class="wrap" style="margin-top:.6rem"><table><thead><tr><th data-i18n="col.time">Time</th><th data-i18n="col.write">Write</th><th data-i18n="col.event">Event</th><th data-i18n="col.detail">Detail</th></tr></thead>
 <tbody id="writes"></tbody></table></div>
+</div>
+
+<div id="cloud-box" hidden>
+<h2 data-i18n="h.cloud">Cloud monitoring</h2>
+<div class="status" id="cloud-status"></div>
+<div class="row" style="margin-top:.6rem"><button class="btn" id="cloud-toggle" type="button"></button> <span class="note" id="cloud-note"></span></div>
+<div class="tiles" id="cloud-tiles" style="margin-top:.6rem"></div>
+<p class="muted" data-i18n="cl.about">Polls the Estyma cloud with the account from the container environment (ESTYMA_EMAIL / ESTYMA_PASSWORD) and writes cloud-*.jsonl next to the other logs. The credentials never pass through this page.</p>
 </div>
 
 <h2><span data-i18n="h.history">History</span> <span class="range" id="range">
@@ -164,6 +174,13 @@ const I18N = {
     "alarm.banner": "Alarm: {t}", "alarm.since": "since {t}", "alarm.unknown": "Alarm active (burner state: error)",
     "alarm.code": "Code {c}", "alarm.140": "Missing fuel / ignition failed",
     "as.active": "active", "as.resetting": "being reset", "as.cleared": "cleared",
+    "h.cloud": "Cloud monitoring",
+    "cl.about": "Polls the Estyma cloud with the account from the container environment (ESTYMA_EMAIL / ESTYMA_PASSWORD) and writes cloud-*.jsonl next to the other logs. The credentials never pass through this page.",
+    "cl.on": "Switch on", "cl.off": "Switch off", "cl.confirmoff": "Stop polling the cloud?",
+    "cl.s.off": "Off", "cl.s.unconfigured": "Not configured", "cl.s.connecting": "Logging in…", "cl.s.running": "Running", "cl.s.error": "Problem",
+    "cl.lastpoll": "last poll {ago}", "cl.every": "every {n} s", "cl.retry": "retry in {n} s", "cl.dataage": "cloud data age {n} s",
+    "cl.device": "Device {id}", "cl.local": "local {v}", "cl.needauth": "Set UI_USER / UI_PASSWORD to switch this from the page",
+    "cl.nodata": "No cloud data yet.",
   },
   de: {
     "nav.monitor": "Monitor", "nav.logs": "Logs", "loading": "Lädt…",
@@ -203,6 +220,13 @@ const I18N = {
     "alarm.banner": "Alarm: {t}", "alarm.since": "seit {t}", "alarm.unknown": "Alarm aktiv (Brennerstatus: Fehler)",
     "alarm.code": "Code {c}", "alarm.140": "Brennstoffmangel / Zündung fehlgeschlagen",
     "as.active": "aktiv", "as.resetting": "wird zurückgesetzt", "as.cleared": "behoben",
+    "h.cloud": "Cloud-Überwachung",
+    "cl.about": "Fragt die Estyma-Cloud mit dem Konto aus der Container-Umgebung ab (ESTYMA_EMAIL / ESTYMA_PASSWORD) und schreibt cloud-*.jsonl neben die anderen Logs. Die Zugangsdaten laufen nie über diese Seite.",
+    "cl.on": "Einschalten", "cl.off": "Ausschalten", "cl.confirmoff": "Cloud-Abfrage beenden?",
+    "cl.s.off": "Aus", "cl.s.unconfigured": "Nicht eingerichtet", "cl.s.connecting": "Anmeldung…", "cl.s.running": "Läuft", "cl.s.error": "Problem",
+    "cl.lastpoll": "letzte Abfrage {ago}", "cl.every": "alle {n} s", "cl.retry": "neuer Versuch in {n} s", "cl.dataage": "Cloud-Datenalter {n} s",
+    "cl.device": "Gerät {id}", "cl.local": "lokal {v}", "cl.needauth": "UI_USER / UI_PASSWORD setzen, um dies von der Seite zu schalten",
+    "cl.nodata": "Noch keine Cloud-Daten.",
   },
 };
 // Messages the server sends in English (controller.py); translated by pattern.
@@ -227,6 +251,13 @@ const SERVER_MSG = {
     [/^set UI_USER and UI_PASSWORD to allow writes from the web UI$/, "UI_USER und UI_PASSWORD setzen, um aus der Web-Oberfläche zu schreiben"],
     [/^Content-Type must be application\/json$/, "Content-Type muss application/json sein"],
     [/^invalid JSON$/, "ungültiges JSON"],
+    [/^set ESTYMA_EMAIL and ESTYMA_PASSWORD in the container environment$/, "ESTYMA_EMAIL und ESTYMA_PASSWORD in der Container-Umgebung setzen"],
+    [/^EstymaApiWrapper is not installed$/, "EstymaApiWrapper ist nicht installiert"],
+    [/^credentials could not be read: (.+)$/, "Zugangsdaten nicht lesbar: $1"],
+    [/^set UI_USER and UI_PASSWORD to allow switching cloud monitoring from the web UI$/, "UI_USER und UI_PASSWORD setzen, um die Cloud-Überwachung aus der Web-Oberfläche zu schalten"],
+    [/^enabled must be true or false$/, "enabled muss true oder false sein"],
+    [/^login failed: (.+)$/, "Anmeldung fehlgeschlagen: $1"],
+    [/^no device data$/, "keine Gerätedaten"],
   ],
 };
 let lang = "en";
@@ -505,6 +536,67 @@ $("ctl").addEventListener("click", (e) => {
   post("/api/set", { key: k, value: v }, k);
 });
 
+// -- cloud monitoring --------------------------------------------------------
+let cloud = null, cloudNote = null;
+async function loadCloud() {
+  try {
+    const r = await fetch("/api/cloud", { cache: "no-store" });
+    if (!r.ok) return;
+    cloud = await r.json();
+    renderCloud();
+  } catch (e) {}
+}
+function renderCloud() {
+  const c = cloud; $("cloud-box").hidden = false;
+  const col = { running: "var(--good)", connecting: "var(--warn)", error: "var(--bad)" }[c.state] || "var(--muted)";
+  const st = [`<span><span class="dot" style="background:${col}"></span><b>${esc(T("cl.s." + c.state))}</b>${c.message ? " · " + esc(srvMsg(c.message)) : ""}</span>`];
+  if (!c.configured && c.problem) st.push(`<span>${esc(srvMsg(c.problem))}</span>`);
+  if (c.enabled && c.configured) {
+    if (c.last_poll) st.push(`<span>${T("cl.lastpoll", { ago: ago(c.now - c.last_poll) })}</span>`);
+    st.push(`<span>${T("cl.every", { n: fmt(c.interval, 0) })}</span>`);
+    if (c.state === "error" && c.retry_in) st.push(`<span>${T("cl.retry", { n: fmt(c.retry_in, 0) })}</span>`);
+  }
+  $("cloud-status").innerHTML = st.join("");
+  const b = $("cloud-toggle");
+  b.textContent = c.enabled && c.configured ? T("cl.off") : T("cl.on");
+  b.classList.toggle("primary", !(c.enabled && c.configured));
+  b.disabled = !c.configured || !c.ui_auth;
+  const note = $("cloud-note");
+  note.className = "note" + (cloudNote && cloudNote.err ? " err" : "");
+  note.textContent = cloudNote ? srvMsg(cloudNote.text) : c.configured && !c.ui_auth ? T("cl.needauth") : "";
+  // Latest cloud values, next to what the controller reported locally.
+  const cur = (data && data.current) || {};
+  const F = (data && data.fields) || {};
+  const show = (k, v) => k === "burner_state"
+    ? ((I18N[lang]["bs." + v] || I18N.en["bs." + v]) ? T("bs." + v) + " (" + v + ")" : T("state", { v }))
+    : typeof v === "number" ? fmt(v, 1) + (F[k] && F[k].unit ? `<small>${F[k].unit}</small>` : k.endsWith("_set") ? "<small>°C</small>" : "") : esc(v);
+  const devs = Object.entries(c.devices || {});
+  const tiles = [];
+  for (const [id, dv] of devs) {
+    if (!dv.values) continue;
+    const head = devs.length > 1 ? `${esc(T("cl.device", { id }))} · ` : "";
+    for (const [k, v] of Object.entries(dv.values)) {
+      const local = k === "boiler_set" ? (data && data.settings.boiler_set && data.settings.boiler_set.value) : cur[k] && cur[k].value;
+      const sub = [local != null ? T("cl.local", { v: k === "burner_state" ? local : fmt(local, 1) }) : "",
+        dv.data_age_s != null ? T("cl.dataage", { n: fmt(dv.data_age_s, 0) }) : ""].filter(Boolean).join(" · ");
+      tiles.push(`<div class="tile"><div class="k">${head}${esc(L(k))}</div><div class="v">${show(k, v)}</div><div class="sub">${esc(sub)}</div></div>`);
+    }
+  }
+  $("cloud-tiles").innerHTML = tiles.join("") || (c.enabled && c.configured ? `<div class="muted">${T("cl.nodata")}</div>` : "");
+}
+$("cloud-toggle").addEventListener("click", async () => {
+  if (!cloud) return;
+  const on = !(cloud.enabled && cloud.configured);
+  if (!on && !confirm(T("cl.confirmoff"))) return;
+  try {
+    const r = await fetch("/api/cloud", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: on }) });
+    const j = await r.json().catch(() => ({ message: "HTTP " + r.status }));
+    cloudNote = !r.ok || j.ok === false ? { text: j.message, err: true } : null;
+  } catch (e) { cloudNote = { text: e.message, err: true }; }
+  if (cloudNote) setTimeout(() => { cloudNote = null; cloud && renderCloud(); }, 8000);
+  loadCloud();
+});
+
 $("range").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
   hours = +b.dataset.h;
@@ -520,6 +612,7 @@ $("lang").addEventListener("click", (e) => {
   applyStatic();
   if (data) render();
   if (ctl) renderControl();
+  if (cloud) renderCloud();
 });
 $("charts").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-series]"); if (!b) return;
@@ -532,8 +625,9 @@ $("charts").addEventListener("click", (e) => {
 });
 applyStatic();
 let resizeT; addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => data && drawCharts(), 150); });
-load(); loadControl();
+load(); loadControl(); loadCloud();
 setInterval(load, 10000);
+setInterval(loadCloud, 10000);
 setInterval(loadControl, 5000);
 </script>
 </body></html>

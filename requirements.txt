@@ -1,0 +1,9 @@
+# Python packages for the Docker image (installed by the Dockerfile).
+# The proxy itself is stdlib only; these are for the optional cloud monitoring
+# (proxy/cloud_monitor.py) and compare/cloud_recorder.py.
+EstymaApiWrapper==0.0.70   # https://github.com/Tabisch/EstymaApi
+# The wrapper does not declare its own dependencies, hence these:
+aiohttp==3.14.5
+beautifulsoup4==4.15.0
+# Time zone data for the controller clock sync (CONTROLLER_TZ).
+tzdata

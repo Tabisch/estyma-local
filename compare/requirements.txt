@@ -1,5 +1,0 @@
-# Only needed for cloud_recorder.py; compare_cloud_proxy.py is stdlib only.
-# The wrapper does not declare its own dependencies, hence aiohttp/bs4 here.
-EstymaApiWrapper>=0.0.70
-aiohttp
-beautifulsoup4

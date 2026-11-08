@@ -106,6 +106,7 @@ class LogUIHandler(BaseHTTPRequestHandler):
     auth: bytes | None  # expected "user:password" or None
     monitor = None      # monitor.Monitor or None
     controller = None   # controller.Controller or None
+    cloud = None        # cloud_monitor.CloudMonitor or None
 
     def log_message(self, fmt, *args):
         pass
@@ -170,6 +171,10 @@ class LogUIHandler(BaseHTTPRequestHandler):
             snap = self.controller.snapshot()
             snap["ui_auth"] = self.auth is not None
             return self._json(200, snap)
+        if path == "/api/cloud" and self.cloud:
+            st = self.cloud.status()
+            st["ui_auth"] = self.auth is not None
+            return self._json(200, st)
         if path == "/all.zip":
             return self._zip()
         if path.startswith("/files/"):
@@ -185,8 +190,9 @@ class LogUIHandler(BaseHTTPRequestHandler):
                        [("WWW-Authenticate", 'Basic realm="estyma logs"')])
             return
         path = urllib.parse.urlsplit(self.path).path
-        if path not in ("/api/set", "/api/cancel", "/api/delete-logs") or (
-                path != "/api/delete-logs" and not self.controller):
+        available = {"/api/delete-logs": True, "/api/set": bool(self.controller),
+                     "/api/cancel": bool(self.controller), "/api/cloud": bool(self.cloud)}
+        if not available.get(path):
             return self._send(404, b"not found\n", "text/plain")
         # A JSON content type cannot be sent cross-site without a CORS
         # preflight, which we never answer: a simple CSRF guard.
@@ -194,7 +200,8 @@ class LogUIHandler(BaseHTTPRequestHandler):
         if ctype != "application/json":
             return self._json(415, {"ok": False, "message": "Content-Type must be application/json"})
         if self.auth is None:
-            what = "deleting logs" if path == "/api/delete-logs" else "writes"
+            what = {"/api/delete-logs": "deleting logs",
+                    "/api/cloud": "switching cloud monitoring"}.get(path, "writes")
             return self._json(403, {"ok": False, "message":
                                     f"set UI_USER and UI_PASSWORD to allow {what} from the web UI"})
         try:
@@ -205,6 +212,15 @@ class LogUIHandler(BaseHTTPRequestHandler):
             return self._json(400, {"ok": False, "message": "invalid JSON"})
         if path == "/api/delete-logs":
             return self._delete_logs(req.get("names"))
+        if path == "/api/cloud":
+            if not isinstance(req.get("enabled"), bool):
+                return self._json(400, {"ok": False, "message": "enabled must be true or false"})
+            try:
+                st = self.cloud.set_enabled(req["enabled"])
+            except ValueError as exc:
+                return self._json(409, {"ok": False, "message": str(exc)})
+            st["ui_auth"] = True
+            return self._json(200, {"ok": True, **st})
         from controller import WriteError
         if path == "/api/cancel":
             ok = self.controller.cancel_write(key, source="web")
@@ -318,11 +334,12 @@ class LogUIHandler(BaseHTTPRequestHandler):
 
 def start_log_ui(host: str, port: int, log_dir: str,
                  user: str | None = None, password: str | None = None,
-                 monitor=None, controller=None) -> ThreadingHTTPServer:
+                 monitor=None, controller=None, cloud=None) -> ThreadingHTTPServer:
     """Start the UI in a background thread and return the server."""
     auth = f"{user}:{password}".encode() if user and password else None
     handler = type("Handler", (LogUIHandler,), {"log_dir": os.path.abspath(log_dir), "auth": auth,
-                                                "monitor": monitor, "controller": controller})
+                                                "monitor": monitor, "controller": controller,
+                                                "cloud": cloud})
     server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, name="log-ui", daemon=True).start()

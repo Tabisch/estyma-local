@@ -7,10 +7,11 @@ HTTP.
 Step 1: a **transparent logging proxy** between the heating controller and the
 provider's server. It forwards every request unchanged and records each
 request/response pair, so the protocol can be reverse engineered and a local
-replacement built later. The image also contains an optional **cloud
-recorder** that polls the provider's web API, so cloud values can be matched
-to raw controller data. It is not part of the compose stack; run it by hand
-when needed (see "Cloud recorder" below).
+replacement built later. Optional **cloud monitoring** polls the provider's
+web API from the same container, so cloud values can be matched to raw
+controller data. It is switched on and off in the web UI; the account
+credentials stay in the container's environment variables (see "Cloud
+monitoring" below).
 
 This README covers one setup: Docker (Portainer stack or docker compose) plus
 a NAT rule on the firewall/router.
@@ -70,7 +71,7 @@ controller still shows as online in the provider's web UI.
 ## 2. Deploy
 
 The image is `ghcr.io/tabisch/estyma-local:latest` (amd64 only for now). It
-contains the proxy and the (optional) cloud recorder. `docker-compose.yml` defines:
+contains the proxy, the web UI and the optional cloud monitoring. `docker-compose.yml` defines:
 
 - `estyma-proxy`: the proxy (host port 8088) and the web UI with the live monitor and log downloads (host port 8089)
 - `estyma-logs`: named volume for the logs
@@ -85,7 +86,8 @@ provider's normal hostname works there.
    editor, or choose *Repository* with this repo's URL, reference
    `refs/heads/main` and compose path `docker-compose.yml`.
 2. Under *Environment variables* add what you need (see the table below),
-   typically `UI_USER` / `UI_PASSWORD` to protect the log UI.
+   typically `UI_USER` / `UI_PASSWORD` to protect the log UI, and
+   `ESTYMA_EMAIL` / `ESTYMA_PASSWORD` if you want cloud monitoring.
 3. *Deploy the stack*.
 4. To update after a new image was built: open the stack, *Update the stack*
    with *Re-pull image and redeploy* enabled (or *Pull and redeploy* for a
@@ -128,6 +130,7 @@ Open `http://<proxy_host>:8089/`.
   ask first). Deleting only works when `UI_USER` / `UI_PASSWORD` are set;
   `state.json` (the server's register state) cannot be deleted from here.
   Charts already loaded in the monitor keep their data until the next restart.
+- **Cloud monitoring** (section on the monitor page): see below.
 
 The UI is available in English and German. It follows the browser language;
 the EN / DE switch at the top right overrides it and is remembered in the
@@ -207,6 +210,39 @@ then talks to the cloud directly). With `LOCAL_FALLBACK=1`, `proxy` and
 `hybrid` answer locally whenever the cloud does not, so a flaky cloud no
 longer leaves the controller without an answer.
 
+## Cloud monitoring
+
+The proxy can also poll the Estyma cloud (through the
+[EstymaApi wrapper](https://github.com/Tabisch/EstymaApi)) and write what the
+cloud reports to `cloud-YYYY-MM-DD.jsonl` in the logs volume, next to the
+proxy logs, for `compare_cloud_proxy.py`. The monitor page has a *Cloud
+monitoring* section with a *Switch on* / *Switch off* button, the state
+(off, logging in, running, problem), the time of the last poll and the
+latest cloud values next to the ones the controller reported locally.
+
+- The credentials only come from the container environment:
+  `ESTYMA_EMAIL` plus `ESTYMA_PASSWORD` (or `ESTYMA_PASSWORD_B64` /
+  `ESTYMA_PASSWORD_FILE`). The web UI cannot see, enter or store them.
+  Without them the section shows *Not configured* and the button is
+  disabled.
+- Switching needs `UI_USER` / `UI_PASSWORD`, like deleting logs.
+- The choice is saved in `cloud-monitor.json` in the logs volume and kept
+  across restarts and image updates. Until it is first switched in the UI,
+  `CLOUD_MONITOR` decides (default `0` = off).
+- Switching off logs out of the cloud and stops polling right away.
+- The cloud login is retried with a growing delay (30 s up to 15 min) when
+  it fails; the reason is shown in the section.
+
+As JSON: `GET /api/cloud`, and `POST /api/cloud` with `{"enabled": true}` or
+`false` (`Content-Type: application/json`, basic auth).
+
+The wrapper is installed into the image automatically from
+`requirements.txt` (pinned version); nothing to install by hand.
+
+The standalone recorder `compare/cloud_recorder.py` is still in the image
+for one-off runs (`docker exec <proxy-container> python3
+/app/compare/cloud_recorder.py --count 1` with the same variables).
+
 The panel's data is also available as JSON: `GET /api/control`, and
 `POST /api/set` with `{"key": "boiler_target", "value": 62}` (or
 `boiler_on`, 0/1) and `POST /api/cancel` with `{"key": ...}`; both need
@@ -250,31 +286,22 @@ Values below are defaults or placeholders.
 `UPSTREAM` is not needed in `local` mode unless `CLOUD_MIRROR` or
 `LOCAL_FALLBACK` is on.
 
-### Cloud recorder (not in the compose stack)
-
-The recorder ships in the same image but is not part of `docker-compose.yml`.
-Run it by hand while you need cloud data; it writes into the same volume as
-the proxy (the volume is `<stack>_estyma-logs`, e.g. `estyma-local_estyma-logs`):
-
-```sh
-docker run -d --name estyma-cloud-recorder --restart unless-stopped \
-  -e ESTYMA_EMAIL=you@example.com -e ESTYMA_PASSWORD=change-me \
-  -v estyma-local_estyma-logs:/logs \
-  ghcr.io/tabisch/estyma-local:latest python3 /app/compare/cloud_recorder.py
-docker rm -f estyma-cloud-recorder     # stop it again
-```
+### Cloud monitoring (same service, see "Cloud monitoring")
 
 | Variable          | Default in image | Meaning |
 |-------------------|------------------|---------|
-| `ESTYMA_EMAIL`    | (required)       | Login e-mail of your Estyma cloud account |
-| `ESTYMA_PASSWORD` | (required)       | Password of that account |
+| `ESTYMA_EMAIL`    | (unset)          | Login e-mail of your Estyma cloud account; without it cloud monitoring is unavailable |
+| `ESTYMA_PASSWORD` | (unset)          | Password of that account |
 | `ESTYMA_PASSWORD_B64` | (empty)      | Base64 of the password, overrides `ESTYMA_PASSWORD`. Use it when the password starts or ends with a space, because `.env` files and some UIs trim those (`printf ' my password' \| base64`) |
 | `ESTYMA_PASSWORD_FILE` | (empty)     | Path to a file holding the password (e.g. a Docker secret); only a trailing newline is removed |
 | `ESTYMA_DOMAIN`   | `igneo.pl`       | Which Estyma cloud to log in to |
 | `ESTYMA_LANGUAGE` | `english`        | Language for the wrapper's value names |
-| `INTERVAL`        | `30`             | Seconds between polls |
-| `LOG_DIR`         | `/logs`          | Where `cloud-YYYY-MM-DD.jsonl` is written (same volume as the proxy) |
-| `IDLE_IF_UNCONFIGURED` | (unset)     | `1` = idle instead of exiting when credentials are missing |
+| `CLOUD_MONITOR`   | `0`              | Initial on/off state, only used until it is switched in the web UI |
+| `CLOUD_INTERVAL`  | `30`             | Seconds between cloud polls |
+
+The standalone `compare/cloud_recorder.py` reads the same `ESTYMA_*`
+variables, plus `INTERVAL` (seconds between polls, default 30) and
+`IDLE_IF_UNCONFIGURED` (`1` = idle instead of exiting without credentials).
 
 ### Compose / `.env` (host side)
 
@@ -287,6 +314,7 @@ docker rm -f estyma-cloud-recorder     # stop it again
 | `UI_PORT`         | `8089`  | Host port of the web UI (inside the container it stays 8089) |
 | `UI_USER` / `UI_PASSWORD` | (empty) | Passed to the proxy, see above |
 | `MODE`, `WRITES_ENABLED`, `ALLOW_POWER_WRITES`, `LOCAL_FALLBACK`, `CLOUD_MIRROR`, `CONTROLLER_TZ` | see above | Passed to the proxy |
+| `ESTYMA_EMAIL`, `ESTYMA_PASSWORD`, `ESTYMA_PASSWORD_B64`, `CLOUD_MONITOR`, `CLOUD_INTERVAL` | (empty) / `0` / `30` | Passed to the proxy for cloud monitoring |
 
 `UPSTREAM` and `UPSTREAM_TIMEOUT` are set
 directly in `docker-compose.yml`; edit them there.
