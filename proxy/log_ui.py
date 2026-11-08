@@ -1,6 +1,7 @@
-"""Tiny web UI to list and download the capture logs from a browser.
+"""Tiny web UI: live monitor of the controller's values and log downloads.
 
-Runs inside the proxy process on its own port (UI_PORT, default 8089), never
+``/`` shows the monitor (monitor.py, monitor.html), ``/logs`` lists the log
+files. Runs inside the proxy process on its own port (UI_PORT, default 8089), never
 on the proxy port. Read-only: it only serves files that sit directly in
 LOG_DIR. Optional HTTP basic auth via UI_USER / UI_PASSWORD.
 
@@ -14,6 +15,7 @@ import base64
 import hmac
 import html
 import io
+import json
 import os
 import threading
 import urllib.parse
@@ -35,6 +37,7 @@ PAGE = """<!doctype html>
  .muted {{ color: #666; font-size: .9rem; }}
  @media (prefers-color-scheme: dark) {{ body {{ background: #111; color: #ddd; }} th, td {{ border-color: #333; }} a {{ color: #7aa7ff; }} }}
 </style></head><body>
+<p><a href="/">Monitor</a> &nbsp; <b>Logs</b></p>
 <h1>Estyma logs</h1>
 <p class="muted">{count} files, {total} in <code>{logdir}</code></p>
 {zip_link}
@@ -57,6 +60,7 @@ class LogUIHandler(BaseHTTPRequestHandler):
     server_version = "estyma-log-ui"
     log_dir: str
     auth: bytes | None  # expected "user:password" or None
+    monitor = None      # monitor.Monitor or None
 
     def log_message(self, fmt, *args):
         pass
@@ -109,9 +113,14 @@ class LogUIHandler(BaseHTTPRequestHandler):
             self._send(401, b"authentication required\n", "text/plain",
                        [("WWW-Authenticate", 'Basic realm="estyma logs"')])
             return
-        path = urllib.parse.urlsplit(self.path).path
+        url = urllib.parse.urlsplit(self.path)
+        path = url.path
         if path == "/":
+            return self._monitor_page() if self.monitor else self._index()
+        if path in ("/logs", "/logs/"):
             return self._index()
+        if path == "/api/monitor" and self.monitor:
+            return self._monitor_api(url.query)
         if path == "/all.zip":
             return self._zip()
         if path.startswith("/files/"):
@@ -134,6 +143,19 @@ class LogUIHandler(BaseHTTPRequestHandler):
             rows=rows,
         ).encode()
         self._send(200, body, "text/html; charset=utf-8")
+
+    def _monitor_page(self):
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "monitor.html"), "rb") as fh:
+            self._send(200, fh.read(), "text/html; charset=utf-8")
+
+    def _monitor_api(self, query: str):
+        try:
+            hours = float(urllib.parse.parse_qs(query).get("hours", ["24"])[0])
+        except ValueError:
+            hours = 24
+        hours = min(max(hours, 0.1), 24 * 30)
+        body = json.dumps(self.monitor.snapshot(hours), separators=(",", ":")).encode()
+        self._send(200, body, "application/json")
 
     def _file(self, name: str):
         # Only plain file names directly inside LOG_DIR.
@@ -172,10 +194,12 @@ class LogUIHandler(BaseHTTPRequestHandler):
 
 
 def start_log_ui(host: str, port: int, log_dir: str,
-                 user: str | None = None, password: str | None = None) -> ThreadingHTTPServer:
+                 user: str | None = None, password: str | None = None,
+                 monitor=None) -> ThreadingHTTPServer:
     """Start the UI in a background thread and return the server."""
     auth = f"{user}:{password}".encode() if user and password else None
-    handler = type("Handler", (LogUIHandler,), {"log_dir": os.path.abspath(log_dir), "auth": auth})
+    handler = type("Handler", (LogUIHandler,), {"log_dir": os.path.abspath(log_dir), "auth": auth,
+                                                "monitor": monitor})
     server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, name="log-ui", daemon=True).start()

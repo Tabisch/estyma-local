@@ -22,6 +22,8 @@ Configuration (environment variables or CLI flags, flags win):
                    (default 0)
   UI_PORT          port of the log download web UI, 0 = off (default 8089)
   UI_USER / UI_PASSWORD  enable HTTP basic auth on the log UI
+  MONITOR_HISTORY_HOURS  hours of decoded values kept for the monitor charts
+                   (default 48)
 """
 
 from __future__ import annotations
@@ -65,6 +67,7 @@ class ExchangeLog:
         self.log_dir = log_dir
         self.max_body = max_body
         self._lock = threading.Lock()
+        self.listeners = []  # callables getting every record, e.g. the monitor
         os.makedirs(log_dir, exist_ok=True)
 
     def _path(self, ts: datetime) -> str:
@@ -101,6 +104,11 @@ class ExchangeLog:
         with self._lock:
             with open(self._path(ts), "a", encoding="utf-8") as fh:
                 fh.write(line + "\n")
+        for listener in self.listeners:
+            try:
+                listener(record)
+            except Exception as exc:
+                print(f"listener error: {type(exc).__name__}: {exc}", flush=True)
 
 
 def iso(ts: float) -> str:
@@ -288,6 +296,8 @@ def main(argv=None) -> int:
                    help="port of the log download web UI, 0 = disabled")
     p.add_argument("--ui-user", default=env("UI_USER"))
     p.add_argument("--ui-password", default=env("UI_PASSWORD"))
+    p.add_argument("--monitor-history-hours", type=float,
+                   default=float(env("MONITOR_HISTORY_HOURS", "48")))
     args = p.parse_args(argv)
 
     if not args.upstream:
@@ -301,8 +311,12 @@ def main(argv=None) -> int:
           flush=True)
     if args.ui_port:
         from log_ui import start_log_ui
+        from monitor import Monitor
+        mon = Monitor(args.log_dir, args.monitor_history_hours)
+        log.listeners.append(mon.ingest)
+        mon.start()
         start_log_ui(args.listen_host, args.ui_port, args.log_dir,
-                     args.ui_user, args.ui_password)
+                     args.ui_user, args.ui_password, monitor=mon)
         auth = "basic auth on" if args.ui_user and args.ui_password else "no auth"
         print(f"log UI on http://{args.listen_host}:{args.ui_port}/ ({auth})", flush=True)
     try:

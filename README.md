@@ -24,7 +24,7 @@ cloud-recorder (optional) --- provider web API    +--> volume estyma-logs
         |                                                 exchanges-YYYY-MM-DD.jsonl
         +-----------------------------------------------> cloud-YYYY-MM-DD.jsonl
                                                   |
-                                   browser ---> proxy_host:8089 (log download UI)
+                                   browser ---> proxy_host:8089 (monitor + log download UI)
 ```
 
 - Request headers are forwarded verbatim (order and casing kept, including
@@ -72,7 +72,7 @@ controller still shows as online in the provider's web UI.
 The image is `ghcr.io/tabisch/estyma-local:latest` (amd64, arm64, armv7). It
 contains both the proxy and the cloud recorder. `docker-compose.yml` defines:
 
-- `estyma-proxy`: the proxy (host port 8088) and the log download UI (host port 8089)
+- `estyma-proxy`: the proxy (host port 8088) and the web UI with the live monitor and log downloads (host port 8089)
 - `cloud-recorder`: polls the provider's web API; idles if no credentials are set
 - `estyma-logs`: named volume shared by both
 
@@ -106,14 +106,26 @@ docker compose up -d
 docker compose logs -f estyma-proxy     # one line per captured exchange
 ```
 
-## 3. Download the logs
+## 3. Monitor and logs web UI
 
-Open `http://<proxy_host>:8089/`. It lists every log file in the volume with
-size and date, with a download link per file and a "Download all (zip)"
-button. It is read-only.
+Open `http://<proxy_host>:8089/`.
+
+- **Monitor** (`/`): the values the controller reports to the cloud,
+  decoded from the proxied traffic and refreshed every 10 s: boiler, buffer,
+  heating circuit, outside and flue gas temperatures, O2, burner power and
+  state, boiler pump, lambda PWM, fuel counter, the reported setpoints with
+  their limits, and the connection state (last exchange, cloud status, last
+  value the cloud wrote to the controller). Charts cover the last 1 to 48
+  hours. Values outside a plausible range (corrupted CAN reads) are dropped.
+  The history is kept in memory and rebuilt from the logs in the volume when
+  the container starts. The same data is available as JSON at
+  `/api/monitor?hours=24`.
+- **Logs** (`/logs`): every log file in the volume with size and date, a
+  download link per file and a "Download all (zip)" button. Read-only.
 
 The logs contain whatever the controller sends (device IDs, PINs, ...). Keep
-port 8089 reachable from your LAN only and set `UI_USER` / `UI_PASSWORD`.
+port 8089 reachable from your LAN only and set `UI_USER` / `UI_PASSWORD`
+(they protect the monitor too).
 
 To analyse the logs inside the container instead:
 
@@ -136,9 +148,10 @@ Values below are defaults or placeholders.
 | `LISTEN_PORT`      | `80`             | Proxy port inside the container (the host port is `PROXY_PORT`) |
 | `LOG_DIR`          | `/logs`          | Where the JSONL logs are written (the `estyma-logs` volume). |
 | `MAX_BODY_LOG`     | `0`              | Max bytes of each body kept in the log, `0` = unlimited |
-| `UI_PORT`          | `8089`           | Log web UI port inside the container, `0` = UI off |
+| `UI_PORT`          | `8089`           | Web UI (monitor + logs) port inside the container, `0` = UI off |
 | `UI_USER`          | (unset)          | Basic auth user for the log UI |
 | `UI_PASSWORD`      | (unset)          | Basic auth password; auth is on only when user and password are both set |
+| `MONITOR_HISTORY_HOURS` | `48`        | Hours of decoded values the monitor keeps in memory for its charts (reloaded from the logs on start) |
 
 ### Cloud recorder (`cloud-recorder` service)
 
@@ -166,7 +179,7 @@ start recording.
 | Variable          | Default | Meaning |
 |-------------------|---------|---------|
 | `PROXY_PORT`      | `8088`  | Host port of the proxy; the router's DNAT rule points here |
-| `UI_PORT`         | `8089`  | Host port of the log web UI (inside the container it stays 8089) |
+| `UI_PORT`         | `8089`  | Host port of the web UI (inside the container it stays 8089) |
 | `UI_USER` / `UI_PASSWORD` | (empty) | Passed to the proxy, see above |
 | `ESTYMA_EMAIL` / `ESTYMA_PASSWORD` | (empty) | Passed to the cloud recorder, see above |
 
