@@ -41,7 +41,7 @@ LIVE = [
     ("burner_state", "Burner state", 8199, 1, "low", "", 0, 30),
     ("boiler_pump", "Boiler pump", 8823, 1, "low", "", 0, 1),
     ("boiler_calc", "Boiler target (calculated)", 8196, 1, "x1", "°C", 0, 120),
-    ("fuel_counter", "Fuel counter", 8484, 1, "x1", "", 0, 2**31 - 1),
+    ("fuel_counter", "Fuel counter", 8484, 1, "d10", "kg", 0, 2**31 - 1),
 ]
 
 SETTINGS = [

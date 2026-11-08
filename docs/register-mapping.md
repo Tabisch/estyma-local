@@ -27,7 +27,7 @@ confirms this, so it is used below to settle fields whose value stayed constant.
 | 8196,1 | x1 | `kociol_temp_obli_sub1` / temp_boiler_obli_sub1 | 7..80 calculated boiler target |
 | 8197,1 | low byte | `on_off_sub1` / status_controller_sub1 | 0/1 controller on |
 | 8857,1 | low byte | `co1_stan_pompy_sub1` / status_pump_heating_curcuit1_sub1 | 0/1 circuit 1 pump |
-| 8484,1 | x1 (cloud drops last digit) | `licznik_paliwa_sub1` / consumption_fuel_total_current_sub1 | fuel counter |
+| 8484,1 | /10 (cloud drops last digit) | `licznik_paliwa_sub1` / consumption_fuel_total_current_sub1 | fuel counter in kg (last digit = tenths, confirmed by Tabisch) |
 
 Low-byte matches are `0x100 + value` style registers.
 
