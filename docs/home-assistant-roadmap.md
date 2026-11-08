@@ -20,11 +20,17 @@ Done:
   with NULs, reply with `ODCZYT` (registers to report), optional `ZAPIS`
   (values to write) and `SERVER_INFO`.
 - Most live values, setpoints and the alarm registers are mapped.
+- Cloud writes confirmed (proxy log 2026-11-08): `8195,1=61` set the boiler
+  target (read back about 30 s later), `8197,1=0/1` switches the boiler
+  off/on. Every write carries `4112,1=1` (apply flag). The cloud repeats the
+  same `ZAPIS` on each poll until the controller's report shows the new
+  value; there is no other acknowledgement. While a write is pending the
+  controller polls faster (about 14 s instead of 20 s).
 
 Not done yet:
 
-- No local write has ever been seen to change a setpoint. The only `ZAPIS`
-  observed is the clock sync (`8549,1=<local unix time>;4112,1=1`).
+- Writes so far only came from the cloud; the local server has not sent one
+  of its own yet. Only `8195` and `8197` are confirmed writable.
 - The controller still depends on the cloud for every reply.
 - Nothing is exposed to Home Assistant; the existing integration goes through
   the cloud via EstymaApi.
@@ -59,19 +65,22 @@ can be done and undone safely:
 
 Without confirmed writes, the integration is read-only. Steps:
 
-1. Change the boiler target 60 -> 61 in the cloud UI with proxy and recorder
-   running; confirm `ZAPIS&;8195,1=61;&KONIEC` and that `8195,1` reports 61
-   on the next exchange. Change it back.
-2. Repeat for one value of each kind: a /10 value (room comfort `8242`), an
-   enum (`8194` mode, `8292` heating program), an on/off flag (`8197`), a
-   weekly timer (`8486..8510`). Record the exact encoding (raw vs. /10,
-   whether `0x100 +` flag registers are written with or without the 0x100).
-3. Find out whether a write needs an acknowledgement: does the controller
-   echo the value, set a flag, or does the cloud re-send until it reads the
-   new value? Watch the cloud's `/info_check_order` states
-   (`nowy -> wyslano -> zrealizowano / blad`) next to the raw exchanges.
-4. Learn how alarm reset/acknowledge works remotely (if the cloud offers it).
-5. Find out what `POBIERZ_ODCZYT` and `SERVER_INFO=REGISTER,1;DELAY,10`
+1. ~~Boiler target 60 -> 61~~ done: `ZAPIS&;8195,1=61;4112,1=1;&KONIEC<br>`,
+   whole degrees C, read back on the next report.
+2. ~~On/off flag~~ done: `8197,1` is written as plain 0/1 and reported as
+   `0x100 | value` (256/257). Assume other 256/257 flags work the same, but
+   verify each before allowing it.
+3. ~~Acknowledgement~~ done: none. The cloud re-sends the `ZAPIS` on every
+   poll until the reported value matches, then stops. A local server does
+   the same with a pending-write queue per register.
+4. Still to test, one at a time: a /10 value (room comfort `8242`), an enum
+   (`8194` mode, `8292` heating program), the buffer targets (`8468`,
+   `8469`), a weekly timer (`8486..8510`). Record raw vs. /10 encoding.
+5. Check whether several registers can go in one `ZAPIS` (the clock sync
+   already sends `8549` + `4112` together) and what happens with a value
+   outside the min/max (idx 3/4).
+6. Learn how alarm reset works remotely (if the cloud offers it).
+7. Find out what `POBIERZ_ODCZYT` and `SERVER_INFO=REGISTER,1;DELAY,10`
    control (e.g. does `DELAY,5` make the controller poll faster?).
 
 Exit: a table of writable registers with encoding, limits, and verified
@@ -95,8 +104,11 @@ round trip.
 
 1. Answer `/device/connect` locally: same reply shape, `Content-Type`,
    chunked encoding and line breaks as the cloud (copy byte layout from logs).
-2. Serve the `ODCZYT` list ourselves: the 63 base registers plus the latest
-   alarm slots (follow the `16460` counter like the cloud does).
+2. Serve the `ODCZYT` list ourselves: the 63 base registers plus the newest
+   event/alarm slot. The slots look like ring buffers of 20 (`16400+n` code,
+   `16420+n` / `16440+n` timestamps); track the current slot `n`, and asking
+   for `n+1` and seeing 0 means no newer event. When parsing the cloud's
+   list, read until `KONIEC`, the count after `ODCZYT&` is not always exact.
 3. Clock sync: send `8549,1=<local unix time>;4112,1=1` on start and then
    periodically. Investigate the ~45 minute alarm timestamp offset.
 4. Fallback: if the local server is down the controller loses its server
@@ -151,8 +163,8 @@ One HA device "Estyma boiler" (model from `8485` device type, firmware from
 | Entity | HA platform | Source | Notes |
 |---|---|---|---|
 | Boiler temperature | sensor, temperature, °C | 8193,1 /10 | |
-| Boiler calculated target | sensor, °C | 8196,1 | |
-| Boiler target | number (min/max from idx 3/4), °C | 8195,1 | writable after phase 1 |
+| Boiler calculated target / operating state | sensor | 8196,1 | 80 when on, 7 after switching off; may be a state code rather than a temperature, check before naming |
+| Boiler target | number (min/max from idx 3/4), °C, step 1 | 8195,1 | write confirmed |
 | Buffer top / bottom | sensor, °C | 8466,1 / 8467,1 /10 | |
 | Buffer top / bottom target | number, °C | 8468 / 8469 | writable after phase 1 |
 | Heating circuit 1 temperature | sensor, °C | 16385,1 /10 | |
@@ -163,7 +175,7 @@ One HA device "Estyma boiler" (model from `8485` device type, firmware from
 | Lambda PWM | sensor, diagnostic | 16391,1 low byte | |
 | Burner status | sensor, enum (off, ignition, glowing, modulating, cleaning, error, unknown N) | 8199,1 low byte | |
 | Boiler pump / circuit 1 pump | binary_sensor, running | 8823 / 8857 low byte | |
-| Controller on | switch (or binary_sensor until writes are proven) | 8197,1 low byte | needs extra care, see safety |
+| Boiler on | switch | 8197,1 low byte (write 0/1) | write confirmed; needs extra care, see safety |
 | Operation mode | select | 8194,1 | values still to map |
 | Heating program circuit 1 | select | 8292,1 (probable) | |
 | Room comfort / eco target | number, °C, step 0.1 | 8242 / 8264 /10 | |
@@ -193,9 +205,10 @@ A heating boiler is not a light switch. Writes are the riskiest part.
 3. Rate limiting and de-duplication: HA automations can fire repeatedly; at
    most one pending write per register, coalesce to the latest value, minimum
    interval between writes.
-4. Read-back confirmation: a write is only "done" when the controller reports
-   the new value; otherwise retry a few times, then mark failed and log it.
-   HA shows the reported value, not the requested one.
+4. Read-back confirmation (same as the cloud): send the write, always with
+   `4112,1=1`, on every poll until the controller reports the new value, then
+   drop it from the queue. Give up after a timeout (e.g. 2 minutes), mark it
+   failed and log it. HA shows the reported value, not the requested one.
 5. Separate switch for dangerous actions (controller on/off, burner enable):
    off by default (`ALLOW_POWER_WRITES=0`).
 6. Global read-only switch (`WRITES_ENABLED=0` default) until phase 1 is done.
@@ -229,8 +242,9 @@ The existing HA integration uses EstymaApi against the cloud. Plan:
 
 | Unknown | Why it matters | How to find out |
 |---|---|---|
-| Write encoding and acknowledgement | no setpoints without it | phase 1 test changes |
-| `4112,1=1` meaning | may be needed after every write, not only clock sync | writes with and without it in hybrid mode |
+| Write encoding for /10 values, enums, timers | setpoints beyond boiler target | phase 1 step 4 |
+| What happens without `4112,1=1` or with an out-of-range value | robustness of the local writer | only in hybrid mode, with care |
+| Meaning of `8196` codes and `8480` after switch-on | correct entity names | keep recording |
 | `POBIERZ_ODCZYT` | maybe a controller-initiated read request | watch during cloud UI actions |
 | `SERVER_INFO` (`REGISTER`, `DELAY`) | registration state, poll interval | vary `DELAY` in local/hybrid mode |
 | Unrequested registers (burner settings, DHW, circuits 2-4) | more entities | add candidate registers to `ODCZYT` and look for known values (needs go-ahead) |
