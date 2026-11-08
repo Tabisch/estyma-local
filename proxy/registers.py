@@ -35,7 +35,7 @@ import time
 CATALOG: dict[int, tuple] = {
     4112: ("Apply flag (sent with every write)", "Übernahme-Flag (bei jedem Schreiben)", "x1", "", "confirmed"),
     8193: ("Boiler temperature", "Kesseltemperatur", "d10", "°C", "confirmed"),
-    8194: ("Boiler mode", "Kesselmodus", "x1", "", "likely"),
+    8194: ("Boiler mode", "Kesselmodus", "x1", "", "confirmed"),
     8195: ("Boiler target", "Kessel-Soll", "x1", "°C", "confirmed"),
     8196: ("Boiler target (calculated)", "Kessel-Soll (berechnet)", "x1", "°C", "confirmed"),
     8197: ("Controller on/off", "Regler an/aus", "u8", "", "confirmed"),
@@ -124,6 +124,33 @@ _DAYS = [("Monday", "Montag"), ("Tuesday", "Dienstag"), ("Wednesday", "Mittwoch"
 for _i, (_en, _de) in enumerate(_DAYS):
     CATALOG[8486 + 4 * _i] = (f"Circuit 1 weekly timer, {_en}", f"Wochenprogramm Heizkreis 1, {_de}",
                               "hex", "", "likely")
+# Setting ranges from the service panel (decoded units), for registers that
+# do not report their own min/max as index 3/4.
+RANGES: dict[int, tuple] = {
+    8712: (0, 20), 8849: (0, 20), 8711: (20, 70), 14088: (0, 120), 8556: (35, 75),
+    8819: (-10, 40), 8816: (30, 100), 8817: (30, 100), 8841: (5, 100), 8790: (0, 200),
+    14084: (0, 100), 12300: (1, 100), 8848: (0, 20), 8811: (0, 5), 10650: (0, 100),
+    8818: (5.0, 30.0), 8850: (2.0, 10.0), 8526: (5.0, 15.0), 8530: (5.0, 15.0),
+    14092: (2, 6), 14091: (50, 300), 14080: (5, 180), 14101: (0, 60), 14102: (5, 30),
+    14103: (0, 50), 8791: (10, 150),
+    **{r: (0, 100) for r in range(8801, 8806)},
+    **{r: (20, 80) for r in (8901, 8902, 8905, 8906, 8909, 8910, 8518, 8519)},
+}
+
+# Names of enumerated values: reg -> {value: (en, de)}.
+_ONOFF = {0: ("off", "aus"), 1: ("on", "an")}
+VALUES: dict[int, dict] = {
+    8194: {0: ("time automatic", "Zeitautomatik"), 1: ("time manual", "Zeit manuell"),
+           2: ("automatic", "Automatik"), 3: ("manual", "Manuell")},
+    8197: _ONOFF, 8823: _ONOFF, 8857: _ONOFF,
+    8199: {0: ("off", "aus"), 1: ("ignition", "Zünden"), 2: ("glowing", "Glühen"),
+           5: ("modulation", "Modulation"), 7: ("cleaning", "Reinigung"), 10: ("error", "Fehler")},
+    8292: {0: ("off", "aus"), 1: ("economical", "Eco"), 2: ("temporary", "temporär"),
+           3: ("comfortable", "Komfort")},
+    13829: _ONOFF,
+    **{r: {0: ("manual", "manuell"), 1: ("weather", "witterungsgeführt")} for r in (8514, 8515)},
+}
+
 # Alarm ring buffer: slot k uses 16400+k (state << 16 | code), 16420+k start,
 # 16440+k end (0 while active).
 for _k in range(20):
@@ -262,10 +289,13 @@ class RegisterTable:
             if idx not in (1, 3, 4) and conf != "unknown":
                 conf = "guess"  # only index 1/3/4 (value/min/max) were ever seen
             shown = e["stable"] if e["stable"] is not None else e["raw"]
+            value = decode(shown, how)
+            name = VALUES.get(reg, {}).get(value) if idx == 1 else None
             out.append({
                 "reg": reg, "idx": idx, "label": label, "label_de": label_de, "unit": unit,
-                "conf": conf, "decode": how,
-                "raw": e["raw"], "stable": e["stable"], "value": decode(shown, how),
+                "conf": conf, "decode": how, "range": RANGES.get(reg) if idx == 1 else None,
+                "value_name": list(name) if name else None,
+                "raw": e["raw"], "stable": e["stable"], "value": value,
                 "first": e["first"], "last": e["last"], "stable_t": e.get("stable_t"),
                 "count": e["count"], "changes": e["changes"], "requested": e.get("requested"),
             })

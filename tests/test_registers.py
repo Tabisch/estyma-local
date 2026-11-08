@@ -31,6 +31,19 @@ class DecodeTest(unittest.TestCase):
         for reg in (8193, 8195, 8199, 8484, 8790, 8818, 16411, 16431, 16451, 16460, 8510):
             self.assertIn(reg, CATALOG)
 
+    def test_service_settings(self):
+        # All 45 service-panel registers (docs/service-settings.md) have a name.
+        service = [8712, 8849, 8711, 14088, 8556, 8819, 8816, 8817, *range(8801, 8806), 8841,
+                   8790, 14084, 12300, 8848, 8811, 10650, 8818, 8850, 13829, 8526, 8530, 14092,
+                   14091, 14152, 14080, 14101, 14102, 14103, 8791, 8901, 8902, 16396, 16397,
+                   8905, 8906, 8909, 8910, 8514, 8515, 8518, 8519]
+        self.assertEqual(len(set(service)), 45)
+        for reg in service:
+            self.assertEqual(CATALOG[reg][4], "confirmed", reg)
+        self.assertIn("pumps", CATALOG[8711][0])
+        self.assertEqual(decode(65526, CATALOG[8819][2]), -10)
+        self.assertEqual(decode(0x11B, CATALOG[8850][2]), 2.7)
+
 
 class TableTest(unittest.TestCase):
     def setUp(self):
@@ -49,6 +62,15 @@ class TableTest(unittest.TestCase):
         self.assertEqual(rows[(8790, 1)]["value"], 90)
         self.assertEqual(rows[(8790, 1)]["first"], 120)
         self.assertEqual(rows[(8816, 1)]["value"], 30)                # 0x100 + 30
+
+    def test_value_names_and_ranges(self):
+        t = RegisterTable(self.dir)
+        t.observe(1, {(8194, 1): 2, (8514, 1): 0x100, (8818, 1): 144, (8195, 3): 60})
+        rows = {(r["reg"], r["idx"]): r for r in t.snapshot()}
+        self.assertEqual(rows[(8194, 1)]["value_name"], ["automatic", "Automatik"])
+        self.assertEqual(rows[(8514, 1)]["value_name"][0], "manual")
+        self.assertEqual(rows[(8818, 1)]["range"], (5.0, 30.0))
+        self.assertIsNone(rows[(8195, 3)]["range"])
 
     def test_unknown_and_requested_only(self):
         t = RegisterTable(self.dir)

@@ -126,8 +126,9 @@ Open `http://<proxy_host>:8089/`.
   `/api/monitor?hours=24`.
 - **Registers** (`/registers`): a raw table of every register the controller
   reported or the server asked for: number (`reg,idx`), likely use (from
-  [docs/register-mapping.md](docs/register-mapping.md) and the burner
-  settings, with how sure the mapping is, or *unknown*), decoded value, raw
+  [docs/register-mapping.md](docs/register-mapping.md) and the service panel
+  settings, with how sure the mapping is, or *unknown*; setting ranges and
+  names of enumerated values such as modes), decoded value, raw
   value and when it was last seen. A register that shows up for the first
   time, for example one the cloud's service panel adds to the read list, gets
   a new row on its own and is highlighted. A value only counts once two
