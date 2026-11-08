@@ -5,5 +5,7 @@ EstymaApiWrapper==0.0.70   # https://github.com/Tabisch/EstymaApi
 # The wrapper does not declare its own dependencies, hence these:
 aiohttp==3.14.5
 beautifulsoup4==4.15.0
+# MQTT client for the optional Home Assistant publisher (proxy/mqtt_publisher.py).
+paho-mqtt==2.1.0
 # Time zone data for the controller clock sync (CONTROLLER_TZ).
 tzdata

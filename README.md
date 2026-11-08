@@ -289,6 +289,58 @@ The panel's data is also available as JSON: `GET /api/control`, and
 `boiler_on`, 0/1) and `POST /api/cancel` with `{"key": ...}`; both need
 `Content-Type: application/json` and basic auth.
 
+## Home Assistant (MQTT)
+
+The server can publish everything it knows about the controller to your MQTT
+broker, with Home Assistant's MQTT discovery, so one **Estyma boiler** device
+with all its entities appears in Home Assistant by itself. It is
+**read-only**: nothing from MQTT reaches the controller yet. It works in every
+mode (`proxy` included), because it only uses what the controller reports.
+
+Set it up:
+
+1. In Home Assistant, the MQTT integration must be connected to the same
+   broker (with discovery on, the default).
+2. In the stack's environment variables (Portainer) set `MQTT_HOST` and, if
+   your broker needs a login, `MQTT_USER` / `MQTT_PASSWORD`. Redeploy.
+3. The container log shows `mqtt: connected to ...`. The device appears under
+   *Settings → Devices & services → MQTT* within one report (about 20 s).
+
+Entities:
+
+| Entity | Source |
+|---|---|
+| Boiler, buffer top/bottom, heating circuit 1 flow, outside, flue gas temperatures | 8193, 8466, 8467, 16385, 8543, 8473 |
+| Boiler target, boiler target (calculated) | 8195, 8196 |
+| Oxygen in flue gas, burner power, burner state (off, ignition, glowing, modulation, cleaning, error) | 8480, 16389, 8199 |
+| Boiler on, boiler pump, heating circuit 1 pump (on/off) | 8197, 8823, 8857 |
+| Fuel consumed (kg), fuel energy (kWh) | 8484 |
+| Alarm (problem on/off, newest alarm slot as attributes), alarm code | 16400..16460 |
+| Last report, server mode, lambda PWM (diagnostic; lambda PWM disabled by default) | |
+
+*Fuel energy* is fuel consumed × calorific value, for the **Energy
+dashboard** (add it under *Gas consumption* or as an individual device). The
+calorific value is `FUEL_KWH_PER_KG` if set, otherwise the controller's own
+setting (8850, read in `hybrid`/`local` mode), otherwise 4.8 kWh/kg. Changing
+it makes the total jump, so set it once. A fuel counter reading that goes
+down or jumps implausibly is treated as a corrupted read and skipped.
+
+The device goes *unavailable* when the controller has not reported for
+`MQTT_STALE_SECONDS`, or when the server stops (MQTT last will).
+
+Topics, with the defaults (`estyma/boiler`):
+
+- `estyma/boiler/state`: one JSON object with all values (retained). Unknown
+  values are `null`. Handy for Node-RED, ioBroker or openHAB as well.
+- `estyma/boiler/alarm`: newest alarm slot (`active`, `code`, `text`,
+  `state`, `start`, `end`; times in controller clock).
+- `estyma/boiler/availability`: `online` / `offline`.
+- `homeassistant/<component>/estyma_boiler/<key>/config`: discovery
+  (retained), sent again when Home Assistant restarts.
+
+To remove the device, delete it in Home Assistant and clear the retained
+`homeassistant/+/estyma_boiler/+/config` topics (e.g. with MQTT Explorer).
+
 ## Environment variables
 
 Values below are defaults or placeholders.
@@ -346,6 +398,20 @@ The standalone `compare/cloud_recorder.py` reads the same `ESTYMA_*`
 variables, plus `INTERVAL` (seconds between polls, default 30) and
 `IDLE_IF_UNCONFIGURED` (`1` = idle instead of exiting without credentials).
 
+### MQTT / Home Assistant (same service, see "Home Assistant (MQTT)")
+
+| Variable          | Default | Meaning |
+|-------------------|---------|---------|
+| `MQTT_HOST`       | (empty) | Broker host name or IP; empty = publisher off |
+| `MQTT_PORT`       | `1883`  | Broker port (`8883` default with `MQTT_TLS=1`) |
+| `MQTT_USER` / `MQTT_PASSWORD` | (empty) | Broker login, if needed |
+| `MQTT_TLS`        | `0`     | `1` = connect with TLS (system CA certificates) |
+| `MQTT_PREFIX`     | `estyma` | First part of the topics |
+| `MQTT_DEVICE_ID`  | `boiler` | Second part of the topics and of the unique IDs; change only for a second boiler |
+| `HA_DISCOVERY_PREFIX` | `homeassistant` | Home Assistant's discovery prefix |
+| `MQTT_STALE_SECONDS` | `90` | Seconds without a controller report until the device is unavailable |
+| `FUEL_KWH_PER_KG` | (empty) | Calorific value for the energy sensor; empty = controller setting, else 4.8 |
+
 ### Compose / `.env` (host side)
 
 `docker-compose.yml` reads these from the stack's *Environment variables*
@@ -358,6 +424,7 @@ variables, plus `INTERVAL` (seconds between polls, default 30) and
 | `UI_USER` / `UI_PASSWORD` | (empty) | Passed to the proxy, see above |
 | `MODE`, `WRITES_ENABLED`, `ALLOW_POWER_WRITES`, `ALLOW_UNTESTED_WRITES`, `SETTINGS_READ_MINUTES`, `LOCAL_FALLBACK`, `CLOUD_MIRROR`, `CONTROLLER_TZ` | see above | Passed to the proxy |
 | `ESTYMA_EMAIL`, `ESTYMA_PASSWORD`, `ESTYMA_PASSWORD_B64`, `CLOUD_MONITOR`, `CLOUD_INTERVAL` | (empty) / `0` / `30` | Passed to the proxy for cloud monitoring |
+| `MQTT_HOST`, `MQTT_PORT`, `MQTT_USER`, `MQTT_PASSWORD`, `MQTT_PREFIX`, `HA_DISCOVERY_PREFIX`, `FUEL_KWH_PER_KG` | (empty) / `1883` / ... | Passed to the proxy for the MQTT publisher; the other MQTT variables can be added the same way |
 
 `UPSTREAM` and `UPSTREAM_TIMEOUT` are set
 directly in `docker-compose.yml`; edit them there.
@@ -410,7 +477,8 @@ python3 -m unittest discover -s tests
 ```
 
 The tests use synthetic messages in the recorded layout (no real device
-data) and run the proxy against a fake cloud.
+data) and run the proxy against a fake cloud. The MQTT test also connects to a
+real broker when `mosquitto` is installed (otherwise that part is skipped).
 
 ## Log format
 
