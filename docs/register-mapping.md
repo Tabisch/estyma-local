@@ -71,6 +71,9 @@ them.
 
 ## Settings (constant during recording, single fit or fixed by the sub->idx rule)
 
+Service-panel settings (burner, boiler, heating curves) are listed in
+[service-settings.md](service-settings.md).
+
 | Register | Transform | Cloud field | Value |
 |---|---|---|---|
 | 8195,1 / ,3 / ,4 | x1 | `kociol_temp_zad_sub1/3/4` boiler target / min / max | 60 / 60 / 80 |
