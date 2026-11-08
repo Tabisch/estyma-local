@@ -69,7 +69,7 @@ controller still shows as online in the provider's web UI.
 
 ## 2. Deploy
 
-The image is `ghcr.io/tabisch/estyma-local:latest` (amd64, arm64, armv7). It
+The image is `ghcr.io/tabisch/estyma-local:latest` (amd64 only for now). It
 contains both the proxy and the cloud recorder. `docker-compose.yml` defines:
 
 - `estyma-proxy`: the proxy (host port 8088) and the web UI with the live monitor and log downloads (host port 8089)
@@ -275,7 +275,7 @@ directly in `docker-compose.yml`; edit them there.
 
 ## Image build
 
-`.github/workflows/docker.yml` builds the image for amd64, arm64 and armv7 and
+`.github/workflows/docker.yml` builds the image for amd64 (other architectures are switched off for now) and
 pushes it to `ghcr.io/tabisch/estyma-local` (tags `latest` and the commit SHA,
 plus the tag name for `v*` tags). It builds when:
 
@@ -310,8 +310,9 @@ own machine instead:
    the value `self-hosted`. Delete the variable to go back to GitHub's runners.
 4. Re-run the workflow (*Actions → Docker image → Run workflow*).
 
-The multi-arch build (amd64, arm64, armv7) uses QEMU, which the workflow sets
-up on the runner itself. On a Raspberry Pi this works but is slow.
+The build is amd64 only, so use an x86-64 machine as the runner. To build
+for ARM again, add the platforms in `docker.yml` and put back the
+`docker/setup-qemu-action` step (see the comment there).
 
 ## Tests
 
