@@ -47,7 +47,7 @@ class WriteSafetyTest(unittest.TestCase):
         c, _, _ = make()
         c.observe_report(report())
         with self.assertRaises(WriteError):
-            c.request_write("buffer_top_target", 50)
+            c.request_write("fuel_level", 50)
 
     def test_range_uses_controller_limits(self):
         c, _, _ = make()
@@ -196,3 +196,100 @@ class LocalModeTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+SETTINGS_REPORT = dict(r8526_1=0x100 + 120, r8526_3=0x100 + 50, r8526_4=0x100 + 150,
+                       r8468_1=60, r8468_3=7, r8468_4=80, r8712_1=10, r8514_1=0x100)
+
+
+class SettingsTest(unittest.TestCase):
+    def test_untested_needs_extra_flag(self):
+        c, _, _ = make()
+        c.observe_report(report(**SETTINGS_REPORT))
+        with self.assertRaisesRegex(WriteError, "ALLOW_UNTESTED_WRITES"):
+            c.request_write("buffer_top_target", 50)
+        c.request_write("boiler_target", 61)  # tested ones still fine
+
+    def test_scaled_write_and_u8_readback(self):
+        c, _, _ = make(allow_untested_writes=True)
+        c.observe_report(report(**SETTINGS_REPORT))
+        self.assertEqual(c.current("o2_30"), 120)
+        with self.assertRaisesRegex(WriteError, "multiple of 0.1"):
+            c.request_write("o2_30", 8.55)
+        with self.assertRaisesRegex(WriteError, "between 5.0 and 15.0"):
+            c.request_write("o2_30", 16)
+        res = c.request_write("o2_30", 8.5)
+        self.assertIn("8.5 %", res["message"])
+        self.assertEqual(c.next_writes(local_reply=False), [(8526, 1, 85)])
+        c.observe_report(report(**dict(SETTINGS_REPORT, r8526_1=0x100 + 85)))
+        self.assertEqual(c.pending, {})
+
+    def test_u8_limits_from_controller(self):
+        c, _, _ = make(allow_untested_writes=True)
+        c.observe_report(report(**dict(SETTINGS_REPORT, r8526_4=0x100 + 140)))
+        self.assertEqual(c.limits("o2_30"), (50, 140))
+        c.observe_report(report(**dict(SETTINGS_REPORT, r8526_3=0x100 + 150, r8526_4=0x100 + 60)))
+        self.assertEqual(c.limits("o2_30"), (50, 150))  # min > max: ignored
+
+    def test_needs_a_read_first(self):
+        c, _, _ = make(allow_untested_writes=True)
+        c.observe_report(report())
+        with self.assertRaisesRegex(WriteError, "not been read"):
+            c.request_write("hyst_on", 8)
+
+    def test_enum_values(self):
+        c, _, _ = make(allow_untested_writes=True)
+        c.observe_report(report(**SETTINGS_REPORT))
+        with self.assertRaisesRegex(WriteError, "not allowed"):
+            c.request_write("co1_mode", 2)
+        c.request_write("co1_mode", 1)
+        self.assertEqual(c.next_writes(local_reply=False), [(8514, 1, 1)])
+
+    def test_settings_reads(self):
+        c, clock, _ = make(settings_read_interval=3600)
+        reads = c.extra_reads()
+        self.assertIn((8712, 1), reads)
+        self.assertIn((8526, 4), reads)
+        self.assertNotIn((8195, 1), reads)
+        self.assertEqual(c.extra_reads(), [])  # sent, waiting for the report
+        regs = report(**{f"r{r}_{i}": 0x100 for r, i in reads})
+        clock.t += 15
+        c.observe_report(regs)
+        self.assertEqual(c.settings_read, clock.t)
+        self.assertEqual(c.extra_reads(), [])
+        clock.t += 3600
+        self.assertIn((8712, 1), c.extra_reads())
+
+    def test_settings_read_retried(self):
+        c, clock, _ = make()
+        self.assertTrue(c.extra_reads())
+        c.observe_report(report())  # reply lost: settings not reported
+        self.assertTrue(c.extra_reads())
+
+    def test_pending_register_is_read(self):
+        c, _, _ = make(allow_untested_writes=True)
+        c.observe_report(report(**SETTINGS_REPORT))
+        c.settings_due = False
+        c.request_write("hyst_on", 8)
+        self.assertEqual(c.extra_reads(), [(8712, 1), (8712, 3), (8712, 4)])
+        self.assertEqual(c.extra_reads(present=[(8712, 1), (8712, 3), (8712, 4)]), [])
+
+    def test_no_reads_in_proxy_mode(self):
+        c, _, _ = make("proxy")
+        self.assertEqual(c.extra_reads(), [])
+        self.assertFalse(c.request_settings_read()["ok"])
+
+    def test_settings_snapshot(self):
+        c, _, _ = make()
+        c.observe_report(report(**SETTINGS_REPORT))
+        snap = c.settings_snapshot()
+        self.assertEqual([g["key"] for g in snap["groups"]],
+                         ["user", "boiler", "burner", "circuit1", "circuit2"])
+        items = {i["key"]: i for g in snap["groups"] for i in g["items"]}
+        self.assertEqual(items["o2_30"]["value"], 12.0)
+        self.assertEqual((items["o2_30"]["min"], items["o2_30"]["max"]), (5.0, 15.0))
+        self.assertEqual(items["co1_mode"]["options"]["0"], ["manual", "manuell"])
+        self.assertFalse(items["o2_30"]["allowed"])
+        self.assertEqual(items["o2_30"]["reason"], "ALLOW_UNTESTED_WRITES=0")
+        self.assertTrue(items["boiler_target"]["allowed"])
+        self.assertEqual(set(c.snapshot()["writable"]), {"boiler_target", "boiler_on"})

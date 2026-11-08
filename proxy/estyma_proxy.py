@@ -40,6 +40,11 @@ Local server (see README, "Operating modes"):
                    controller ourselves)
   WRITES_ENABLED   1 = allow local writes (default 0, read-only)
   ALLOW_POWER_WRITES  1 = also allow switching the boiler on/off (default 0)
+  ALLOW_UNTESTED_WRITES  1 = also allow the settings page's other settings,
+                   whose writes were not yet seen working on a real
+                   controller (default 0; only 8195 and 8197 are tested)
+  SETTINGS_READ_MINUTES  minutes between reads of all settings in hybrid /
+                   local mode, 0 = only on start and on request (default 60)
   WRITE_TIMEOUT    seconds until an unconfirmed write fails (default 120)
   WRITE_MIN_INTERVAL  minimum seconds between requests per register (default 10)
   LOCAL_FALLBACK   1 = answer locally when the cloud fails (proxy/hybrid)
@@ -308,8 +313,12 @@ class ProxyHandler(BaseHTTPRequestHandler):
         """Build the whole reply ourselves (local mode or fallback)."""
         ctl = self.ctl
         writes = ctl.next_writes(local_reply=True)
-        text = P.build_reply(ctl.read_list(), writes, tz=ctl.tz, delay=self.poll_delay)
+        read_list = ctl.read_list()
+        extra = ctl.extra_reads(read_list)
+        text = P.build_reply(read_list + extra, writes, tz=ctl.tz, delay=self.poll_delay)
         record["local"] = True
+        if extra:
+            record["extra_reads"] = len(extra)
         if writes:
             record["writes"] = [f"{r},{i}={v}" for r, i, v in writes]
         headers = [
@@ -339,6 +348,13 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 new = P.inject_writes(text, writes) if writes else None
                 if new is not None:
                     record["injected"] = [f"{r},{i}={v}" for r, i, v in writes]
+                    text = new
+                    body = new.encode("utf-8")
+            if ctl.mode == "hybrid":
+                extra = ctl.extra_reads(P.parse_read_list(text) or ())
+                new = P.add_reads(text, extra) if extra else None
+                if new is not None:
+                    record["extra_reads"] = len(extra)
                     body = new.encode("utf-8")
         except Exception as exc:
             print(f"reply handling error: {type(exc).__name__}: {exc}", flush=True)
@@ -425,11 +441,14 @@ def main(argv=None) -> int:
     p.add_argument("--clock-sync-hours", type=float, default=float(env("CLOCK_SYNC_HOURS", "6")))
     p.add_argument("--poll-delay", type=int, default=int(env("POLL_DELAY", "10")))
     p.add_argument("--write-timeout", type=float, default=float(env("WRITE_TIMEOUT", "120")))
+    p.add_argument("--settings-read-minutes", type=float,
+                   default=float(env("SETTINGS_READ_MINUTES", "60")))
     p.add_argument("--write-min-interval", type=float,
                    default=float(env("WRITE_MIN_INTERVAL", "10")))
     args = p.parse_args(argv)
     writes_enabled = env_flag("WRITES_ENABLED")
     allow_power = env_flag("ALLOW_POWER_WRITES")
+    allow_untested = env_flag("ALLOW_UNTESTED_WRITES")
     local_fallback = env_flag("LOCAL_FALLBACK")
     cloud_mirror = env_flag("CLOUD_MIRROR")
 
@@ -438,7 +457,9 @@ def main(argv=None) -> int:
 
     log = ExchangeLog(args.log_dir, args.max_body_log)
     ctl = Controller(args.mode, args.log_dir, writes_enabled=writes_enabled,
-                     allow_power_writes=allow_power, write_timeout=args.write_timeout,
+                     allow_power_writes=allow_power, allow_untested_writes=allow_untested,
+                     settings_read_interval=args.settings_read_minutes * 60,
+                     write_timeout=args.write_timeout,
                      write_min_interval=args.write_min_interval,
                      clock_sync_interval=args.clock_sync_hours * 3600,
                      tz=load_tz(args.controller_tz), state_file=args.state_file)
@@ -452,6 +473,7 @@ def main(argv=None) -> int:
           f"{where[args.mode]}, logging to {os.path.abspath(args.log_dir)}", flush=True)
     print(f"writes {'ENABLED' if writes_enabled else 'off'}"
           f"{', on/off allowed' if writes_enabled and allow_power else ''}"
+          f"{', untested settings allowed' if writes_enabled and allow_untested else ''}"
           f"{', local fallback on' if local_fallback else ''}", flush=True)
     if args.ui_port:
         from log_ui import start_log_ui

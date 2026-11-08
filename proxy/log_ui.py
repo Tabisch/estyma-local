@@ -42,7 +42,7 @@ PAGE = """<!doctype html>
  .muted {{ color: #666; font-size: .9rem; }}
  @media (prefers-color-scheme: dark) {{ body {{ background: #111; color: #ddd; }} th, td {{ border-color: #333; }} a {{ color: #7aa7ff; }} }}
 </style></head><body>
-<p><a href="/" data-i18n="monitor">Monitor</a> &nbsp; <a href="/registers" data-i18n="registers">Registers</a> &nbsp; <b data-i18n="logs">Logs</b></p>
+<p><a href="/" data-i18n="monitor">Monitor</a> &nbsp; <a href="/settings" data-i18n="settings">Settings</a> &nbsp; <a href="/registers" data-i18n="registers">Registers</a> &nbsp; <b data-i18n="logs">Logs</b></p>
 <h1 data-i18n="title">Estyma logs</h1>
 <p class="muted"><span data-i18n="files" data-n="{count}">{count} files</span>, {total} <span data-i18n="in">in</span> <code>{logdir}</code></p>
 {zip_link}{delall}
@@ -74,7 +74,7 @@ PAGE = """<!doctype html>
 <script>
 // Same language choice as the monitor page (stored in this browser).
 (function () {{
-  var de = {{ monitor: "Monitor", registers: "Register", logs: "Logs", title: "Estyma-Logs", files: "{{n}} Dateien", "in": "in",
+  var de = {{ monitor: "Monitor", settings: "Einstellungen", registers: "Register", logs: "Logs", title: "Estyma-Logs", files: "{{n}} Dateien", "in": "in",
     file: "Datei", size: "Größe", modified: "Geändert", nologs: "Noch keine Logs.", zip: "Alle herunterladen (zip)",
     del: "Löschen", delall: "Alle .jsonl löschen", needauth: "Zum Löschen UI_USER und UI_PASSWORD setzen." }};
   var lang = "";
@@ -177,6 +177,12 @@ class LogUIHandler(BaseHTTPRequestHandler):
             snap = self.controller.snapshot()
             snap["ui_auth"] = self.auth is not None
             return self._json(200, snap)
+        if path in ("/settings", "/settings/") and self.controller:
+            return self._page("settings.html")
+        if path == "/api/settings" and self.controller:
+            snap = self.controller.settings_snapshot()
+            snap["ui_auth"] = self.auth is not None
+            return self._json(200, snap)
         if path == "/api/cloud" and self.cloud:
             st = self.cloud.status()
             st["ui_auth"] = self.auth is not None
@@ -197,7 +203,8 @@ class LogUIHandler(BaseHTTPRequestHandler):
             return
         path = urllib.parse.urlsplit(self.path).path
         available = {"/api/delete-logs": True, "/api/set": bool(self.controller),
-                     "/api/cancel": bool(self.controller), "/api/cloud": bool(self.cloud)}
+                     "/api/cancel": bool(self.controller), "/api/cloud": bool(self.cloud),
+                     "/api/read-settings": bool(self.controller)}
         if not available.get(path):
             return self._send(404, b"not found\n", "text/plain")
         # A JSON content type cannot be sent cross-site without a CORS
@@ -205,6 +212,9 @@ class LogUIHandler(BaseHTTPRequestHandler):
         ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
         if ctype != "application/json":
             return self._json(415, {"ok": False, "message": "Content-Type must be application/json"})
+        if path == "/api/read-settings":  # only adds reads, changes nothing
+            res = self.controller.request_settings_read()
+            return self._json(200 if res["ok"] else 409, res)
         if self.auth is None:
             what = {"/api/delete-logs": "deleting logs",
                     "/api/cloud": "switching cloud monitoring"}.get(path, "writes")

@@ -53,7 +53,9 @@ class ServerTest(unittest.TestCase):
 
     def start(self, mode, **kw):
         ctl = Controller(mode, self.dir, writes_enabled=True, allow_power_writes=True,
-                         clock_sync_interval=kw.pop("clock_sync", 0))
+                         clock_sync_interval=kw.pop("clock_sync", 0),
+                         allow_untested_writes=kw.pop("untested", False))
+        ctl.settings_due = kw.pop("read_settings", False)
         log = E.ExchangeLog(self.dir, 0)
         srv = E.make_server("127.0.0.1", 0, f"http://127.0.0.1:{self.cloud_port}", 5, log, ctl, **kw)
         ui = start_log_ui("127.0.0.1", 0, self.dir, "u", "p", controller=ctl)
@@ -116,6 +118,41 @@ class ServerTest(unittest.TestCase):
         code, res = self.ui("POST", "/api/set", {"key": "boiler_target", "value": 99})
         self.assertEqual(code, 409)
         self.assertIn("between", res["message"])
+
+    def test_hybrid_reads_settings(self):
+        self.start("hybrid", read_settings=True)
+        _, text = self.poll(report())
+        rl = P.parse_read_list(text)
+        base = P.parse_read_list(cloud_reply())
+        self.assertEqual(rl[:len(base)], base)
+        self.assertIn((8712, 1), rl[len(base):])
+        self.assertIn(f"ODCZYT&{len(rl)};", text)
+        _, snap = self.ui("GET", "/api/settings")
+        self.assertIsNotNone(snap["settings"]["sent"])
+        self.poll(report(**{f"r{r}_{i}": 0x100 for r, i in rl[len(base):]}))
+        _, text = self.poll(report())
+        self.assertEqual(text, cloud_reply())  # read done: reply untouched again
+        code, res = self.ui("POST", "/api/read-settings", {})
+        self.assertEqual(code, 200, res)
+        _, text = self.poll(report())
+        self.assertIn("8712,1;", text)
+
+    def test_settings_page_and_untested_write(self):
+        self.start("hybrid", untested=True)
+        self.poll(report(r8712_1=10))
+        code, page = self.ui("GET", "/settings")
+        self.assertEqual(code, 200)
+        self.assertIn("Estyma settings", page)
+        code, res = self.ui("POST", "/api/set", {"key": "hyst_on", "value": 8})
+        self.assertEqual(code, 200, res)
+        _, text = self.poll(report(r8712_1=10))
+        self.assertIn("ZAPIS&;8712,1=8;4112,1=1;&KONIEC<br>", text)
+        self.assertIn("8712,1;", text)  # read back even though not in the cloud's list
+        self.poll(report(r8712_1=8))
+        _, snap = self.ui("GET", "/api/settings")
+        self.assertEqual(snap["pending"], [])
+        items = {i["key"]: i for g in snap["groups"] for i in g["items"]}
+        self.assertEqual(items["hyst_on"]["value"], 8)
 
     def test_local_mode_answers_without_cloud(self):
         self.start("local", clock_sync=3600)

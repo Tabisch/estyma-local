@@ -144,6 +144,29 @@ def inject_writes(reply: str, entries) -> str | None:
     return reply[:pos] + format_writes(entries) + reply[pos:]
 
 
+def add_reads(reply: str, entries) -> str | None:
+    """Append ``reg,idx`` entries to the ``ODCZYT`` list of a reply.
+
+    This is how the cloud's service panel reads settings: the controller
+    reports every listed register on its next request. Entries already in
+    the list are skipped. Returns None when nothing was added or the reply
+    has no ``ODCZYT`` block.
+    """
+    m = _ODCZYT_RE.search(reply)
+    if not m or not entries:
+        return None
+    have = set(parse_read_list(reply) or ())
+    new = [e for e in dict.fromkeys(entries) if e not in have]
+    if not new:
+        return None
+    items = m.group(2)
+    if items and not items.endswith(";"):
+        items += ";"
+    count = len(have) + len(new)
+    block = f"ODCZYT&{count};{items}" + "".join(f"{r},{i};" for r, i in new) + "KONIEC&"
+    return reply[:m.start()] + block + reply[m.end():]
+
+
 def can_inject(reply: str) -> bool:
     if "ZAPIS&" in reply:
         return False

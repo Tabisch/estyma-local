@@ -135,6 +135,15 @@ Open `http://<proxy_host>:8089/`.
   reports in a row agree; a different raw value is flagged as a possible
   glitch. The table is kept in `registers.json` in the log volume, so
   registers read only once survive a restart. JSON at `/api/registers`.
+- **Settings** (`/settings`): the controller's settings, grouped like the
+  cloud panels: user settings (on/off, boiler target and mode, buffer
+  targets, room temperatures, circuit 1 program), boiler (hystereses, pump
+  temperature and overrun, return protection), burner (power, blower curve,
+  ignition, glowing, burn-out, feeder, fuel, lambda/O2, pause mode) and
+  heating circuits CO1 / CO2 (mode, manual target, weather curve). Each shows
+  the reported value, its register, when it was read and the allowed range.
+  Changing them works like the boiler target (see "Operating modes" below)
+  and asks for confirmation first. JSON at `/api/settings`.
 - **Logs** (`/logs`): every log file in the volume with size and date, a
   download link per file and a "Download all (zip)" button. Each `.jsonl`
   file has a *Delete* button, and *Delete all .jsonl* clears them all (both
@@ -185,10 +194,28 @@ from the cloud:
 |---|---|---|---|
 | Boiler target | `8195,1` | whole °C, 60..80 and within the controller's own min/max | `WRITES_ENABLED=1` |
 | Boiler on/off | `8197,1` | 0 / 1 | `WRITES_ENABLED=1` and `ALLOW_POWER_WRITES=1` |
+| Every other setting on the settings page | see [docs/registers.md](docs/registers.md) | the cloud panel's range, within the controller's own min/max | `WRITES_ENABLED=1` and `ALLOW_UNTESTED_WRITES=1` |
+
+Only `8195` and `8197` were seen being written on the real controller. The
+other settings use the same `ZAPIS` path and the cloud panel's ranges, but
+are marked *untested* on the page and stay locked unless
+`ALLOW_UNTESTED_WRITES=1`. Change them one at a time and check the result on
+the controller's own screen. Air correction (`8819`) is limited to 0..40 %
+because the encoding of negative values is not known; weekly timers are not
+offered yet.
+
+The settings are not part of the controller's normal report. In `hybrid` and
+`local` mode the server adds them to the register list (`ODCZYT`), the same
+way the cloud's service panel reads them: on start, every
+`SETTINGS_READ_MINUTES` and when *Read settings now* is pressed. A register
+with a pending write is added on every poll so its read-back can confirm it.
+In `proxy` mode the page is read only and shows whatever the cloud last
+read.
 
 How a write works:
 
-- Set it on the **Control** panel of the monitor page (`:8089`). Writing from
+- Set it on the **Control** panel of the monitor page or on the **Settings**
+  page (`:8089`). Writing from
   the page also needs `UI_USER` / `UI_PASSWORD`, so nobody on the LAN can
   change the heating without logging in.
 - The write is sent like the cloud does it, `ZAPIS&;8195,1=62;4112,1=1;&KONIEC`,
@@ -288,6 +315,8 @@ Values below are defaults or placeholders.
 | `MODE`             | `proxy` | `proxy`, `hybrid` or `local` |
 | `WRITES_ENABLED`   | `0`     | `1` = allow local writes (boiler target) |
 | `ALLOW_POWER_WRITES` | `0`   | `1` = also allow switching the boiler on/off; needs `WRITES_ENABLED=1` |
+| `ALLOW_UNTESTED_WRITES` | `0` | `1` = also allow the settings whose write path is untested (all but boiler target and on/off); needs `WRITES_ENABLED=1` |
+| `SETTINGS_READ_MINUTES` | `60` | Minutes between reads of all settings in `hybrid`/`local`, `0` = only on start and on request |
 | `WRITE_TIMEOUT`    | `120`   | Seconds until a write without read-back is marked failed |
 | `WRITE_MIN_INTERVAL` | `10`  | Minimum seconds between two requests for the same register |
 | `LOCAL_FALLBACK`   | `0`     | `1` = in `proxy`/`hybrid`, answer locally when the cloud fails instead of `502` |
@@ -327,7 +356,7 @@ variables, plus `INTERVAL` (seconds between polls, default 30) and
 | `PROXY_PORT`      | `8088`  | Host port of the proxy; the router's DNAT rule points here |
 | `UI_PORT`         | `8089`  | Host port of the web UI (inside the container it stays 8089) |
 | `UI_USER` / `UI_PASSWORD` | (empty) | Passed to the proxy, see above |
-| `MODE`, `WRITES_ENABLED`, `ALLOW_POWER_WRITES`, `LOCAL_FALLBACK`, `CLOUD_MIRROR`, `CONTROLLER_TZ` | see above | Passed to the proxy |
+| `MODE`, `WRITES_ENABLED`, `ALLOW_POWER_WRITES`, `ALLOW_UNTESTED_WRITES`, `SETTINGS_READ_MINUTES`, `LOCAL_FALLBACK`, `CLOUD_MIRROR`, `CONTROLLER_TZ` | see above | Passed to the proxy |
 | `ESTYMA_EMAIL`, `ESTYMA_PASSWORD`, `ESTYMA_PASSWORD_B64`, `CLOUD_MONITOR`, `CLOUD_INTERVAL` | (empty) / `0` / `30` | Passed to the proxy for cloud monitoring |
 
 `UPSTREAM` and `UPSTREAM_TIMEOUT` are set

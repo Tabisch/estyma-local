@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estyma settings</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f6f6f4; --surface: #fcfcfb; --border: #e3e2de;
+  --text: #0b0b0b; --text-2: #52514e; --muted: #7d7c77;
+  --accent: #2a78d6; --hl: #e8f1fc;
+  --good: #1a7f37; --warn: #b26b00; --bad: #c62828;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #111110; --surface: #1a1a19; --border: #2e2e2c;
+    --text: #f0efec; --text-2: #c3c2b7; --muted: #8f8e88;
+    --accent: #3987e5; --hl: #182638;
+    --good: #4cc26a; --warn: #e0a030; --bad: #ef6b6b;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 system-ui, sans-serif; }
+main { max-width: 60rem; margin: 0 auto; padding: 1rem 16px 3rem; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem 1.5rem; }
+h1 { font-size: 1.35rem; margin: .2rem 0; }
+h2 { font-size: 1.05rem; margin: 1.6rem 0 .5rem; }
+nav a { color: var(--accent); text-decoration: none; margin-right: 1rem; }
+nav a.on { color: var(--text); font-weight: 600; }
+.range { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; vertical-align: middle; margin-left: auto; }
+.range button { background: var(--surface); color: var(--text-2); border: 0; padding: .3rem .7rem; font: inherit; font-size: .85rem; cursor: pointer; }
+.range button + button { border-left: 1px solid var(--border); }
+.range button.on { background: var(--accent); color: #fff; }
+.status { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; color: var(--text-2); font-size: .9rem; margin: .6rem 0 0; align-items: center; }
+.status b { color: var(--text); }
+.notice { margin: .8rem 0 0; padding: .6rem .8rem; border: 1px solid var(--border); border-left: 3px solid var(--warn); border-radius: 6px; background: var(--surface); font-size: .9rem; color: var(--text-2); }
+.notice.bad { border-left-color: var(--bad); }
+.list { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+.item { display: grid; grid-template-columns: minmax(0, 1fr) 7rem minmax(15rem, auto); gap: .2rem 1rem; align-items: center; padding: .55rem .8rem; border-bottom: 1px solid var(--border); }
+.item:last-child { border-bottom: 0; }
+.item.pending { background: var(--hl); }
+.name { min-width: 0; }
+.name .sub, .sub { color: var(--muted); font-size: .8rem; }
+.cur { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.cur small { font-weight: 400; color: var(--text-2); margin-left: .15rem; }
+.edit { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.edit input, .edit select { font: inherit; padding: .25rem .4rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
+.edit input { width: 5.5rem; text-align: right; }
+.btn { font: inherit; font-size: .85rem; padding: .28rem .7rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.note { grid-column: 1 / -1; font-size: .82rem; color: var(--text-2); }
+.note.err { color: var(--bad); }
+.note:empty { display: none; }
+.pill { display: inline-block; padding: 0 .45rem; border-radius: 999px; font-size: .72rem; border: 1px solid currentColor; margin-left: .3rem; white-space: nowrap; vertical-align: 1px; }
+.pill.untested { color: var(--warn); }
+.pill.tested { color: var(--good); }
+.pill.likely { color: var(--accent); }
+.muted { color: var(--muted); font-size: .85rem; }
+table { border-collapse: collapse; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+th, td { text-align: left; padding: .35rem .7rem; border-bottom: 1px solid var(--border); font-size: .85rem; vertical-align: top; }
+th { color: var(--text-2); font-weight: 600; }
+@media (max-width: 640px) {
+  .item { grid-template-columns: minmax(0, 1fr) auto; }
+  .edit { grid-column: 1 / -1; justify-content: flex-start; }
+}
+</style></head><body><main>
+<header>
+  <h1 data-i18n="title">Settings</h1>
+  <nav><a href="/" data-i18n="nav.monitor">Monitor</a><a class="on" href="/settings" data-i18n="nav.settings">Settings</a><a href="/registers" data-i18n="nav.registers">Registers</a><a href="/logs" data-i18n="nav.logs">Logs</a></nav>
+  <span class="range" id="lang" role="group" aria-label="Language"><button data-l="en" lang="en">EN</button><button data-l="de" lang="de">DE</button></span>
+</header>
+<div class="status" id="status" data-i18n="loading">Loading…</div>
+<div id="notices"></div>
+<div id="groups"></div>
+<h2 data-i18n="writes">Recent writes</h2>
+<table><thead><tr><th data-i18n="col.time">Time</th><th data-i18n="col.write">Write</th><th data-i18n="col.event">Event</th><th data-i18n="col.detail">Detail</th></tr></thead>
+<tbody id="writes"></tbody></table>
+<p class="muted" data-i18n="footer">Values are the controller's own reports. The settings are not part of the normal report, so in hybrid and local mode the server adds them to the read list on start, every SETTINGS_READ_MINUTES and when you press "Read settings now", the same way the cloud's service panel does. A write is sent on every poll until the controller reports the new value. Ranges are the ones the cloud panels offer, narrowed by the minimum and maximum the controller reports.</p>
+</main>
+<script>
+"use strict";
+const I18N = {
+  en: {
+    "title": "Settings", "nav.monitor": "Monitor", "nav.settings": "Settings", "nav.registers": "Registers", "nav.logs": "Logs", "loading": "Loading…",
+    "writes": "Recent writes", "col.time": "Time", "col.write": "Write", "col.event": "Event", "col.detail": "Detail",
+    "footer": "Values are the controller's own reports. The settings are not part of the normal report, so in hybrid and local mode the server adds them to the read list on start, every SETTINGS_READ_MINUTES and when you press \"Read settings now\", the same way the cloud's service panel does. A write is sent on every poll until the controller reports the new value. Ranges are the ones the cloud panels offer, narrowed by the minimum and maximum the controller reports.",
+    "st.mode": "Mode {m}", "st.writes": "Writes {s}", "st.on": "on", "st.off": "off", "st.untested": "untested settings {s}",
+    "st.read": "Settings read {ago}", "st.never": "Settings not read yet", "st.reading": "Reading settings…", "st.readnow": "Read settings now",
+    "st.alarm": "Alarm active, only on/off can be written", "unreachable": "Not reachable ({e})",
+    "n.proxy": "MODE=proxy: read only. The page shows the settings the cloud's service panel read last; set MODE=hybrid or MODE=local to read and change them here.",
+    "n.writesoff": "Writes are off. Set WRITES_ENABLED=1 (and UI_USER / UI_PASSWORD) to change settings.",
+    "n.noauth": "Set UI_USER and UI_PASSWORD to change settings from the web UI.",
+    "n.untested": "Only the boiler target and on/off were seen being written on the real controller. The other settings are marked \"untested\" and stay locked unless ALLOW_UNTESTED_WRITES=1. Change them one at a time and check the result on the controller's own screen.",
+    "n.untestedon": "ALLOW_UNTESTED_WRITES=1: settings marked \"untested\" can be written. Their write path was not tested on a real controller yet; change one at a time and check the result on the controller's own screen.",
+    "untested": "untested", "untested.t": "Writing this register was not yet seen working on a real controller", "tested": "tested", "likely": "likely",
+    "set": "Set", "cancel": "Cancel", "range": "{lo}–{hi}", "seen": "read {ago}", "notread": "not read yet",
+    "pending": "Sending {v}, poll {n}…", "locked": "Locked: {r}",
+    "confirm": "Change \"{l}\" from {a} to {b}?", "confirm.untested": "\n\nThis register's write path has not been tested on a real controller yet. Check the result on the controller's screen.",
+    "confirm.off": "\n\nThis switches the whole boiler off.",
+    "nowrites": "No writes yet.", "was": "was {v}", "polls": "{n} polls",
+    "ev.requested": "requested", "ev.sent": "sent", "ev.confirmed": "confirmed", "ev.failed": "failed", "ev.rejected": "rejected",
+    "ev.cancelled": "cancelled", "ev.replaced": "replaced", "ev.superseded": "superseded by the cloud", "ev.noop": "no change",
+    "ago.s": "{n} s ago", "ago.min": "{n} min ago", "ago.h": "{n} h ago", "ago.d": "{n} d ago",
+  },
+  de: {
+    "title": "Einstellungen", "nav.monitor": "Monitor", "nav.settings": "Einstellungen", "nav.registers": "Register", "nav.logs": "Logs", "loading": "Lädt…",
+    "writes": "Letzte Schreibvorgänge", "col.time": "Zeit", "col.write": "Schreiben", "col.event": "Ereignis", "col.detail": "Details",
+    "footer": "Die Werte sind die eigenen Meldungen des Reglers. Die Einstellungen sind nicht Teil der normalen Meldung, deshalb setzt der Server sie im Hybrid- und Lokal-Modus beim Start, alle SETTINGS_READ_MINUTES und bei \"Einstellungen jetzt lesen\" auf die Leseliste, so wie es das Servicepanel der Cloud macht. Ein Schreibvorgang wird bei jeder Abfrage gesendet, bis der Regler den neuen Wert meldet. Die Bereiche sind die der Cloud-Panels, eingeengt durch Minimum und Maximum, die der Regler meldet.",
+    "st.mode": "Modus {m}", "st.writes": "Schreiben {s}", "st.on": "an", "st.off": "aus", "st.untested": "ungetestete Einstellungen {s}",
+    "st.read": "Einstellungen gelesen {ago}", "st.never": "Einstellungen noch nicht gelesen", "st.reading": "Einstellungen werden gelesen…", "st.readnow": "Einstellungen jetzt lesen",
+    "st.alarm": "Alarm aktiv, nur An/Aus kann geschrieben werden", "unreachable": "Nicht erreichbar ({e})",
+    "n.proxy": "MODE=proxy: nur lesen. Die Seite zeigt die Einstellungen, die das Servicepanel der Cloud zuletzt gelesen hat; MODE=hybrid oder MODE=local setzen, um sie hier zu lesen und zu ändern.",
+    "n.writesoff": "Schreiben ist aus. WRITES_ENABLED=1 (und UI_USER / UI_PASSWORD) setzen, um Einstellungen zu ändern.",
+    "n.noauth": "UI_USER und UI_PASSWORD setzen, um Einstellungen aus der Web-Oberfläche zu ändern.",
+    "n.untested": "Nur Kessel-Soll und An/Aus wurden am echten Regler beim Schreiben beobachtet. Die anderen Einstellungen sind als \"ungetestet\" markiert und bleiben gesperrt, solange ALLOW_UNTESTED_WRITES nicht 1 ist. Einzeln ändern und das Ergebnis am Display des Reglers prüfen.",
+    "n.untestedon": "ALLOW_UNTESTED_WRITES=1: als \"ungetestet\" markierte Einstellungen können geschrieben werden. Ihr Schreibweg wurde an einem echten Regler noch nicht getestet; einzeln ändern und das Ergebnis am Display des Reglers prüfen.",
+    "untested": "ungetestet", "untested.t": "Schreiben dieses Registers wurde an einem echten Regler noch nicht beobachtet", "tested": "getestet", "likely": "wahrscheinlich",
+    "set": "Setzen", "cancel": "Abbrechen", "range": "{lo}–{hi}", "seen": "gelesen {ago}", "notread": "noch nicht gelesen",
+    "pending": "Sende {v}, Abfrage {n}…", "locked": "Gesperrt: {r}",
+    "confirm": "\"{l}\" von {a} auf {b} ändern?", "confirm.untested": "\n\nDer Schreibweg dieses Registers wurde an einem echten Regler noch nicht getestet. Ergebnis am Display des Reglers prüfen.",
+    "confirm.off": "\n\nDas schaltet den ganzen Kessel aus.",
+    "nowrites": "Noch keine Schreibvorgänge.", "was": "vorher {v}", "polls": "{n} Abfragen",
+    "ev.requested": "angefordert", "ev.sent": "gesendet", "ev.confirmed": "bestätigt", "ev.failed": "fehlgeschlagen", "ev.rejected": "abgelehnt",
+    "ev.cancelled": "abgebrochen", "ev.replaced": "ersetzt", "ev.superseded": "von der Cloud ersetzt", "ev.noop": "keine Änderung",
+    "ago.s": "vor {n} s", "ago.min": "vor {n} min", "ago.h": "vor {n} h", "ago.d": "vor {n} T",
+  },
+};
+// Server messages (controller.py / log_ui.py) -> German.
+const SERVER_MSG = {
+  de: [
+    [/^MODE=proxy \(set MODE=hybrid or local\)$/, "MODE=proxy (MODE=hybrid oder local setzen)"],
+    [/^alarm active$/, "Alarm aktiv"],
+    [/^'(.+)' is not writable$/, "'$1' ist nicht schreibbar"],
+    [/^writes need MODE=hybrid or MODE=local$/, "Schreiben braucht MODE=hybrid oder MODE=local"],
+    [/^reading settings needs MODE=hybrid or MODE=local$/, "Lesen der Einstellungen braucht MODE=hybrid oder MODE=local"],
+    [/^settings are read on the next poll$/, "Einstellungen werden bei der nächsten Abfrage gelesen"],
+    [/^writes are off \(WRITES_ENABLED=0\)$/, "Schreiben ist aus (WRITES_ENABLED=0)"],
+    [/^switching the boiler on\/off is off \(ALLOW_POWER_WRITES=0\)$/, "Kessel an/aus ist gesperrt (ALLOW_POWER_WRITES=0)"],
+    [/^writing this register is untested \(ALLOW_UNTESTED_WRITES=0\)$/, "Schreiben dieses Registers ist ungetestet (ALLOW_UNTESTED_WRITES=0)"],
+    [/^value must be a whole number$/, "Wert muss eine ganze Zahl sein"],
+    [/^value must be a number$/, "Wert muss eine Zahl sein"],
+    [/^value must be a multiple of (\S+)$/, "Wert muss ein Vielfaches von $1 sein"],
+    [/^(.+) must be between (.+) and (.+)$/, "$1 muss zwischen $2 und $3 liegen"],
+    [/^(.+): value not allowed$/, "$1: Wert nicht erlaubt"],
+    [/^(.+) has not been read yet, read the settings first$/, "$1 wurde noch nicht gelesen, zuerst die Einstellungen lesen"],
+    [/^no report from the controller yet$/, "Noch keine Meldung vom Regler"],
+    [/^an alarm is active; only on\/off is allowed$/, "Alarm aktiv; nur An/Aus ist erlaubt"],
+    [/^too fast, wait (\S+) s$/, "Zu schnell, $1 s warten"],
+    [/^(.+) is already (.+)$/, "$1 ist bereits $2"],
+    [/^(.+) = (.+) already queued$/, "$1 = $2 ist bereits eingereiht"],
+    [/^(.+) = (.+) queued, sent on the next poll$/, "$1 = $2 eingereiht, wird bei der nächsten Abfrage gesendet"],
+    [/^already set$/, "bereits gesetzt"],
+    [/^reported before it was sent$/, "gemeldet, bevor es gesendet wurde"],
+    [/^no read-back within (\S+) s$/, "keine Bestätigung innerhalb von $1 s"],
+    [/^cloud wrote (\S+) to the same register$/, "Cloud schrieb $1 in dasselbe Register"],
+    [/^cancelled$/, "abgebrochen"], [/^nothing pending$/, "nichts ausstehend"],
+    [/^set UI_USER and UI_PASSWORD to allow writes from the web UI$/, "UI_USER und UI_PASSWORD setzen, um aus der Web-Oberfläche zu schreiben"],
+    [/^(MODE=proxy|WRITES_ENABLED=0|ALLOW_POWER_WRITES=0|ALLOW_UNTESTED_WRITES=0)$/, "$1"],
+  ],
+};
+
+let lang = "";
+try { lang = localStorage.getItem("estyma-lang") || ""; } catch (e) {}
+if (!I18N[lang]) lang = (navigator.languages || [navigator.language || "en"]).map((l) => String(l).slice(0, 2).toLowerCase()).find((l) => I18N[l]) || "en";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const T = (key, vars) => {
+  let s = I18N[lang][key] ?? I18N.en[key] ?? key;
+  for (const [k, v] of Object.entries(vars || {})) s = s.replace("{" + k + "}", v);
+  return s;
+};
+const srvMsg = (m) => {
+  if (!m) return "";
+  for (const [re, out] of SERVER_MSG[lang] || []) if (re.test(m)) return m.replace(re, out);
+  return m;
+};
+const ago = (s) => s < 90 ? T("ago.s", { n: Math.max(0, Math.round(s)) }) : s < 5400 ? T("ago.min", { n: Math.round(s / 60) })
+  : s < 172800 ? T("ago.h", { n: Math.round(s / 3600) }) : T("ago.d", { n: Math.round(s / 86400) });
+const L = (o) => (lang === "de" && o.label_de) || o.label;
+const decimals = (it) => it.step < 1 ? 1 : 0;
+function show(it, v) {
+  if (v == null) return "–";
+  if (it.options && it.options[String(v)]) return it.options[String(v)][lang === "de" ? 1 : 0];
+  if (it.kind === "bool") return v ? (lang === "de" ? "an" : "on") : (lang === "de" ? "aus" : "off");
+  return Number(v).toLocaleString(lang, { minimumFractionDigits: decimals(it), maximumFractionDigits: decimals(it) });
+}
+const withUnit = (it, v) => show(it, v) + (it.unit && v != null && !it.options ? " " + it.unit : "");
+
+let data = null, error = null, notes = {}, edits = {}, items = {};
+
+function render() {
+  if (error && !data) { $("status").textContent = T("unreachable", { e: error }); return; }
+  if (!data) return;
+  const d = data, s = d.settings;
+  const st = [`<span>${T("st.mode", { m: `<b>${esc(d.mode)}</b>` })}</span>`,
+    `<span>${T("st.writes", { s: `<b>${T(d.writes_enabled ? "st.on" : "st.off")}</b>` })}${d.writes_enabled ? ", " + T("st.untested", { s: `<b>${T(d.allow_untested_writes ? "st.on" : "st.off")}</b>` }) : ""}</span>`];
+  st.push(`<span>${s.sent ? T("st.reading") : s.read ? T("st.read", { ago: ago(d.now - s.read) }) : T("st.never")}</span>`);
+  if (s.can_read) st.push(`<button class="btn" id="readnow"${s.sent || s.due ? " disabled" : ""}>${T("st.readnow")}</button>`);
+  if (d.alarm_active) st.push(`<span style="color:var(--bad)"><b>${T("st.alarm")}</b></span>`);
+  if (error) st.push(`<span style="color:var(--bad)">${esc(T("unreachable", { e: error }))}</span>`);
+  if (notes._read) st.push(`<span class="${notes._read.err ? "note err" : ""}">${esc(srvMsg(notes._read.text))}</span>`);
+  $("status").innerHTML = st.join("");
+
+  const n = [];
+  if (d.mode === "proxy") n.push(["", "n.proxy"]);
+  else if (!d.writes_enabled) n.push(["", "n.writesoff"]);
+  else if (!d.ui_auth) n.push(["bad", "n.noauth"]);
+  if (d.mode !== "proxy" && d.writes_enabled) n.push(["", d.allow_untested_writes ? "n.untestedon" : "n.untested"]);
+  $("notices").innerHTML = n.map(([c, k]) => `<div class="notice ${c}">${esc(T(k))}</div>`).join("");
+
+  const pend = Object.fromEntries(d.pending.map((p) => [p.key, p]));
+  const focus = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.in : null;
+  items = {};
+  $("groups").innerHTML = d.groups.map((g) => `<h2>${esc(L(g))}</h2><div class="list">${g.items.map((it) => {
+    items[it.key] = it;
+    const p = pend[it.key], canEdit = it.allowed && d.ui_auth;
+    const dis = canEdit ? "" : " disabled";
+    const val = edits[it.key] ?? (it.value == null ? "" : String(it.value));
+    let ctl;
+    if (it.options) {
+      const opts = Object.entries(it.options).map(([k, v]) => `<option value="${esc(k)}"${String(val) === k ? " selected" : ""}>${esc(v[lang === "de" ? 1 : 0])}</option>`).join("");
+      ctl = `<select data-in="${it.key}"${dis}>${it.value == null ? '<option value="">–</option>' : ""}${opts}</select>`;
+    } else {
+      ctl = `<input type="number" data-in="${it.key}" min="${it.min}" max="${it.max}" step="${it.step}" value="${esc(val)}"${dis}>`
+        + `<span class="sub">${esc(T("range", { lo: show(it, it.min), hi: show(it, it.max) }))}${it.unit ? " " + esc(it.unit) : ""}</span>`;
+    }
+    ctl += `<button class="btn primary" data-set="${it.key}"${dis}>${T("set")}</button>`;
+    if (p) ctl += `<button class="btn" data-cancel="${it.key}">${T("cancel")}</button>`;
+    const pills = (it.tested ? "" : `<span class="pill untested" title="${esc(T("untested.t"))}">${T("untested")}</span>`)
+      + (it.conf === "likely" ? `<span class="pill likely">${T("likely")}</span>` : "");
+    const sub = [it.register, it.seen ? T("seen", { ago: ago(d.now - it.seen) }) : T("notread")].join(" · ");
+    const nt = notes[it.key];
+    const note = nt ? srvMsg(nt.text) : p ? T("pending", { v: withUnit(it, p.value), n: p.sent }) : !it.allowed && d.writes_enabled && d.mode !== "proxy" && it.reason !== "ALLOW_UNTESTED_WRITES=0" ? T("locked", { r: srvMsg(it.reason) }) : "";
+    return `<div class="item${p ? " pending" : ""}"><div class="name">${esc(L(it))}${pills}<div class="sub">${esc(sub)}</div></div>`
+      + `<div class="cur">${esc(show(it, it.value))}${it.unit && it.value != null && !it.options ? `<small>${esc(it.unit)}</small>` : ""}</div>`
+      + `<div class="edit">${ctl}</div><div class="note${nt && nt.err ? " err" : ""}">${esc(note)}</div></div>`;
+  }).join("")}</div>`).join("");
+  if (focus) { const el = document.querySelector(`[data-in="${focus}"]`); if (el) el.focus(); }
+
+  $("writes").innerHTML = d.recent.map((r) => `<tr><td>${esc(new Date(r.time).toLocaleString(lang))}</td><td><code>${esc((r.register || r.key) + (r.value != null ? "=" + r.value : ""))}</code></td><td>${esc(T("ev." + r.event))}</td><td>${esc([r.source, srvMsg(r.reason), r.old != null ? T("was", { v: r.old }) : "", r.polls ? T("polls", { n: r.polls }) : ""].filter(Boolean).join(" · "))}</td></tr>`).join("")
+    || `<tr><td colspan="4" class="muted">${T("nowrites")}</td></tr>`;
+}
+
+async function refresh() {
+  try {
+    const r = await fetch("/api/settings", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    data = await r.json(); error = null;
+  } catch (e) { error = e.message || String(e); }
+  render();
+}
+
+async function post(url, body, k) {
+  try {
+    const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({ message: "HTTP " + r.status }));
+    notes[k] = { text: j.message, err: !r.ok || j.ok === false };
+    if (r.ok && j.ok !== false) delete edits[k];
+  } catch (e) { notes[k] = { text: e.message, err: true }; }
+  setTimeout(() => { delete notes[k]; render(); }, 8000);
+  refresh();
+}
+
+document.addEventListener("input", (e) => {
+  const k = e.target.dataset && e.target.dataset.in;
+  if (k) edits[k] = e.target.value;
+});
+document.addEventListener("keydown", (e) => {
+  const k = e.key === "Enter" && e.target.dataset && e.target.dataset.in;
+  if (k) { const b = document.querySelector(`[data-set="${k}"]`); if (b && !b.disabled) b.click(); }
+});
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.id === "readnow") return post("/api/read-settings", {}, "_read");
+  if (b.dataset.cancel) { delete edits[b.dataset.cancel]; return post("/api/cancel", { key: b.dataset.cancel }, b.dataset.cancel); }
+  const k = b.dataset.set; if (!k) return;
+  const it = items[k], el = document.querySelector(`[data-in="${k}"]`);
+  if (!it || !el || el.value === "") return;
+  const v = Number(el.value);
+  if (!Number.isFinite(v)) { notes[k] = { text: "value must be a number", err: true }; return render(); }
+  let q = T("confirm", { l: L(it), a: withUnit(it, it.value), b: withUnit(it, v) });
+  if (!it.tested) q += T("confirm.untested");
+  if (it.kind === "bool" && v === 0) q += T("confirm.off");
+  if (!confirm(q)) return;
+  post("/api/set", { key: k, value: v }, k);
+});
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = T(el.dataset.i18n); });
+  for (const b of $("lang").children) b.classList.toggle("on", b.dataset.l === lang);
+  render();
+}
+$("lang").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b || b.dataset.l === lang) return;
+  lang = b.dataset.l;
+  try { localStorage.setItem("estyma-lang", lang); } catch (err) {}
+  applyLang();
+});
+applyLang();
+refresh();
+setInterval(refresh, 10000);
+</script>
+</body></html>
