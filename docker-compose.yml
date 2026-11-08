@@ -19,6 +19,14 @@ services:
       # Optional basic auth for the log UI (set both in .env)
       UI_USER: "${UI_USER:-}"
       UI_PASSWORD: "${UI_PASSWORD:-}"
+      # Local server, see README "Operating modes". Defaults keep today's
+      # behaviour: forward only, no writes.
+      MODE: "${MODE:-proxy}"                       # proxy | hybrid | local
+      WRITES_ENABLED: "${WRITES_ENABLED:-0}"       # 1 = allow boiler target writes
+      ALLOW_POWER_WRITES: "${ALLOW_POWER_WRITES:-0}"  # 1 = also allow boiler on/off
+      LOCAL_FALLBACK: "${LOCAL_FALLBACK:-0}"       # 1 = answer locally when the cloud fails
+      CLOUD_MIRROR: "${CLOUD_MIRROR:-0}"           # local mode: still send reports to the cloud
+      CONTROLLER_TZ: "${CONTROLLER_TZ:-Europe/Warsaw}"
     volumes:
       - estyma-logs:/logs
 

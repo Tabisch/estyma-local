@@ -61,6 +61,7 @@ class LogUIHandler(BaseHTTPRequestHandler):
     log_dir: str
     auth: bytes | None  # expected "user:password" or None
     monitor = None      # monitor.Monitor or None
+    controller = None   # controller.Controller or None
 
     def log_message(self, fmt, *args):
         pass
@@ -121,11 +122,50 @@ class LogUIHandler(BaseHTTPRequestHandler):
             return self._index()
         if path == "/api/monitor" and self.monitor:
             return self._monitor_api(url.query)
+        if path == "/api/control" and self.controller:
+            snap = self.controller.snapshot()
+            snap["ui_auth"] = self.auth is not None
+            return self._json(200, snap)
         if path == "/all.zip":
             return self._zip()
         if path.startswith("/files/"):
             return self._file(urllib.parse.unquote(path[len("/files/"):]))
         self._send(404, b"not found\n", "text/plain")
+
+    def _json(self, code: int, obj) -> None:
+        self._send(code, json.dumps(obj, separators=(",", ":")).encode(), "application/json")
+
+    def do_POST(self):
+        if not self._authorized():
+            self._send(401, b"authentication required\n", "text/plain",
+                       [("WWW-Authenticate", 'Basic realm="estyma logs"')])
+            return
+        path = urllib.parse.urlsplit(self.path).path
+        if path not in ("/api/set", "/api/cancel") or not self.controller:
+            return self._send(404, b"not found\n", "text/plain")
+        # A JSON content type cannot be sent cross-site without a CORS
+        # preflight, which we never answer: a simple CSRF guard.
+        ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if ctype != "application/json":
+            return self._json(415, {"ok": False, "message": "Content-Type must be application/json"})
+        if self.auth is None:
+            return self._json(403, {"ok": False, "message":
+                                    "set UI_USER and UI_PASSWORD to allow writes from the web UI"})
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            req = json.loads(self.rfile.read(min(length, 4096)) or b"{}")
+            key = str(req.get("key", ""))
+        except (ValueError, AttributeError):
+            return self._json(400, {"ok": False, "message": "invalid JSON"})
+        from controller import WriteError
+        if path == "/api/cancel":
+            ok = self.controller.cancel_write(key, source="web")
+            return self._json(200, {"ok": ok, "message": "cancelled" if ok else "nothing pending"})
+        try:
+            res = self.controller.request_write(key, req.get("value"), source="web")
+        except WriteError as exc:
+            return self._json(409, {"ok": False, "message": str(exc)})
+        return self._json(200, {"ok": True, **res})
 
     def _index(self):
         files = self._files()
@@ -195,11 +235,11 @@ class LogUIHandler(BaseHTTPRequestHandler):
 
 def start_log_ui(host: str, port: int, log_dir: str,
                  user: str | None = None, password: str | None = None,
-                 monitor=None) -> ThreadingHTTPServer:
+                 monitor=None, controller=None) -> ThreadingHTTPServer:
     """Start the UI in a background thread and return the server."""
     auth = f"{user}:{password}".encode() if user and password else None
     handler = type("Handler", (LogUIHandler,), {"log_dir": os.path.abspath(log_dir), "auth": auth,
-                                                "monitor": monitor})
+                                                "monitor": monitor, "controller": controller})
     server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, name="log-ui", daemon=True).start()

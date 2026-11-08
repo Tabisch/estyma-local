@@ -139,6 +139,68 @@ Register meanings found so far with this comparison are in
 names, their English meaning and enum values are in
 [docs/cloud-translation.md](docs/cloud-translation.md).
 
+## 4. Operating modes (local server)
+
+The proxy can also act as the controller's server. `MODE` picks how much it
+does; the defaults keep the plain logging proxy and never write anything.
+
+| `MODE` | Who answers the controller | Local writes |
+|---|---|---|
+| `proxy` (default) | the cloud, forwarded unchanged | no |
+| `hybrid` | the cloud, but a pending local write is added to its reply | yes, if enabled |
+| `local` | this server, the cloud is not contacted (unless `CLOUD_MIRROR=1`) | yes, if enabled |
+
+Writes are read-only by default and limited to what has been seen working
+from the cloud:
+
+| Control | Register | Values | Needs |
+|---|---|---|---|
+| Boiler target | `8195,1` | whole °C, 60..80 and within the controller's own min/max | `WRITES_ENABLED=1` |
+| Boiler on/off | `8197,1` | 0 / 1 | `WRITES_ENABLED=1` and `ALLOW_POWER_WRITES=1` |
+
+How a write works:
+
+- Set it on the **Control** panel of the monitor page (`:8089`). Writing from
+  the page also needs `UI_USER` / `UI_PASSWORD`, so nobody on the LAN can
+  change the heating without logging in.
+- The write is sent like the cloud does it, `ZAPIS&;8195,1=62;4112,1=1;&KONIEC`,
+  on every poll until the controller reports the new value (read-back), then
+  it is done. If the value does not show up within `WRITE_TIMEOUT` seconds
+  the write is marked failed. The panel always shows the reported value, not
+  the requested one.
+- One register per poll, at most one pending write per register (a new
+  request replaces it), and at most one request per register every
+  `WRITE_MIN_INTERVAL` seconds.
+- While an alarm is active only on/off is sent (switching off and on is how
+  an alarm is reset).
+- In `hybrid` mode the cloud stays in charge: nothing is added to a reply
+  that already carries a cloud write, and a cloud write to the same register
+  cancels the local one. Changes made locally are seen by the cloud on the
+  next report, like changes made at the controller.
+- Every step (requested, sent, confirmed, failed, rejected, ...) is written
+  to `writes-YYYY-MM-DD.jsonl` in the logs volume and listed on the page.
+
+`local` mode answers every `/device/connect` itself with the same reply
+layout as the cloud: the register list (learned from the cloud while running
+in `proxy`/`hybrid` mode and saved in `state.json`, or a built-in default)
+plus the two newest alarm slots, and a clock sync (`8549`, local time in
+`CONTROLLER_TZ`) on start and every `CLOCK_SYNC_HOURS`. The vendor app no
+longer gets data unless `CLOUD_MIRROR=1`, which still forwards each report
+to the cloud in the background and ignores its reply (its writes are not
+applied).
+
+Suggested order: run `hybrid` with `WRITES_ENABLED=1` for a while and try a
+boiler target change from the page; then `local`. To go back to the cloud at
+any time set `MODE=proxy` (or remove the router's DNAT rule; the controller
+then talks to the cloud directly). With `LOCAL_FALLBACK=1`, `proxy` and
+`hybrid` answer locally whenever the cloud does not, so a flaky cloud no
+longer leaves the controller without an answer.
+
+The panel's data is also available as JSON: `GET /api/control`, and
+`POST /api/set` with `{"key": "boiler_target", "value": 62}` (or
+`boiler_on`, 0/1) and `POST /api/cancel` with `{"key": ...}`; both need
+`Content-Type: application/json` and basic auth.
+
 ## Environment variables
 
 Values below are defaults or placeholders.
@@ -157,6 +219,25 @@ Values below are defaults or placeholders.
 | `UI_USER`          | (unset)          | Basic auth user for the log UI |
 | `UI_PASSWORD`      | (unset)          | Basic auth password; auth is on only when user and password are both set |
 | `MONITOR_HISTORY_HOURS` | `48`        | Hours of decoded values the monitor keeps in memory for its charts (reloaded from the logs on start) |
+
+### Local server (same service, see "Operating modes")
+
+| Variable           | Default | Meaning |
+|--------------------|---------|---------|
+| `MODE`             | `proxy` | `proxy`, `hybrid` or `local` |
+| `WRITES_ENABLED`   | `0`     | `1` = allow local writes (boiler target) |
+| `ALLOW_POWER_WRITES` | `0`   | `1` = also allow switching the boiler on/off; needs `WRITES_ENABLED=1` |
+| `WRITE_TIMEOUT`    | `120`   | Seconds until a write without read-back is marked failed |
+| `WRITE_MIN_INTERVAL` | `10`  | Minimum seconds between two requests for the same register |
+| `LOCAL_FALLBACK`   | `0`     | `1` = in `proxy`/`hybrid`, answer locally when the cloud fails instead of `502` |
+| `CLOUD_MIRROR`     | `0`     | `1` = in `local`, still forward each report to the cloud and ignore its reply |
+| `CONTROLLER_TZ`    | `Europe/Warsaw` | Time zone of the controller clock, for the clock sync in `local` mode |
+| `CLOCK_SYNC_HOURS` | `6`     | Hours between clock syncs in `local` mode, `0` = off |
+| `POLL_DELAY`       | `10`    | `DELAY` value in local replies (the controller's pause between polls) |
+| `STATE_FILE`       | `/logs/state.json` | Last reported registers and the learned register list, kept across restarts |
+
+`UPSTREAM` is not needed in `local` mode unless `CLOUD_MIRROR` or
+`LOCAL_FALLBACK` is on.
 
 ### Cloud recorder (`cloud-recorder` service)
 
@@ -186,6 +267,7 @@ start recording.
 | `PROXY_PORT`      | `8088`  | Host port of the proxy; the router's DNAT rule points here |
 | `UI_PORT`         | `8089`  | Host port of the web UI (inside the container it stays 8089) |
 | `UI_USER` / `UI_PASSWORD` | (empty) | Passed to the proxy, see above |
+| `MODE`, `WRITES_ENABLED`, `ALLOW_POWER_WRITES`, `LOCAL_FALLBACK`, `CLOUD_MIRROR`, `CONTROLLER_TZ` | see above | Passed to the proxy |
 | `ESTYMA_EMAIL` / `ESTYMA_PASSWORD` | (empty) | Passed to the cloud recorder, see above |
 
 `UPSTREAM`, `UPSTREAM_TIMEOUT`, `ESTYMA_DOMAIN` and `INTERVAL` are set
@@ -224,6 +306,15 @@ own machine instead:
 The multi-arch build (amd64, arm64, armv7) uses QEMU, which the workflow sets
 up on the runner itself. On a Raspberry Pi this works but is slow.
 
+## Tests
+
+```sh
+python3 -m unittest discover -s tests
+```
+
+The tests use synthetic messages in the recorded layout (no real device
+data) and run the proxy against a fake cloud.
+
 ## Log format
 
 One JSON object per line in `exchanges-YYYY-MM-DD.jsonl` in the `estyma-logs` volume (UTC dates):
@@ -250,7 +341,10 @@ One JSON object per line in `exchanges-YYYY-MM-DD.jsonl` in the `estyma-logs` vo
 
 Bodies are stored as `text` when they are valid UTF-8, otherwise as `base64`.
 Form-encoded and JSON bodies are also decoded into `form` / `json`. Failed
-exchanges have an `error` field instead of `response`.
+exchanges have an `error` field instead of `response`. Exchanges also carry
+`mode`, and `local: true` (answered locally), `injected` (local writes added
+to the cloud's reply) or `mirror: true` (background copy to the cloud in
+`local` mode) where that applies.
 
 Logs contain whatever the controller sends, possibly including account
 credentials or device IDs. Keep them private and out of git.

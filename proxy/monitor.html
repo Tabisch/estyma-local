@@ -59,6 +59,14 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .wrap { overflow-x: auto; }
 .muted { color: var(--muted); font-size: .85rem; }
 code { font-size: .85em; word-break: break-all; }
+.ctl { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr)); gap: .6rem; }
+.ctl .tile .row { display: flex; gap: .4rem; align-items: center; margin-top: .4rem; flex-wrap: wrap; }
+.ctl input { width: 5rem; font: inherit; padding: .3rem .4rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
+.btn { font: inherit; font-size: .88rem; padding: .32rem .75rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.note { font-size: .82rem; color: var(--text-2); margin-top: .35rem; min-height: 1.1em; }
+.note.err { color: var(--bad); }
 </style></head><body><main>
 <header>
   <h1>Estyma monitor</h1>
@@ -68,6 +76,14 @@ code { font-size: .85em; word-break: break-all; }
 
 <h2>Now</h2>
 <div class="tiles" id="tiles"></div>
+
+<div id="control-box" hidden>
+<h2>Control</h2>
+<div class="status" id="ctl-status"></div>
+<div class="ctl" id="ctl" style="margin-top:.6rem"></div>
+<div class="wrap" style="margin-top:.6rem"><table><thead><tr><th>Time</th><th>Write</th><th>Event</th><th>Detail</th></tr></thead>
+<tbody id="writes"></tbody></table></div>
+</div>
 
 <h2>History <span class="range" id="range">
   <button data-h="1">1 h</button><button data-h="6">6 h</button><button data-h="24" class="on">24 h</button><button data-h="48">48 h</button>
@@ -80,7 +96,7 @@ code { font-size: .85em; word-break: break-all; }
 
 <h2>Connection</h2>
 <div class="wrap"><table><tbody id="conn"></tbody></table></div>
-<p class="muted">Values are decoded from what the controller sends to the cloud through the proxy, about every 20 s. Readings outside a plausible range (corrupted CAN reads) are dropped. Refreshes every 10 s.</p>
+<p class="muted">Values are decoded from what the controller reports, about every 20 s. Readings outside a plausible range (corrupted CAN reads) are dropped. Refreshes every 10 s.</p>
 </main>
 <script>
 "use strict";
@@ -171,7 +187,8 @@ function render() {
     if (le.server_info) c.push(["Server info", `<code>${esc(le.server_info)}</code>`]);
   }
   if (d.device.frame) c.push(["Frame number", esc(d.device.frame)]);
-  c.push(["Last write from the cloud", lw ? `${stamp(lw.time)} · <code>${esc(lw.values || "")}</code>` : "none seen"]);
+  c.push(["Last write to the controller", lw ? `${stamp(lw.time)} · ${lw.source === "local" ? "local" : "cloud"} · <code>${esc(lw.values || "")}</code>` : "none seen"]);
+  if (le && le.mode) c.push(["Server mode", esc(le.mode) + (le.local ? " · answered locally" : "")]);
   $("conn").innerHTML = c.map(([a, b]) => `<tr><th>${a}</th><td>${b}</td></tr>`).join("");
 
   drawCharts();
@@ -261,6 +278,60 @@ function drawChart(el, cfg) {
   svg.onpointermove = move; svg.onpointerdown = move; svg.onpointerleave = leave;
 }
 
+// -- control panel ---------------------------------------------------------
+let ctl = null, ctlNote = {};
+async function loadControl() {
+  try {
+    const r = await fetch("/api/control", { cache: "no-store" });
+    if (!r.ok) return;
+    ctl = await r.json();
+    renderControl();
+  } catch (e) {}
+}
+function renderControl() {
+  const c = ctl; $("control-box").hidden = false;
+  const st = [`<span>Mode <b>${esc(c.mode)}</b></span>`,
+    `<span>Writes ${c.writes_enabled ? "<b>enabled</b>" : "off"}${c.writes_enabled && !c.allow_power_writes ? " (on/off not allowed)" : ""}</span>`];
+  if (c.alarm_active) st.push(`<span><span class="dot" style="background:var(--bad)"></span>Alarm active</span>`);
+  if (c.writes_enabled && !c.ui_auth) st.push(`<span>Set UI_USER / UI_PASSWORD to write from this page</span>`);
+  $("ctl-status").innerHTML = st.join("");
+  const pend = Object.fromEntries(c.pending.map((p) => [p.key, p]));
+  const active = document.activeElement && document.activeElement.id;
+  const keepVal = $("in-boiler_target") ? $("in-boiler_target").value : null;
+  $("ctl").innerHTML = Object.entries(c.writable).map(([k, w]) => {
+    const p = pend[k], dis = w.allowed && c.ui_auth ? "" : " disabled";
+    const cur = w.value == null ? "–" : w.kind === "bool" ? (w.value ? "On" : "Off") : w.value + (w.unit ? `<small>${w.unit}</small>` : "");
+    let row;
+    if (w.kind === "bool") row = `<button class="btn" data-k="${k}" data-v="1"${dis}>Switch on</button><button class="btn" data-k="${k}" data-v="0"${dis}>Switch off</button>`;
+    else row = `<input id="in-${k}" type="number" min="${w.min}" max="${w.max}" step="1" value="${w.value ?? ""}"${dis}><button class="btn primary" data-k="${k}" data-in="1"${dis}>Set</button><span class="muted">${w.min}–${w.max}</span>`;
+    if (p) row += `<button class="btn" data-cancel="${k}">Cancel</button>`;
+    const n = ctlNote[k], why = !w.allowed ? "Locked: " + w.reason : "";
+    const pnote = p ? `Pending: ${w.kind === "bool" ? (p.value ? "on" : "off") : p.value}, sent ${p.sent}×, waiting for read-back` : "";
+    return `<div class="tile"><div class="k">${esc(w.label)} <span class="muted">(${esc(w.register)})</span></div><div class="v">${cur}</div>
+      <div class="row">${row}</div><div class="note${n && n.err ? " err" : ""}">${esc((n && n.text) || pnote || why)}</div></div>`;
+  }).join("");
+  if (keepVal != null && active === "in-boiler_target") { const i = $("in-boiler_target"); i.value = keepVal; i.focus(); }
+  $("writes").innerHTML = c.recent.map((r) => `<tr><td>${esc(new Date(r.time).toLocaleString())}</td><td><code>${esc((r.register || r.key) + (r.value != null ? "=" + r.value : ""))}</code></td><td>${esc(r.event)}</td><td>${esc([r.source, r.reason, r.old != null ? "was " + r.old : "", r.polls ? r.polls + " polls" : ""].filter(Boolean).join(" · "))}</td></tr>`).join("")
+    || `<tr><td colspan="4" class="muted">No writes yet.</td></tr>`;
+}
+async function post(url, body, k) {
+  try {
+    const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({ message: "HTTP " + r.status }));
+    ctlNote[k] = { text: j.message, err: !r.ok || j.ok === false };
+  } catch (e) { ctlNote[k] = { text: e.message, err: true }; }
+  setTimeout(() => { delete ctlNote[k]; ctl && renderControl(); }, 8000);
+  loadControl();
+}
+$("ctl").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.cancel) return post("/api/cancel", { key: b.dataset.cancel }, b.dataset.cancel);
+  const k = b.dataset.k, w = ctl.writable[k];
+  const v = b.dataset.in ? Number($("in-" + k).value) : Number(b.dataset.v);
+  if (w.kind === "bool" && !confirm(`Really switch the boiler ${v ? "on" : "off"}?`)) return;
+  post("/api/set", { key: k, value: v }, k);
+});
+
 $("range").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
   hours = +b.dataset.h;
@@ -270,7 +341,8 @@ $("range").addEventListener("click", (e) => {
 });
 for (const x of $("range").children) x.classList.toggle("on", +x.dataset.h === hours);
 let resizeT; addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => data && drawCharts(), 150); });
-load();
+load(); loadControl();
 setInterval(load, 10000);
+setInterval(loadControl, 5000);
 </script>
 </body></html>
