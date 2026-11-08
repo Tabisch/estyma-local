@@ -31,6 +31,44 @@ confirms this, so it is used below to settle fields whose value stayed constant.
 
 Low-byte matches are `0x100 + value` style registers.
 
+Burner status values seen (`8199,1` low byte, cloud text in German UI):
+0 off (ausgeschaltet), 1 ignition (anzünden), 2 glowing (glühend),
+5 modulation, 7 cleaning (Reinigung), 10 error (Fehler).
+
+## Alarms
+
+Found from a "missing fuel" alarm on 2026-11-08 (three alarms, controller
+switched off/on in between to reset).
+
+| Register | Meaning |
+|---|---|
+| 16460,1 | Alarm counter, `0x100 + n`; +1 on every new alarm (268 -> 269 -> 270 -> 271) |
+| 16411 + k, 1 | Alarm slot k: state in bits 16+ and alarm code in the low byte. `0x3008C` = active, `0x7008C` = being reset, `0x8C` = cleared. Code 140 (0x8C) = missing fuel / ignition failure |
+| 16431 + k, 1 | Alarm slot k start time (Unix time, controller clock) |
+| 16451 + k, 1 | Alarm slot k end time; 0 while the alarm is active |
+
+The slot that is used follows the counter: counter 268 -> slot 16411/16431/16451
+(an older code-140 alarm from 2026-11-05), 269 -> 16412/..., 270 -> 16413/...,
+271 -> 16414/.... When the counter goes up the cloud adds the new slot's three
+registers to its `ODCZYT` request list (63 -> 66 entries) and drops older ones
+later, so it only ever asks for the latest one or two slots.
+
+The alarm timestamps are about 45 minutes behind the real time even though the
+cloud syncs `8549` (controller clock, local time) every few minutes; the cause
+is unknown.
+
+While an alarm is active, the cloud's `online.ilosc_alarmow` is 1 and the
+burner status is 10.
+
+## Read glitches
+
+Corrupted readings have garbage in the upper 16 bits and the correct value in
+the lower 16 bits (e.g. `31981648` = `0x01E80050` for 80, `4653063` =
+`0x00470007` for 7), or are `0xA5A5....`, `1000039936 + x` or `100794368 + x`.
+They last for one report. A local server should drop a value that jumps for a
+single report, or keep only the low 16 bits for registers that never exceed
+them.
+
 ## Settings (constant during recording, single fit or fixed by the sub->idx rule)
 
 | Register | Transform | Cloud field | Value |
@@ -54,9 +92,7 @@ Low-byte matches are `0x100 + value` style registers.
 - `consumption_fuel_current_day` is computed by the wrapper (fuel counter minus
   `daystats_data.pierwszy_pomiar_paliwa`, the counter at midnight); the
   midnight value is cloud-side and has no register.
-- 16412..16414, 16432..16434, 16452..16454 appeared only in part of the
-  second recording (next to the timestamp registers 16411/16431/16451);
-  meaning unknown. 16460,1 is not explained by any cloud field.
+- 16412..16414, 16432..16434, 16452..16454 are alarm slots, see "Alarms".
 - Fields with value 0 (circuits 2..4 temps, return temp, lambda temp,
   solar, fuel fill level, energy meter, DHW): not present / not fitted on
   this installation; they match any zero register.
