@@ -33,21 +33,49 @@ PAGE = """<!doctype html>
  table {{ border-collapse: collapse; width: 100%; }}
  th, td {{ text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #ddd; }}
  td.num {{ text-align: right; font-variant-numeric: tabular-nums; }}
- a.button {{ display: inline-block; margin: .5rem 0 1rem; padding: .4rem .8rem; background: #2563eb; color: #fff; border-radius: 4px; text-decoration: none; }}
+ a.button, button {{ display: inline-block; margin: .5rem .4rem 1rem 0; padding: .4rem .8rem; background: #2563eb; color: #fff; border: 0; border-radius: 4px; text-decoration: none; font: inherit; cursor: pointer; }}
+ button.del {{ background: none; color: #c62828; border: 1px solid currentColor; padding: .15rem .55rem; margin: 0; font-size: .85rem; }}
+ button.delall {{ background: #c62828; }}
+ button:disabled {{ opacity: .45; cursor: not-allowed; }}
+ #msg {{ color: #c62828; min-height: 1.2em; }}
  .muted {{ color: #666; font-size: .9rem; }}
  @media (prefers-color-scheme: dark) {{ body {{ background: #111; color: #ddd; }} th, td {{ border-color: #333; }} a {{ color: #7aa7ff; }} }}
 </style></head><body>
 <p><a href="/" data-i18n="monitor">Monitor</a> &nbsp; <b data-i18n="logs">Logs</b></p>
 <h1 data-i18n="title">Estyma logs</h1>
 <p class="muted"><span data-i18n="files" data-n="{count}">{count} files</span>, {total} <span data-i18n="in">in</span> <code>{logdir}</code></p>
-{zip_link}
-<table><thead><tr><th data-i18n="file">File</th><th data-i18n="size">Size</th><th data-i18n="modified">Modified</th></tr></thead>
+{zip_link}{delall}
+<p id="msg" class="muted">{delnote}</p>
+<table><thead><tr><th data-i18n="file">File</th><th data-i18n="size">Size</th><th data-i18n="modified">Modified</th><th></th></tr></thead>
 <tbody>{rows}</tbody></table>
+<script>
+// Delete buttons: POST JSON (needs UI_USER / UI_PASSWORD on the server).
+(function () {{
+  function ask(names) {{
+    var de = document.documentElement.lang === "de";
+    var q = names.length === 1
+      ? (de ? names[0] + " endgültig löschen?" : "Delete " + names[0] + " for good?")
+      : (de ? "Alle " + names.length + " .jsonl-Dateien endgültig löschen?" : "Delete all " + names.length + " .jsonl files for good?");
+    if (!confirm(q)) return;
+    fetch("/api/delete-logs", {{ method: "POST", headers: {{ "Content-Type": "application/json" }}, body: JSON.stringify({{ names: names }}) }})
+      .then(function (r) {{ return r.json(); }})
+      .then(function (j) {{ if (j.ok) location.reload(); else document.getElementById("msg").textContent = j.message; }})
+      .catch(function (e) {{ document.getElementById("msg").textContent = String(e); }});
+  }}
+  document.addEventListener("click", function (e) {{
+    var b = e.target.closest("button[data-del], button.delall");
+    if (!b) return;
+    if (b.dataset.del) return ask([b.dataset.del]);
+    ask(Array.prototype.map.call(document.querySelectorAll("button[data-del]"), function (x) {{ return x.dataset.del; }}));
+  }});
+}})();
+</script>
 <script>
 // Same language choice as the monitor page (stored in this browser).
 (function () {{
   var de = {{ monitor: "Monitor", logs: "Logs", title: "Estyma-Logs", files: "{{n}} Dateien", "in": "in",
-    file: "Datei", size: "Größe", modified: "Geändert", nologs: "Noch keine Logs.", zip: "Alle herunterladen (zip)" }};
+    file: "Datei", size: "Größe", modified: "Geändert", nologs: "Noch keine Logs.", zip: "Alle herunterladen (zip)",
+    del: "Löschen", delall: "Alle .jsonl löschen", needauth: "Zum Löschen UI_USER und UI_PASSWORD setzen." }};
   var lang = "";
   try {{ lang = localStorage.getItem("estyma-lang") || ""; }} catch (e) {{}}
   if (!lang) lang = String((navigator.languages || [navigator.language || "en"])[0]).slice(0, 2).toLowerCase();
@@ -157,7 +185,8 @@ class LogUIHandler(BaseHTTPRequestHandler):
                        [("WWW-Authenticate", 'Basic realm="estyma logs"')])
             return
         path = urllib.parse.urlsplit(self.path).path
-        if path not in ("/api/set", "/api/cancel") or not self.controller:
+        if path not in ("/api/set", "/api/cancel", "/api/delete-logs") or (
+                path != "/api/delete-logs" and not self.controller):
             return self._send(404, b"not found\n", "text/plain")
         # A JSON content type cannot be sent cross-site without a CORS
         # preflight, which we never answer: a simple CSRF guard.
@@ -165,14 +194,17 @@ class LogUIHandler(BaseHTTPRequestHandler):
         if ctype != "application/json":
             return self._json(415, {"ok": False, "message": "Content-Type must be application/json"})
         if self.auth is None:
+            what = "deleting logs" if path == "/api/delete-logs" else "writes"
             return self._json(403, {"ok": False, "message":
-                                    "set UI_USER and UI_PASSWORD to allow writes from the web UI"})
+                                    f"set UI_USER and UI_PASSWORD to allow {what} from the web UI"})
         try:
             length = int(self.headers.get("Content-Length") or 0)
-            req = json.loads(self.rfile.read(min(length, 4096)) or b"{}")
+            req = json.loads(self.rfile.read(min(length, 65536)) or b"{}")
             key = str(req.get("key", ""))
         except (ValueError, AttributeError):
             return self._json(400, {"ok": False, "message": "invalid JSON"})
+        if path == "/api/delete-logs":
+            return self._delete_logs(req.get("names"))
         from controller import WriteError
         if path == "/api/cancel":
             ok = self.controller.cancel_write(key, source="web")
@@ -188,10 +220,16 @@ class LogUIHandler(BaseHTTPRequestHandler):
         rows = "".join(
             f'<tr><td><a href="/files/{urllib.parse.quote(n)}">{html.escape(n)}</a></td>'
             f'<td class="num">{human_size(s)}</td>'
-            f'<td>{datetime.fromtimestamp(m):%Y-%m-%d %H:%M:%S}</td></tr>'
+            f'<td>{datetime.fromtimestamp(m):%Y-%m-%d %H:%M:%S}</td>'
+            f'<td>{self._del_button(n)}</td></tr>'
             for n, s, m in files
-        ) or '<tr><td colspan="3" class="muted" data-i18n="nologs">No logs yet.</td></tr>'
+        ) or '<tr><td colspan="4" class="muted" data-i18n="nologs">No logs yet.</td></tr>'
+        deletable = any(n.endswith(".jsonl") for n, _, _ in files)
         body = PAGE.format(
+            delall=('<button class="delall" data-i18n="delall"%s>Delete all .jsonl</button>'
+                    % ("" if self.auth else " disabled")) if deletable else "",
+            delnote=('' if self.auth or not deletable else
+                     '<span data-i18n="needauth">Set UI_USER and UI_PASSWORD to delete files.</span>'),
             count=len(files),
             total=human_size(sum(s for _, s, _ in files)),
             logdir=html.escape(self.log_dir),
@@ -199,6 +237,35 @@ class LogUIHandler(BaseHTTPRequestHandler):
             rows=rows,
         ).encode()
         self._send(200, body, "text/html; charset=utf-8")
+
+    def _del_button(self, name: str) -> str:
+        if not name.endswith(".jsonl"):
+            return ""  # e.g. state.json is the server's state, not a log
+        dis = "" if self.auth else " disabled"
+        return (f'<button class="del" data-del="{html.escape(name, quote=True)}" '
+                f'data-i18n="del"{dis}>Delete</button>')
+
+    def _delete_logs(self, names) -> None:
+        if not isinstance(names, list) or not names:
+            return self._json(400, {"ok": False, "message": "names must be a non-empty list"})
+        existing = {n for n, _, _ in self._files()}
+        deleted, errors = [], []
+        for name in names:
+            name = str(name)
+            # Only .jsonl files directly inside LOG_DIR, never state.json etc.
+            if (not name.endswith(".jsonl") or "/" in name or "\\" in name
+                    or name.startswith(".") or name not in existing):
+                errors.append(f"{name}: not a log file")
+                continue
+            try:
+                os.remove(os.path.join(self.log_dir, name))
+                deleted.append(name)
+            except OSError as exc:
+                errors.append(f"{name}: {exc.strerror}")
+        if deleted:
+            print(f"log UI: deleted {', '.join(deleted)}", flush=True)
+        self._json(200 if not errors else 409,
+                   {"ok": not errors, "deleted": deleted, "message": "; ".join(errors) or "deleted"})
 
     def _monitor_page(self):
         with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "monitor.html"), "rb") as fh:

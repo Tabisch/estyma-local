@@ -125,7 +125,11 @@ Open `http://<proxy_host>:8089/`.
   the container starts. The same data is available as JSON at
   `/api/monitor?hours=24`.
 - **Logs** (`/logs`): every log file in the volume with size and date, a
-  download link per file and a "Download all (zip)" button. Read-only.
+  download link per file and a "Download all (zip)" button. Each `.jsonl`
+  file has a *Delete* button, and *Delete all .jsonl* clears them all (both
+  ask first). Deleting only works when `UI_USER` / `UI_PASSWORD` are set;
+  `state.json` (the server's register state) cannot be deleted from here.
+  Charts already loaded in the monitor keep their data until the next restart.
 
 The UI is available in English and German. It follows the browser language;
 the EN / DE switch at the top right overrides it and is remembered in the
