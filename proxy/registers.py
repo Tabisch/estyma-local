@@ -59,29 +59,59 @@ CATALOG: dict[int, tuple] = {
     16389: ("Burner power", "Brennerleistung", "u8", "%", "confirmed"),
     16391: ("Lambda PWM", "Lambda-PWM", "u8", "", "confirmed"),
     16460: ("Alarm counter", "Alarmzähler", "u8", "", "confirmed"),
-    # Burner settings ("Brenner > Einstellungen"), from the service panel read.
-    8526: ("O2 target at 30 % power", "O2 bei 30 % Leistung", "u8/10", "%", "confirmed"),
-    8530: ("O2 target at 100 % power", "O2 bei 100 % Leistung", "u8/10", "%", "confirmed"),
-    8711: ("Air flow at 30 % power", "Luftstrom bei 30 % Leistung", "u16/10", "m/s", "likely"),
-    8790: ("Initial fuel dose", "Anfangsdosis", "u16", "s", "confirmed"),
-    8816: ("Minimum burner power", "Min. Leistung", "u8", "%", "confirmed"),
-    8817: ("Maximum burner power", "Max. Leistung", "u8", "%", "confirmed"),
-    8818: ("Hopper auger feed rate", "Förderleistung Behälterschnecke", "u16/10", "kg/h", "confirmed"),
-    8819: ("Air correction", "Luftkorrektur", "s16", "%", "guess"),
-    8841: ("Blower during ignition", "Gebläse Anzünden", "u8", "%", "confirmed"),
-    8848: ("Glow time", "Glühzeit", "u8", "min", "confirmed"),
-    8849: ("Burner inertia", "Brenner-Trägheit", "u16", "min", "guess"),
-    8909: ("Fuel calorific value", "Brennwert", "u8/10", "kWh/kg", "likely"),
-    12300: ("Blower during burn-out", "Gebläse Ausbrand", "u8", "%", "likely"),
-    13829: ("Lambda mode", "Lambdamodus", "u8", "", "likely"),
-    14080: ("Auger interval", "Schnecke Intervall", "u8", "s", "likely"),
-    14084: ("Blower during pre-glow", "Gebläse Vorglühen", "u8", "%", "confirmed"),
-    14091: ("Air flow at 100 % power", "Luftstrom bei 100 % Leistung", "u16/10", "m/s", "likely"),
-    14092: ("Minimum ignition time", "Min. Anzündzeit", "u8", "min", "confirmed"),
-    14101: ("Pause time", "Pausenzeit", "u8", "min", "confirmed"),
-    14102: ("Pause power", "Pausenleistung", "u8", "%", "confirmed"),
-    14103: ("Pause blower", "Pausengebläse", "u8", "%", "likely"),
 }
+
+# Service settings (cloud service panel; every row names its register, see
+# docs/registers.md). reg: (label, label_de, decode, unit)
+SERVICE: dict[int, tuple] = {
+    8514: ('Circuit 1 mode', 'Heizkreis 1 Modus', 'u8', ''),
+    8515: ('Circuit 2 mode', 'Heizkreis 2 Modus', 'u8', ''),
+    8518: ('Circuit 1 flow target in manual mode', 'Heizkreis 1 Vorlauf-Soll manuell', 'u8', '°C'),
+    8519: ('Circuit 2 flow target in manual mode', 'Heizkreis 2 Vorlauf-Soll manuell', 'u8', '°C'),
+    8526: ('Target O2 in flue gas at 30 % power', 'O2 bei 30 % Leistung', 'u8/10', '%'),
+    8530: ('Target O2 in flue gas at 100 % power', 'O2 bei 100 % Leistung', 'u8/10', '%'),
+    8556: ('Minimum return temperature (return protection)', 'Min. Rücklauftemperatur', 'u16', '°C'),
+    8711: ('Minimum boiler temperature before the pumps may run', 'Min. Pumpentemperatur', 'u16', '°C'),
+    8712: ('Switch-on hysteresis (below target)', 'Einschalthysterese', 'u16', '°C'),
+    8790: ('Initial fuel dose', 'Anfangsdosis', 'u16', 's'),
+    8791: ('Maximum feed time (may be adapted by the controller)', 'Max. Förderzeit', 'u16', 's'),
+    8801: ('Blower power at 20 % burner power', 'Gebläse bei 20 % Leistung', 'u8', '%'),
+    8802: ('Blower power at 40 % burner power', 'Gebläse bei 40 % Leistung', 'u8', '%'),
+    8803: ('Blower power at 60 % burner power', 'Gebläse bei 60 % Leistung', 'u8', '%'),
+    8804: ('Blower power at 80 % burner power', 'Gebläse bei 80 % Leistung', 'u8', '%'),
+    8805: ('Blower power at 100 % burner power', 'Gebläse bei 100 % Leistung', 'u8', '%'),
+    8811: ('Burn-out phase duration', 'Abbrennzeit', 'u8', 'min'),
+    8816: ('Minimum burner power during modulation', 'Min. Leistung', 'u8', '%'),
+    8817: ('Maximum burner power during modulation', 'Max. Leistung', 'u8', '%'),
+    8818: ('Hopper feeder output from the feed test (used for fuel consumption)', 'Förderleistung Behälterschnecke', 'u16/10', 'kg/h'),
+    8819: ('Air correction, added to the blower power', 'Luftkorrektur', 's16', '%'),
+    8841: ('Blower power during ignition', 'Gebläse Anzünden', 'u8', '%'),
+    8848: ('Glowing phase duration', 'Glühzeit', 'u8', 'min'),
+    8849: ('Switch-off hysteresis (above target)', 'Ausschalthysterese', 'u16', '°C'),
+    8850: ('Fuel calorific value', 'Brennstoffbrennwert', 'u8/10', 'kWh/kg'),
+    8901: ('Circuit 1 weather curve: flow target at -20 °C outside', 'Heizkreis 1 Heizkurve: Vorlauf bei -20 °C außen', 'u8', '°C'),
+    8902: ('Circuit 2 weather curve: flow target at -20 °C outside', 'Heizkreis 2 Heizkurve: Vorlauf bei -20 °C außen', 'u8', '°C'),
+    8905: ('Circuit 1 weather curve: flow target at 0 °C outside', 'Heizkreis 1 Heizkurve: Vorlauf bei 0 °C außen', 'u8', '°C'),
+    8906: ('Circuit 2 weather curve: flow target at 0 °C outside', 'Heizkreis 2 Heizkurve: Vorlauf bei 0 °C außen', 'u8', '°C'),
+    8909: ('Circuit 1 weather curve: flow target at 10 °C outside', 'Heizkreis 1 Heizkurve: Vorlauf bei 10 °C außen', 'u8', '°C'),
+    8910: ('Circuit 2 weather curve: flow target at 10 °C outside', 'Heizkreis 2 Heizkurve: Vorlauf bei 10 °C außen', 'u8', '°C'),
+    10650: ('Fuel feed during glowing', 'Brennstoff beim Vorglühen', 'u8', '%'),
+    12300: ('Blower power during burn-out', 'Gebläse Ausbrand', 'u8', '%'),
+    13829: ('Lambda (O2) control', 'Lambdasteuerung', 'u8', ''),
+    14080: ('Hopper feeder cycle period', 'Schnecke Intervall', 'u8', 's'),
+    14084: ('Blower power during glowing', 'Gebläse Vorglühen', 'u8', '%'),
+    14088: ('Pump overrun after the burner stops', 'Pumpennachlauf', 'u8', 'min'),
+    14091: ('Burner feeder run time as % of the hopper feeder', 'Brennerschnecke in % der Behälterschnecke', 'u16', '%'),
+    14092: ('Minimum ignition time', 'Min. Anzündzeit', 'u8', 'min'),
+    14101: ('Pause time (low-load pause mode)', 'Pausenzeit', 'u8', 'min'),
+    14102: ('Burner power in pause mode', 'Pausenleistung', 'u8', '%'),
+    14103: ('Blower power in pause mode', 'Pausengebläse', 'u8', '%'),
+    14152: ('Burner feeder initial dose (no answer from this controller)', 'Brennerschnecke Anfangsdosis', 'u8', 's'),
+    16396: ('Circuit 1 weather curve: flow target at -10 °C outside (no answer from this controller)', 'Heizkreis 1 Heizkurve: Vorlauf bei -10 °C außen', 'u8', '°C'),
+    16397: ('Circuit 2 weather curve: flow target at -10 °C outside (no answer from this controller)', 'Heizkreis 2 Heizkurve: Vorlauf bei -10 °C außen', 'u8', '°C'),
+}
+for _r, (_en, _de, _dec, _unit) in SERVICE.items():
+    CATALOG[_r] = (_en, _de, _dec, _unit, "confirmed")
 
 # Probable configuration flags (lambda fitted, number of buffers, number of
 # heating circuits, ...): constant 0x100 / 0x101, not yet told apart.
@@ -94,12 +124,6 @@ _DAYS = [("Monday", "Montag"), ("Tuesday", "Dienstag"), ("Wednesday", "Mittwoch"
 for _i, (_en, _de) in enumerate(_DAYS):
     CATALOG[8486 + 4 * _i] = (f"Circuit 1 weekly timer, {_en}", f"Wochenprogramm Heizkreis 1, {_de}",
                               "hex", "", "likely")
-for _i in range(5):
-    CATALOG[8801 + _i] = (f"Blower curve point {_i + 1}", f"Gebläsekurve Punkt {_i + 1}",
-                          "u8", "%", "likely")
-for _r in range(8901, 8911):
-    CATALOG.setdefault(_r, (f"Calorific value, fuel type {_r - 8900}", f"Brennwert, Brennstoff {_r - 8900}",
-                            "u8/10", "kWh/kg", "guess"))
 # Alarm ring buffer: slot k uses 16400+k (state << 16 | code), 16420+k start,
 # 16440+k end (0 while active).
 for _k in range(20):

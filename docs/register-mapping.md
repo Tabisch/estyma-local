@@ -71,6 +71,9 @@ them.
 
 ## Settings (constant during recording, single fit or fixed by the sub->idx rule)
 
+All registers with function and value range, including the service settings,
+are listed in [registers.md](registers.md).
+
 | Register | Transform | Cloud field | Value |
 |---|---|---|---|
 | 8195,1 / ,3 / ,4 | x1 | `kociol_temp_zad_sub1/3/4` boiler target / min / max | 60 / 60 / 80 |
