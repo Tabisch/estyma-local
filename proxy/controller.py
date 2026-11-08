@@ -38,6 +38,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 import protocol as P
+import registers as R
 
 # --------------------------------------------------------------------------
 # Register model
@@ -58,35 +59,153 @@ def flag_value(raw: int) -> int | None:
     return v & 0xFF if v >> 8 == 1 else None
 
 
+def low8(raw: int) -> int | None:
+    """8-bit settings report as 0x0nn or 0x1nn; anything else is a glitch."""
+    v = low16(raw)
+    return v & 0xFF if v >> 8 in (0, 1) else None
+
+
+def signed16(raw: int) -> int:
+    v = low16(raw)
+    return v - 0x10000 if v >= 0x8000 else v
+
+
 @dataclass(frozen=True)
 class Writable:
     key: str
     label: str
     reg: int
     idx: int
-    kind: str                 # "int" or "bool"
-    lo: int                   # local hard limits (always applied)
+    kind: str                 # "int", "bool" or "enum"
+    lo: int                   # local hard limits in raw units (always applied)
     hi: int
     power: bool = False       # needs ALLOW_POWER_WRITES
     limit_regs: tuple | None = None  # (min reg, max reg) reported by the controller
     unit: str = ""
+    label_de: str = ""
+    decode: str = "u16"       # how a report reads back: "u16", "u8", "s16"
+    scale: int = 1            # shown value = raw / scale
+    tested: bool = False      # write seen working on the real controller
+    group: str = ""           # settings page section
+    options: dict | None = None  # enum: raw -> (en, de)
+    conf: str = "confirmed"   # how sure the register mapping is
+    main: bool = False        # shown in the monitor page's control panel
 
     def readback(self, raw: int | None) -> int | None:
         if raw is None:
             return None
         if self.kind == "bool":
             return flag_value(raw)
+        if self.decode == "u8":
+            return low8(raw)
+        if self.decode == "s16":
+            return signed16(raw)
         return low16(raw)
 
+    def show(self, raw: int | None):
+        """Raw (write units) -> shown value."""
+        if raw is None:
+            return None
+        return raw / self.scale if self.scale != 1 else raw
 
-# Only registers whose writes were seen working from the cloud (2026-11-08).
-WRITABLE = {
-    w.key: w for w in [
-        Writable("boiler_target", "Boiler target", 8195, 1, "int", 60, 80,
-                 limit_regs=((8195, 3), (8195, 4)), unit="°C"),
-        Writable("boiler_on", "Boiler on", 8197, 1, "bool", 0, 1, power=True),
-    ]
+    def num(self, raw: int) -> str:
+        return f"{raw / self.scale:.1f}" if self.scale != 1 else str(raw)
+
+    def fmt(self, raw: int | None) -> str:
+        if raw is None:
+            return "?"
+        if self.options and raw in self.options:
+            return self.options[raw][0]
+        return f"{self.num(raw)} {self.unit}".strip()
+
+
+def _setting(key, reg, group, lo, hi, *, kind="int", scale=1, limits=True, conf="confirmed",
+             options=None, tested=False, **kw) -> Writable:
+    """A settings page entry; labels, decoding and unit come from registers.py.
+
+    ``lo``/``hi`` are in shown units (e.g. 5.0..15.0 %); stored in raw units.
+    ``limits``: the controller also reports min/max as index 3/4.
+    """
+    en, de, how, unit, _ = R.CATALOG[reg]
+    decode = {"u8/10": "u8", "u16/10": "u16", "d10": "u16", "x1": "u16"}.get(how, how)
+    return Writable(key, kw.pop("label", en), reg, 1, kind, round(lo * scale), round(hi * scale),
+                    limit_regs=((reg, 3), (reg, 4)) if limits else None, unit=unit,
+                    label_de=kw.pop("label_de", de), decode=decode, scale=scale, tested=tested,
+                    group=group, options=options if options is not None else R.VALUES.get(reg),
+                    conf=conf, **kw)
+
+
+# Settings page sections, in order: key -> (English, German).
+GROUPS = {
+    "user": ("User settings", "Benutzereinstellungen"),
+    "boiler": ("Boiler", "Kessel"),
+    "burner": ("Burner", "Brenner"),
+    "circuit1": ("Heating circuit 1 (CO1)", "Heizkreis 1 (CO1)"),
+    "circuit2": ("Heating circuit 2 (CO2)", "Heizkreis 2 (CO2)"),
 }
+
+# Ranges are the ones the cloud panels offer (docs/registers.md). Only 8195
+# and 8197 were seen being written (by the cloud, 2026-11-08); every other
+# write is untested and needs ALLOW_UNTESTED_WRITES=1 as well.
+_B = "burner"
+_SETTINGS = [
+    Writable("boiler_on", "Boiler on", 8197, 1, "bool", 0, 1, power=True, label_de="Kessel an",
+             tested=True, group="user", options=R.VALUES[8197], main=True),
+    _setting("boiler_target", 8195, "user", 60, 80, tested=True, main=True, label="Boiler target"),
+    _setting("boiler_mode", 8194, "user", 0, 3, kind="enum", limits=False),
+    _setting("buffer_top_target", 8468, "user", 7, 80),
+    _setting("buffer_bottom_target", 8469, "user", 7, 80),
+    _setting("room_comfort_1", 8242, "user", 15.0, 30.0, scale=10),
+    _setting("room_eco_1", 8264, "user", 10.0, 30.0, scale=10),
+    _setting("circuit1_program", 8292, "user", 0, 3, kind="enum", limits=False, conf="likely"),
+    # Boiler (service panel "Kocioł")
+    _setting("hyst_on", 8712, "boiler", 0, 20),
+    _setting("hyst_off", 8849, "boiler", 0, 20),
+    _setting("pump_min_temp", 8711, "boiler", 20, 70),
+    _setting("pump_overrun", 14088, "boiler", 0, 120),
+    _setting("return_min_temp", 8556, "boiler", 35, 75),
+    # Burner (service panel "Palnik"). Air correction goes down to -10 %, but
+    # how negative values are written is unknown, so only 0..40 is offered.
+    _setting("air_correction", 8819, _B, 0, 40),
+    _setting("power_min", 8816, _B, 30, 100),
+    _setting("power_max", 8817, _B, 30, 100),
+    *[_setting(f"blower_{p}", 8800 + i, _B, 0, 100) for i, p in enumerate((20, 40, 60, 80, 100), 1)],
+    _setting("blower_ignition", 8841, _B, 5, 100),
+    _setting("initial_dose", 8790, _B, 0, 200),
+    _setting("blower_glowing", 14084, _B, 0, 100),
+    _setting("blower_burnout", 12300, _B, 1, 100),
+    _setting("glowing_time", 8848, _B, 0, 20),
+    _setting("burnout_time", 8811, _B, 0, 5),
+    _setting("fuel_glowing", 10650, _B, 0, 100),
+    _setting("feeder_output", 8818, _B, 5.0, 30.0, scale=10),
+    _setting("calorific_value", 8850, _B, 2.0, 10.0, scale=10),
+    _setting("lambda_control", 13829, _B, 0, 1, kind="enum", limits=False),
+    _setting("o2_30", 8526, _B, 5.0, 15.0, scale=10),
+    _setting("o2_100", 8530, _B, 5.0, 15.0, scale=10),
+    _setting("ignition_min_time", 14092, _B, 2, 6),
+    _setting("burner_feeder_pct", 14091, _B, 50, 300),
+    _setting("feeder_period", 14080, _B, 5, 180),
+    _setting("pause_time", 14101, _B, 0, 60),
+    _setting("pause_power", 14102, _B, 5, 30),
+    _setting("pause_blower", 14103, _B, 0, 50),
+    _setting("feed_max", 8791, _B, 10, 150),
+]
+for _c in (1, 2):
+    _g, _o = f"circuit{_c}", _c - 1  # CO2 registers are CO1 + 1
+    _SETTINGS += [
+        _setting(f"co{_c}_mode", 8514 + _o, _g, 0, 1, kind="enum", limits=False),
+        _setting(f"co{_c}_manual_target", 8518 + _o, _g, 20, 80),
+        _setting(f"co{_c}_curve_m20", 8901 + _o, _g, 20, 80),
+        _setting(f"co{_c}_curve_0", 8905 + _o, _g, 20, 80),
+        _setting(f"co{_c}_curve_10", 8909 + _o, _g, 20, 80),
+    ]
+
+WRITABLE = {w.key: w for w in _SETTINGS}
+
+# Everything the settings page shows, read on demand (index 1 and min/max).
+SETTINGS_READS = [k for w in _SETTINGS if not w.main
+                  for k in [(w.reg, w.idx), *(w.limit_regs or ())]]
+_SETTINGS_VALUES = [(w.reg, w.idx) for w in _SETTINGS if not w.main]
 
 
 @dataclass
@@ -103,9 +222,9 @@ class PendingWrite:
 
     def as_dict(self) -> dict:
         w = WRITABLE[self.key]
-        return {"key": self.key, "register": f"{w.reg},{w.idx}", "value": self.value,
-                "old": self.old, "source": self.source, "requested": self.requested,
-                "sent": self.sent, "last_sent": self.last_sent}
+        return {"key": self.key, "register": f"{w.reg},{w.idx}", "value": w.show(self.value),
+                "raw": self.value, "old": w.show(self.old), "source": self.source,
+                "requested": self.requested, "sent": self.sent, "last_sent": self.last_sent}
 
 
 class WriteError(Exception):
@@ -119,6 +238,7 @@ class WriteError(Exception):
 class Controller:
     def __init__(self, mode: str = "proxy", log_dir: str = "logs", *,
                  writes_enabled: bool = False, allow_power_writes: bool = False,
+                 allow_untested_writes: bool = False, settings_read_interval: float = 3600,
                  write_timeout: float = 120, write_min_interval: float = 10,
                  clock_sync_interval: float = 6 * 3600, tz=None,
                  state_file: str | None = None, clock=time.time) -> None:
@@ -128,6 +248,8 @@ class Controller:
         self.log_dir = log_dir
         self.writes_enabled = writes_enabled
         self.allow_power_writes = allow_power_writes
+        self.allow_untested_writes = allow_untested_writes
+        self.settings_read_interval = settings_read_interval
         self.write_timeout = write_timeout
         self.write_min_interval = write_min_interval
         self.clock_sync_interval = clock_sync_interval
@@ -146,6 +268,14 @@ class Controller:
         self.last_clock_sync: float | None = None
         self._rr = 0                         # round robin over pending writes
         self._saved_at = 0.0
+        # Settings reads (SETTINGS_READS added to ODCZYT): due on start, on
+        # request and every settings_read_interval; retried up to 3 polls
+        # when the controller's next report does not carry them.
+        self.settings_due = True
+        self.settings_sent: float | None = None
+        self.settings_read: float | None = None   # last report that carried them
+        self._settings_tries = 0
+        self._settings_attempt = self.clock()
         self._load_state()
 
     # -- persistence --------------------------------------------------------
@@ -223,16 +353,16 @@ class Controller:
         return w.readback(self.raw(w.reg, w.idx))
 
     def limits(self, key: str) -> tuple[int, int]:
-        """Local hard limits intersected with the controller's min/max."""
+        """Local hard limits intersected with the controller's min/max (raw units)."""
         w = WRITABLE[key]
         lo, hi = w.lo, w.hi
         if w.limit_regs:
-            cmin = self.raw(*w.limit_regs[0])
-            cmax = self.raw(*w.limit_regs[1])
-            if cmin is not None and 0 <= low16(cmin) <= 1000:
-                lo = max(lo, low16(cmin))
-            if cmax is not None and 0 <= low16(cmax) <= 1000:
-                hi = min(hi, low16(cmax))
+            cmin = w.readback(self.raw(*w.limit_regs[0]))
+            cmax = w.readback(self.raw(*w.limit_regs[1]))
+            nlo = max(lo, cmin) if cmin is not None and 0 <= cmin <= 1000 else lo
+            nhi = min(hi, cmax) if cmax is not None and 0 <= cmax <= 1000 else hi
+            if nlo <= nhi:  # implausible limits (e.g. min > max) are ignored
+                lo, hi = nlo, nhi
         return lo, hi
 
     def alarm_slot(self) -> int | None:
@@ -266,6 +396,15 @@ class Controller:
                 self.last_report = now
             for k, raw in regs.items():
                 self.registers[k] = (now, raw)
+            if self.settings_sent is not None and regs:
+                got = sum(1 for k in _SETTINGS_VALUES if k in regs)
+                if got >= len(_SETTINGS_VALUES) // 2:
+                    self.settings_read, self.settings_sent = now, None
+                    self._settings_tries = 0
+                elif self._settings_tries < 3:
+                    self.settings_due = True   # reply lost or ignored: ask again
+                else:
+                    self.settings_sent, self._settings_tries = None, 0
             for key, pw in list(self.pending.items()):
                 cur = self.current(key)
                 if cur == pw.value:
@@ -311,6 +450,44 @@ class Controller:
             out += P.alarm_slot_regs(slot)
             out += P.alarm_slot_regs(slot - 1)
         return out
+
+    def request_settings_read(self) -> dict:
+        if self.mode == "proxy":
+            return {"ok": False, "message": "reading settings needs MODE=hybrid or MODE=local"}
+        with self._lock:
+            self.settings_due, self._settings_tries = True, 0
+        return {"ok": True, "message": "settings are read on the next poll"}
+
+    def extra_reads(self, present=()) -> list:
+        """Registers to add to this poll's ODCZYT (hybrid/local only).
+
+        The settings when due, plus every register with a pending write, so
+        its read-back can confirm it. ``present``: entries already listed.
+        """
+        if self.mode == "proxy":
+            return []
+        now = self.clock()
+        with self._lock:
+            out = []
+            if (not self.settings_due and self.settings_read_interval > 0
+                    and self.settings_sent is None
+                    and now - self._settings_attempt >= self.settings_read_interval):
+                self.settings_due = True
+            if self.settings_due:
+                self.settings_due = False
+                self.settings_sent = self._settings_attempt = now
+                self._settings_tries += 1
+                out += SETTINGS_READS
+            for key in self.pending:
+                w = WRITABLE[key]
+                out += [(w.reg, w.idx), *(w.limit_regs or ())]
+        seen = set(present)
+        res = []
+        for k in out:
+            if k not in seen:
+                seen.add(k)
+                res.append(k)
+        return res
 
     def next_writes(self, local_reply: bool) -> list[tuple[int, int, int]]:
         """Entries for the ZAPIS of this poll (empty = none), marked as sent.
@@ -364,15 +541,29 @@ class Controller:
             raise WriteError("writes are off (WRITES_ENABLED=0)")
         if w.power and not self.allow_power_writes:
             raise WriteError("switching the boiler on/off is off (ALLOW_POWER_WRITES=0)")
+        if not w.tested and not self.allow_untested_writes:
+            raise WriteError("writing this register is untested (ALLOW_UNTESTED_WRITES=0)")
         if isinstance(value, bool):
             value = int(value)
-        if isinstance(value, float) and value.is_integer():
-            value = int(value)
-        if not isinstance(value, int):
-            raise WriteError("value must be a whole number")
+        if not isinstance(value, (int, float)) or value != value:
+            raise WriteError("value must be a number")
+        raw = value * w.scale
+        if isinstance(raw, float):
+            if abs(raw - round(raw)) > 1e-6:
+                raise WriteError("value must be a whole number" if w.scale == 1
+                                 else f"value must be a multiple of {1 / w.scale:g}")
+            raw = int(round(raw))
+        value = raw
         lo, hi = self.limits(key)
         if not lo <= value <= hi:
-            raise WriteError(f"{w.label} must be between {lo} and {hi}")
+            raise WriteError(f"{w.label} must be between {w.num(lo)} and {w.num(hi)}"
+                             if not w.options else f"{w.label}: value not allowed")
+        if w.options and value not in w.options:
+            raise WriteError(f"{w.label}: value not allowed")
+        if self.last_report is None:
+            raise WriteError("no report from the controller yet")
+        if self.raw(w.reg, w.idx) is None:
+            raise WriteError(f"{w.label} has not been read yet, read the settings first")
         if self.last_report is None:
             raise WriteError("no report from the controller yet")
         if not w.power and self.alarm_active():
@@ -383,22 +574,22 @@ class Controller:
             cur = self.current(key)
             if pend is None and cur == value:
                 self._audit("noop", key, value, source=source, reason="already set")
-                return {"status": "unchanged", "message": f"{w.label} is already {value}"}
+                return {"status": "unchanged", "message": f"{w.label} is already {w.fmt(value)}"}
             last = self.last_request.get(key)
             if last is not None and now - last < self.write_min_interval:
                 raise WriteError(f"too fast, wait {self.write_min_interval - (now - last):.0f} s")
             self.last_request[key] = now
             if pend is not None and pend.value == value:
-                return {"status": "pending", "message": f"{w.label} = {value} already queued"}
+                return {"status": "pending", "message": f"{w.label} = {w.fmt(value)} already queued"}
             if pend is not None:
                 self._audit("replaced", key, pend.value, source=pend.source, new_value=value)
             if cur == value:  # a pending write back to the reported value: just drop it
                 del self.pending[key]
-                return {"status": "unchanged", "message": f"{w.label} is already {value}"}
+                return {"status": "unchanged", "message": f"{w.label} is already {w.fmt(value)}"}
             self.pending[key] = PendingWrite(key, value, source, now, cur)
             self._audit("requested", key, value, old=cur, source=source)
         return {"status": "pending",
-                "message": f"{w.label} = {value} queued, sent on the next poll"}
+                "message": f"{w.label} = {w.fmt(value)} queued, sent on the next poll"}
 
     def cancel_write(self, key: str, source: str = "web") -> bool:
         with self._lock:
@@ -407,37 +598,77 @@ class Controller:
             self._audit("cancelled", key, pw.value, source=source)
         return pw is not None
 
+    def _lock_reason(self, w: Writable, alarm: bool) -> str | None:
+        if self.mode == "proxy":
+            return "MODE=proxy (set MODE=hybrid or local)"
+        if not self.writes_enabled:
+            return "WRITES_ENABLED=0"
+        if w.power and not self.allow_power_writes:
+            return "ALLOW_POWER_WRITES=0"
+        if not w.tested and not self.allow_untested_writes:
+            return "ALLOW_UNTESTED_WRITES=0"
+        if not w.power and alarm:
+            return "alarm active"
+        return None
+
+    def _entry(self, key: str, w: Writable, alarm: bool) -> dict:
+        lo, hi = self.limits(key)
+        reason = self._lock_reason(w, alarm)
+        reg = self.registers.get((w.reg, w.idx))
+        cur = self.current(key)
+        return {"label": w.label, "label_de": w.label_de, "kind": w.kind, "unit": w.unit,
+                "register": f"{w.reg},{w.idx}", "value": w.show(cur), "raw": reg[1] if reg else None,
+                "seen": reg[0] if reg else None, "min": w.show(lo), "max": w.show(hi),
+                "step": 1 / w.scale, "options": ({str(k): list(v) for k, v in w.options.items()
+                                                  if lo <= k <= hi} if w.options else None),
+                "tested": w.tested, "conf": w.conf, "allowed": reason is None, "reason": reason}
+
     def snapshot(self) -> dict:
+        """State for the monitor page's control panel (main settings only)."""
         now = self.clock()
         with self._lock:
             alarm = self.alarm_active() if self.last_report else False
-            writable = {}
-            for key, w in WRITABLE.items():
-                lo, hi = self.limits(key)
-                reason = None
-                if self.mode == "proxy":
-                    reason = "MODE=proxy (set MODE=hybrid or local)"
-                elif not self.writes_enabled:
-                    reason = "WRITES_ENABLED=0"
-                elif w.power and not self.allow_power_writes:
-                    reason = "ALLOW_POWER_WRITES=0"
-                elif not w.power and alarm:
-                    reason = "alarm active"
-                writable[key] = {"label": w.label, "kind": w.kind, "unit": w.unit,
-                                 "register": f"{w.reg},{w.idx}", "value": self.current(key),
-                                 "min": lo, "max": hi, "allowed": reason is None,
-                                 "reason": reason}
+            writable = {k: self._entry(k, w, alarm) for k, w in WRITABLE.items() if w.main}
             return {
                 "now": now,
                 "mode": self.mode,
                 "writes_enabled": self.writes_enabled,
                 "allow_power_writes": self.allow_power_writes,
+                "allow_untested_writes": self.allow_untested_writes,
                 "write_timeout": self.write_timeout,
                 "alarm_active": alarm,
                 "last_report": self.last_report,
                 "read_list": {"source": self.read_list_source, "count": len(self.read_list())},
                 "last_clock_sync": self.last_clock_sync,
                 "writable": writable,
+                "pending": [pw.as_dict() for pw in self.pending.values()],
+                "recent": list(reversed(self.recent[-20:])),
+            }
+
+    def settings_snapshot(self) -> dict:
+        """All settings, grouped, for the settings page."""
+        now = self.clock()
+        with self._lock:
+            alarm = self.alarm_active() if self.last_report else False
+            groups = []
+            for g, (en, de) in GROUPS.items():
+                items = [dict(self._entry(k, w, alarm), key=k)
+                         for k, w in WRITABLE.items() if w.group == g]
+                groups.append({"key": g, "label": en, "label_de": de, "items": items})
+            return {
+                "now": now,
+                "mode": self.mode,
+                "writes_enabled": self.writes_enabled,
+                "allow_power_writes": self.allow_power_writes,
+                "allow_untested_writes": self.allow_untested_writes,
+                "write_timeout": self.write_timeout,
+                "alarm_active": alarm,
+                "last_report": self.last_report,
+                "settings": {"due": self.settings_due, "sent": self.settings_sent,
+                             "read": self.settings_read,
+                             "interval": self.settings_read_interval,
+                             "can_read": self.mode != "proxy"},
+                "groups": groups,
                 "pending": [pw.as_dict() for pw in self.pending.values()],
                 "recent": list(reversed(self.recent[-20:])),
             }

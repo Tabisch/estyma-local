@@ -83,7 +83,7 @@ code { font-size: .85em; word-break: break-all; }
 </style></head><body><main>
 <header>
   <h1>Estyma monitor</h1>
-  <nav><a class="on" href="/" data-i18n="nav.monitor">Monitor</a><a href="/registers" data-i18n="nav.registers">Registers</a><a href="/logs" data-i18n="nav.logs">Logs</a></nav>
+  <nav><a class="on" href="/" data-i18n="nav.monitor">Monitor</a><a href="/settings" data-i18n="nav.settings">Settings</a><a href="/registers" data-i18n="nav.registers">Registers</a><a href="/logs" data-i18n="nav.logs">Logs</a></nav>
   <span class="range" id="lang" role="group" aria-label="Language"><button data-l="en" lang="en">EN</button><button data-l="de" lang="de">DE</button></span>
 </header>
 <div class="status" id="status" data-i18n="loading">Loading…</div>
@@ -137,7 +137,7 @@ const STALE_S = 120;
 // #lang. Missing keys fall back to English.
 const I18N = {
   en: {
-    "nav.monitor": "Monitor", "nav.registers": "Registers", "nav.logs": "Logs", "loading": "Loading…",
+    "nav.monitor": "Monitor", "nav.settings": "Settings", "nav.registers": "Registers", "nav.logs": "Logs", "loading": "Loading…",
     "h.now": "Now", "h.control": "Control", "h.history": "History", "h.settings": "Settings reported by the controller", "h.connection": "Connection",
     "col.time": "Time", "col.write": "Write", "col.event": "Event", "col.detail": "Detail",
     "col.setting": "Setting", "col.value": "Value", "col.min": "Min", "col.max": "Max",
@@ -183,7 +183,7 @@ const I18N = {
     "cl.nodata": "No cloud data yet.",
   },
   de: {
-    "nav.monitor": "Monitor", "nav.registers": "Register", "nav.logs": "Logs", "loading": "Lädt…",
+    "nav.monitor": "Monitor", "nav.settings": "Einstellungen", "nav.registers": "Register", "nav.logs": "Logs", "loading": "Lädt…",
     "h.now": "Aktuell", "h.control": "Steuerung", "h.history": "Verlauf", "h.settings": "Vom Regler gemeldete Einstellungen", "h.connection": "Verbindung",
     "col.time": "Zeit", "col.write": "Schreiben", "col.event": "Ereignis", "col.detail": "Details",
     "col.setting": "Einstellung", "col.value": "Wert", "col.min": "Min", "col.max": "Max",

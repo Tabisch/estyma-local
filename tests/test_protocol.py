@@ -58,3 +58,18 @@ class ProtocolTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AddReadsTest(unittest.TestCase):
+    def test_appends_new_entries(self):
+        reply = cloud_reply()
+        before = P.parse_read_list(reply)
+        out = P.add_reads(reply, [(8712, 1), (8193, 1), (8712, 1)])
+        after = P.parse_read_list(out)
+        self.assertEqual(after, before + [(8712, 1)])
+        self.assertIn(f"ODCZYT&{len(after)};", out)
+        self.assertTrue(out.endswith(reply[reply.index("KONIEC&"):]))
+
+    def test_nothing_to_add(self):
+        self.assertIsNone(P.add_reads(cloud_reply(), [(8193, 1)]))
+        self.assertIsNone(P.add_reads("error page", [(8712, 1)]))
