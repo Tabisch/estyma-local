@@ -158,7 +158,7 @@ class Monitor:
 
     def _ingest(self, rec: dict, live_rec: bool) -> None:
         req = rec.get("request") or {}
-        if req.get("path") != "/device/connect":
+        if req.get("path") != "/device/connect" or rec.get("mirror"):
             return
         ts = parse_time(rec["time"])
         body = req.get("body") or {}
@@ -184,6 +184,8 @@ class Monitor:
                     "duration_ms": rec.get("duration_ms"),
                     "registers": len(regs),
                     "server_info": _between(resp_text, "SERVER_INFO=", "<br>"),
+                    "mode": rec.get("mode", "proxy"),
+                    "local": bool(rec.get("local")),
                 }
                 if form.get("SOFT_VER") is not None:
                     self.device = {
@@ -192,7 +194,9 @@ class Monitor:
                         "can_status": form.get("CAN STATUS", "").strip(),
                     }
             if "ZAPIS&" in resp_text and (self.last_write is None or ts >= self.last_write["time"]):
-                self.last_write = {"time": ts, "values": _between(resp_text, "ZAPIS&;", "&KONIEC")}
+                self.last_write = {"time": ts, "values": _between(resp_text, "ZAPIS&;", "&KONIEC"),
+                                   "source": "local" if rec.get("local") or rec.get("injected")
+                                   else "cloud"}
             for k, v in live.items():
                 if k not in self.current or ts >= self.current[k][0]:
                     self.current[k] = (ts, v)

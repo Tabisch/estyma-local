@@ -24,6 +24,23 @@ Configuration (environment variables or CLI flags, flags win):
   UI_USER / UI_PASSWORD  enable HTTP basic auth on the log UI
   MONITOR_HISTORY_HOURS  hours of decoded values kept for the monitor charts
                    (default 48)
+
+Local server (see README, "Operating modes"):
+
+  MODE             proxy (forward only, default), hybrid (forward, may add
+                   local writes to the cloud's reply) or local (answer the
+                   controller ourselves)
+  WRITES_ENABLED   1 = allow local writes (default 0, read-only)
+  ALLOW_POWER_WRITES  1 = also allow switching the boiler on/off (default 0)
+  WRITE_TIMEOUT    seconds until an unconfirmed write fails (default 120)
+  WRITE_MIN_INTERVAL  minimum seconds between requests per register (default 10)
+  LOCAL_FALLBACK   1 = answer locally when the cloud fails (proxy/hybrid)
+  CLOUD_MIRROR     1 = in local mode, still forward each report to the cloud
+                   in the background and ignore its reply
+  CONTROLLER_TZ    time zone of the controller clock (default Europe/Warsaw)
+  CLOCK_SYNC_HOURS hours between clock syncs in local mode, 0 = off (default 6)
+  POLL_DELAY       DELAY value sent in local replies (default 10)
+  STATE_FILE       persisted register state (default LOG_DIR/state.json)
 """
 
 from __future__ import annotations
@@ -39,7 +56,11 @@ import time
 import urllib.parse
 import uuid
 from datetime import datetime, timezone
+from email.utils import formatdate
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+import protocol as P
+from controller import Controller
 
 # Headers that describe a single connection, not the message. They are not
 # forwarded as-is (RFC 9110 section 7.6.1).
@@ -124,9 +145,13 @@ class ProxyHandler(BaseHTTPRequestHandler):
     server_version = "estyma-proxy"
 
     # Set by make_server()
-    upstream: urllib.parse.SplitResult
+    upstream: urllib.parse.SplitResult | None
     upstream_timeout: float
     log: ExchangeLog
+    ctl: Controller | None = None
+    local_fallback: bool = False
+    cloud_mirror: bool = False
+    poll_delay: int = 10
 
     # BaseHTTPRequestHandler dispatches on do_<METHOD>; route all of them here.
     def __getattr__(self, name: str):
@@ -192,13 +217,37 @@ class ProxyHandler(BaseHTTPRequestHandler):
             fwd_headers = [(k, v) for k, v in fwd_headers if k.lower() != "content-length"]
             fwd_headers.append(("Content-Length", str(len(req_body))))
 
-        try:
-            status, reason, resp_headers, resp_body, resp_version = self.forward(
-                target, fwd_headers, req_body
-            )
-        except Exception as exc:  # upstream unreachable, timeout, bad response
+        ctl = self.ctl
+        is_connect = ctl is not None and self.command == "POST" and parsed.path == "/device/connect"
+        if is_connect:
+            try:
+                form = P.loose_form(req_body.decode("utf-8", "replace"))
+                ctl.observe_report(P.parse_report(form.get("ZAPISZ_ODCZYT", "")))
+            except Exception as exc:  # never break the exchange on our side
+                print(f"report handling error: {type(exc).__name__}: {exc}", flush=True)
+        record["mode"] = ctl.mode if ctl else "proxy"
+
+        result = None
+        if is_connect and ctl.mode == "local":
+            result = self.local_response(record)
+            if self.cloud_mirror and self.upstream:
+                threading.Thread(target=self.mirror, args=(target, fwd_headers, req_body),
+                                 daemon=True).start()
+        elif self.upstream is None:
+            result = (404, "Not Found", [("Content-Type", "text/plain")], b"not found\n", "HTTP/1.1")
+        else:
+            try:
+                result = self.forward(target, fwd_headers, req_body)
+            except Exception as exc:  # upstream unreachable, timeout, bad response
+                record["error"] = f"{type(exc).__name__}: {exc}"
+                if is_connect and self.local_fallback:
+                    record["fallback"] = True
+                    result = self.local_response(record)
+            if result is not None and is_connect and not record.get("fallback"):
+                result = self.after_cloud_reply(result, record)
+
+        if result is None:
             t_end = time.time()
-            record["error"] = f"{type(exc).__name__}: {exc}"
             record["duration_ms"] = round((t_end - t_start) * 1000, 1)
             self.log.write(record)
             print(f"{iso(t_end)} {exchange_id} {self.command} {self.path} -> ERROR {record['error']}",
@@ -210,6 +259,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(msg)
             return
+        status, reason, resp_headers, resp_body, resp_version = result
 
         t_end = time.time()
         ctype = next((v for k, v in resp_headers if k.lower() == "content-type"), None)
@@ -244,6 +294,62 @@ class ProxyHandler(BaseHTTPRequestHandler):
         if self.command != "HEAD" and resp_body:
             self.wfile.write(resp_body)
 
+    # -- local server -------------------------------------------------------
+
+    def local_response(self, record: dict):
+        """Build the whole reply ourselves (local mode or fallback)."""
+        ctl = self.ctl
+        writes = ctl.next_writes(local_reply=True)
+        text = P.build_reply(ctl.read_list(), writes, tz=ctl.tz, delay=self.poll_delay)
+        record["local"] = True
+        if writes:
+            record["writes"] = [f"{r},{i}={v}" for r, i, v in writes]
+        headers = [
+            ("Date", formatdate(usegmt=True)),
+            ("Server", "Apache"),
+            ("Access-Control-Allow-Origin", "*"),
+            ("Access-Control-Allow-Methods", "GET, POST"),
+            ("Access-Control-Allow-Headers", "*"),
+            ("Content-Type", "text/html"),
+        ]
+        return 200, "OK", headers, text.encode("utf-8"), "HTTP/1.1"
+
+    def after_cloud_reply(self, result, record: dict):
+        """Proxy/hybrid: learn from the cloud's reply, maybe add a local write."""
+        status, reason, headers, body, version = result
+        if status != 200:
+            return result
+        try:
+            text = body.decode("utf-8")
+        except UnicodeDecodeError:
+            return result
+        ctl = self.ctl
+        try:
+            ctl.observe_cloud_reply(text)
+            if ctl.mode == "hybrid" and P.can_inject(text):
+                writes = ctl.next_writes(local_reply=False)
+                new = P.inject_writes(text, writes) if writes else None
+                if new is not None:
+                    record["injected"] = [f"{r},{i}={v}" for r, i, v in writes]
+                    body = new.encode("utf-8")
+        except Exception as exc:
+            print(f"reply handling error: {type(exc).__name__}: {exc}", flush=True)
+        return status, reason, headers, body, version
+
+    def mirror(self, target: str, headers, body: bytes) -> None:
+        """Local mode with CLOUD_MIRROR: forward the report, ignore the reply."""
+        t0 = time.time()
+        rec: dict = {"id": uuid.uuid4().hex[:12], "time": iso(t0), "mirror": True,
+                     "request": {"method": self.command, "path": target}}
+        try:
+            status, reason, _, resp_body, _ = self.forward(target, headers, body)
+            rec["response"] = {"time": iso(time.time()), "status": status, "reason": reason,
+                               "body": self.log.body_record(resp_body, "text/html")}
+        except Exception as exc:
+            rec["error"] = f"{type(exc).__name__}: {exc}"
+        rec["duration_ms"] = round((time.time() - t0) * 1000, 1)
+        self.log.write(rec)
+
     def forward(self, target: str, headers, body: bytes):
         up = self.upstream
         port = up.port or (443 if up.scheme == "https" else 80)
@@ -267,15 +373,22 @@ class ProxyHandler(BaseHTTPRequestHandler):
 # Entry point
 # --------------------------------------------------------------------------
 
-def make_server(listen_host: str, listen_port: int, upstream: str, timeout: float,
-                log: ExchangeLog) -> ThreadingHTTPServer:
-    up = urllib.parse.urlsplit(upstream if "://" in upstream else f"http://{upstream}")
-    if not up.hostname:
-        raise SystemExit(f"invalid UPSTREAM: {upstream!r}")
+def make_server(listen_host: str, listen_port: int, upstream: str | None, timeout: float,
+                log: ExchangeLog, ctl: Controller | None = None, local_fallback: bool = False,
+                cloud_mirror: bool = False, poll_delay: int = 10) -> ThreadingHTTPServer:
+    up = None
+    if upstream:
+        up = urllib.parse.urlsplit(upstream if "://" in upstream else f"http://{upstream}")
+        if not up.hostname:
+            raise SystemExit(f"invalid UPSTREAM: {upstream!r}")
     handler = type("Handler", (ProxyHandler,), {
         "upstream": up,
         "upstream_timeout": timeout,
         "log": log,
+        "ctl": ctl,
+        "local_fallback": local_fallback,
+        "cloud_mirror": cloud_mirror,
+        "poll_delay": poll_delay,
     })
     ThreadingHTTPServer.allow_reuse_address = True
     ThreadingHTTPServer.daemon_threads = True
@@ -298,17 +411,40 @@ def main(argv=None) -> int:
     p.add_argument("--ui-password", default=env("UI_PASSWORD"))
     p.add_argument("--monitor-history-hours", type=float,
                    default=float(env("MONITOR_HISTORY_HOURS", "48")))
+    p.add_argument("--mode", default=env("MODE", "proxy"), choices=["proxy", "hybrid", "local"])
+    p.add_argument("--state-file", default=env("STATE_FILE"))
+    p.add_argument("--controller-tz", default=env("CONTROLLER_TZ", "Europe/Warsaw"))
+    p.add_argument("--clock-sync-hours", type=float, default=float(env("CLOCK_SYNC_HOURS", "6")))
+    p.add_argument("--poll-delay", type=int, default=int(env("POLL_DELAY", "10")))
+    p.add_argument("--write-timeout", type=float, default=float(env("WRITE_TIMEOUT", "120")))
+    p.add_argument("--write-min-interval", type=float,
+                   default=float(env("WRITE_MIN_INTERVAL", "10")))
     args = p.parse_args(argv)
+    writes_enabled = env_flag("WRITES_ENABLED")
+    allow_power = env_flag("ALLOW_POWER_WRITES")
+    local_fallback = env_flag("LOCAL_FALLBACK")
+    cloud_mirror = env_flag("CLOUD_MIRROR")
 
-    if not args.upstream:
-        p.error("UPSTREAM is required (env var or --upstream)")
+    if not args.upstream and (args.mode != "local" or cloud_mirror or local_fallback):
+        p.error("UPSTREAM is required (env var or --upstream) unless MODE=local")
 
     log = ExchangeLog(args.log_dir, args.max_body_log)
+    ctl = Controller(args.mode, args.log_dir, writes_enabled=writes_enabled,
+                     allow_power_writes=allow_power, write_timeout=args.write_timeout,
+                     write_min_interval=args.write_min_interval,
+                     clock_sync_interval=args.clock_sync_hours * 3600,
+                     tz=load_tz(args.controller_tz), state_file=args.state_file)
     server = make_server(args.listen_host, args.listen_port, args.upstream,
-                         args.upstream_timeout, log)
-    print(f"estyma-proxy listening on {args.listen_host}:{args.listen_port}, "
-          f"forwarding to {args.upstream}, logging to {os.path.abspath(args.log_dir)}",
-          flush=True)
+                         args.upstream_timeout, log, ctl, local_fallback=local_fallback,
+                         cloud_mirror=cloud_mirror, poll_delay=args.poll_delay)
+    where = {"proxy": f"forwarding to {args.upstream}",
+             "hybrid": f"forwarding to {args.upstream} (hybrid: local writes added)",
+             "local": "answering locally" + (f", mirroring to {args.upstream}" if cloud_mirror else "")}
+    print(f"estyma-proxy listening on {args.listen_host}:{args.listen_port}, mode {args.mode}, "
+          f"{where[args.mode]}, logging to {os.path.abspath(args.log_dir)}", flush=True)
+    print(f"writes {'ENABLED' if writes_enabled else 'off'}"
+          f"{', on/off allowed' if writes_enabled and allow_power else ''}"
+          f"{', local fallback on' if local_fallback else ''}", flush=True)
     if args.ui_port:
         from log_ui import start_log_ui
         from monitor import Monitor
@@ -316,7 +452,7 @@ def main(argv=None) -> int:
         log.listeners.append(mon.ingest)
         mon.start()
         start_log_ui(args.listen_host, args.ui_port, args.log_dir,
-                     args.ui_user, args.ui_password, monitor=mon)
+                     args.ui_user, args.ui_password, monitor=mon, controller=ctl)
         auth = "basic auth on" if args.ui_user and args.ui_password else "no auth"
         print(f"log UI on http://{args.listen_host}:{args.ui_port}/ ({auth})", flush=True)
     try:
@@ -325,7 +461,23 @@ def main(argv=None) -> int:
         pass
     finally:
         server.server_close()
+        ctl.save_state(force=True)
     return 0
+
+
+def env_flag(name: str) -> bool:
+    return (os.environ.get(name) or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def load_tz(name: str):
+    """Time zone of the controller clock; fixed UTC+1 if tzdata is missing."""
+    try:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo(name)
+    except Exception as exc:
+        from datetime import timedelta
+        print(f"time zone {name!r} not available ({exc}), using UTC+1", flush=True)
+        return timezone(timedelta(hours=1))
 
 
 if __name__ == "__main__":
