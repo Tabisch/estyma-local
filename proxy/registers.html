@@ -103,7 +103,7 @@ const I18N = {
     "st.count": "{n} registers", "st.unknown": "{n} unknown", "st.newest": "newest: {r} ({ago})", "st.reading": "Reading older logs…",
     "unreachable": "Not reachable ({e})", "none": "No registers seen yet.", "nomatch": "No register matches the filter.",
     "unknown": "unknown", "c.confirmed": "confirmed", "c.likely": "likely", "c.guess": "guess", "c.unknown": "unknown",
-    "idx.3": "minimum", "idx.4": "maximum", "idx.n": "index {n}",
+    "range": "range {lo}..{hi}{u}", "idx.3": "minimum", "idx.4": "maximum", "idx.n": "index {n}",
     "new": "new", "glitch": "glitch?", "glitch.t": "Latest raw {v} differs from the last stable value", "once": "seen once",
     "requested": "requested, no answer yet", "reports": "{n} reports", "reports.1": "1 report", "changes": "{n} changes", "changes.1": "1 change", "first": "first seen {t}",
     "ago.s": "{n} s ago", "ago.min": "{n} min ago", "ago.h": "{n} h ago", "ago.d": "{n} d ago",
@@ -117,7 +117,7 @@ const I18N = {
     "st.count": "{n} Register", "st.unknown": "{n} unbekannt", "st.newest": "zuletzt entdeckt: {r} ({ago})", "st.reading": "Ältere Logs werden gelesen…",
     "unreachable": "Nicht erreichbar ({e})", "none": "Noch keine Register gesehen.", "nomatch": "Kein Register passt zum Filter.",
     "unknown": "unbekannt", "c.confirmed": "bestätigt", "c.likely": "wahrscheinlich", "c.guess": "Vermutung", "c.unknown": "unbekannt",
-    "idx.3": "Minimum", "idx.4": "Maximum", "idx.n": "Index {n}",
+    "range": "Bereich {lo}..{hi}{u}", "idx.3": "Minimum", "idx.4": "Maximum", "idx.n": "Index {n}",
     "new": "neu", "glitch": "Störung?", "glitch.t": "Letzter Rohwert {v} weicht vom letzten stabilen Wert ab", "once": "einmal gesehen",
     "requested": "angefragt, noch keine Antwort", "reports": "{n} Meldungen", "reports.1": "1 Meldung", "changes": "{n} Änderungen", "changes.1": "1 Änderung", "first": "zuerst gesehen {t}",
     "ago.s": "vor {n} s", "ago.min": "vor {n} min", "ago.h": "vor {n} h", "ago.d": "vor {n} T",
@@ -158,12 +158,15 @@ function label(r) {
   return { base, idx };
 }
 
+const num = (v) => v.toLocaleString(lang, { useGrouping: false, maximumFractionDigits: 2 });
+
 function fmtValue(r) {
   const v = r.value;
   if (v == null) return "–";
+  if (r.value_name) return num(v) + " · " + (lang === "de" ? r.value_name[1] : r.value_name[0]);
   if (r.decode === "time") return v === 0 ? "0" : (v > 1.5e9 && v < 4e9 ? ctime(v) : String(v));
   if (typeof v === "number") {
-    const s = v.toLocaleString(lang, { useGrouping: false, maximumFractionDigits: 2 });
+    const s = num(v);
     return r.unit ? s + " " + r.unit : s;
   }
   return v;
@@ -209,6 +212,7 @@ function render() {
     if (firstLoad) seenAtLoad.add(key);
     const use = (l.base ? esc(l.base) : `<span class="unk">${esc(T("unknown"))}</span>`)
       + (l.idx ? ` <span class="sub">(${esc(l.idx)})</span>` : "")
+      + (r.range ? ` <span class="sub">${esc(T("range", { lo: num(r.range[0]), hi: num(r.range[1]), u: r.unit ? "\u202f" + r.unit : "" }))}</span>` : "")
       + `<span class="pill ${r.conf}">${esc(T("c." + r.conf))}</span>`
       + (isNew ? `<span class="pill new">${esc(T("new"))}</span>` : "");
     let raw = "–", rawSub = "";

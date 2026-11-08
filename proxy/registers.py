@@ -22,8 +22,8 @@ import threading
 import time
 
 # --------------------------------------------------------------------------
-# What is known about the registers (docs/register-mapping.md and the burner
-# settings read from the service panel). Index 1 is the value, 3 and 4 its
+# What is known about the registers (docs/register-mapping.md and
+# docs/service-settings.md). Index 1 is the value, 3 and 4 its
 # min and max; the page adds that to the label.
 # --------------------------------------------------------------------------
 # decode: "x1" as is, "d10" / "d100" divided, "u8" low byte (8-bit registers
@@ -35,7 +35,7 @@ import time
 CATALOG: dict[int, tuple] = {
     4112: ("Apply flag (sent with every write)", "Übernahme-Flag (bei jedem Schreiben)", "x1", "", "confirmed"),
     8193: ("Boiler temperature", "Kesseltemperatur", "d10", "°C", "confirmed"),
-    8194: ("Boiler mode", "Kesselmodus", "x1", "", "likely"),
+    8194: ("Boiler mode", "Kesselmodus", "x1", "", "confirmed"),
     8195: ("Boiler target", "Kessel-Soll", "x1", "°C", "confirmed"),
     8196: ("Boiler target (calculated)", "Kessel-Soll (berechnet)", "x1", "°C", "confirmed"),
     8197: ("Controller on/off", "Regler an/aus", "u8", "", "confirmed"),
@@ -59,28 +59,38 @@ CATALOG: dict[int, tuple] = {
     16389: ("Burner power", "Brennerleistung", "u8", "%", "confirmed"),
     16391: ("Lambda PWM", "Lambda-PWM", "u8", "", "confirmed"),
     16460: ("Alarm counter", "Alarmzähler", "u8", "", "confirmed"),
-    # Burner settings ("Brenner > Einstellungen"), from the service panel read.
-    8526: ("O2 target at 30 % power", "O2 bei 30 % Leistung", "u8/10", "%", "confirmed"),
-    8530: ("O2 target at 100 % power", "O2 bei 100 % Leistung", "u8/10", "%", "confirmed"),
-    8711: ("Air flow at 30 % power", "Luftstrom bei 30 % Leistung", "u16/10", "m/s", "likely"),
-    8790: ("Initial fuel dose", "Anfangsdosis", "u16", "s", "confirmed"),
+    # Service settings, identified from the cloud service panel (the row ids
+    # are the registers). 16-bit ones were read with mask 65535, the rest 255.
+    # Boiler
+    8712: ("Boiler switch-on hysteresis", "Kessel Einschalthysterese", "u16", "°C", "confirmed"),
+    8849: ("Boiler switch-off hysteresis", "Kessel Ausschalthysterese", "u16", "°C", "confirmed"),
+    8711: ("Minimum pump temperature", "Pumpen-Mindesttemperatur", "u16", "°C", "confirmed"),
+    14088: ("Pump overrun", "Pumpennachlauf", "u8", "min", "confirmed"),
+    8556: ("Minimum return temperature", "Min. Rücklauftemperatur", "u16", "°C", "confirmed"),
+    # Burner
+    8819: ("Air correction", "Luftkorrektur", "s16", "%", "confirmed"),
     8816: ("Minimum burner power", "Min. Leistung", "u8", "%", "confirmed"),
     8817: ("Maximum burner power", "Max. Leistung", "u8", "%", "confirmed"),
-    8818: ("Hopper auger feed rate", "Förderleistung Behälterschnecke", "u16/10", "kg/h", "confirmed"),
-    8819: ("Air correction", "Luftkorrektur", "s16", "%", "guess"),
-    8841: ("Blower during ignition", "Gebläse Anzünden", "u8", "%", "confirmed"),
+    8841: ("Blower power during ignition", "Gebläse Anzünden", "u8", "%", "confirmed"),
+    8790: ("Initial fuel dose", "Anfangsdosis", "u16", "s", "confirmed"),
+    14084: ("Blower power during glowing", "Gebläse Vorglühen", "u8", "%", "confirmed"),
+    12300: ("Blower power during burn-out", "Gebläse Ausbrand", "u8", "%", "confirmed"),
     8848: ("Glow time", "Glühzeit", "u8", "min", "confirmed"),
-    8849: ("Burner inertia", "Brenner-Trägheit", "u16", "min", "guess"),
-    8909: ("Fuel calorific value", "Brennwert", "u8/10", "kWh/kg", "likely"),
-    12300: ("Blower during burn-out", "Gebläse Ausbrand", "u8", "%", "likely"),
-    13829: ("Lambda mode", "Lambdamodus", "u8", "", "likely"),
-    14080: ("Auger interval", "Schnecke Intervall", "u8", "s", "likely"),
-    14084: ("Blower during pre-glow", "Gebläse Vorglühen", "u8", "%", "confirmed"),
-    14091: ("Air flow at 100 % power", "Luftstrom bei 100 % Leistung", "u16/10", "m/s", "likely"),
+    8811: ("Burn-out time", "Abbrennzeit", "u8", "min", "confirmed"),
+    10650: ("Fuel during glowing", "Vorglühen (Brennstoff)", "u8", "%", "confirmed"),
+    8818: ("Hopper auger feed rate (test)", "Förderleistung Behälterschnecke", "u16/10", "kg/h", "confirmed"),
+    8850: ("Fuel calorific value", "Brennstoffbrennwert", "u8/10", "kWh/kg", "confirmed"),
+    13829: ("Lambda control", "Lambdamodus", "u8", "", "confirmed"),
+    8526: ("O2 target at 30 % power", "O2 bei 30 % Leistung", "u8/10", "%", "confirmed"),
+    8530: ("O2 target at 100 % power", "O2 bei 100 % Leistung", "u8/10", "%", "confirmed"),
     14092: ("Minimum ignition time", "Min. Anzündzeit", "u8", "min", "confirmed"),
+    14091: ("Burner auger (% of hopper auger)", "Brennerschnecke (% der Behälterschnecke)", "u16", "%", "confirmed"),
+    14152: ("Burner auger initial dose", "Brennerschnecke Anfangsdosis", "u8", "", "confirmed"),
+    14080: ("Hopper auger period", "Behälterschnecke Intervall", "u8", "s", "confirmed"),
     14101: ("Pause time", "Pausenzeit", "u8", "min", "confirmed"),
     14102: ("Pause power", "Pausenleistung", "u8", "%", "confirmed"),
-    14103: ("Pause blower", "Pausengebläse", "u8", "%", "likely"),
+    14103: ("Pause blower", "Pausengebläse", "u8", "%", "confirmed"),
+    8791: ("Maximum feed time", "Max. Förderzeit", "u16", "s", "confirmed"),
 }
 
 # Probable configuration flags (lambda fitted, number of buffers, number of
@@ -95,11 +105,44 @@ for _i, (_en, _de) in enumerate(_DAYS):
     CATALOG[8486 + 4 * _i] = (f"Circuit 1 weekly timer, {_en}", f"Wochenprogramm Heizkreis 1, {_de}",
                               "hex", "", "likely")
 for _i in range(5):
-    CATALOG[8801 + _i] = (f"Blower curve point {_i + 1}", f"Gebläsekurve Punkt {_i + 1}",
-                          "u8", "%", "likely")
-for _r in range(8901, 8911):
-    CATALOG.setdefault(_r, (f"Calorific value, fuel type {_r - 8900}", f"Brennwert, Brennstoff {_r - 8900}",
-                            "u8/10", "kWh/kg", "guess"))
+    CATALOG[8801 + _i] = (f"Blower power at {20 * (_i + 1)} % modulation",
+                          f"Gebläseleistung bei {20 * (_i + 1)} % Modulation", "u8", "%", "confirmed")
+# Heating circuits 1 and 2: weather curve, mode and manual target.
+for _c in (1, 2):
+    for _base, _out in ((8901, -20), (16396, -10), (8905, 0), (8909, 10)):
+        CATALOG[_base + _c - 1] = (f"Circuit {_c} flow temperature at {_out} °C outside",
+                                   f"Heizkreis {_c} Vorlauf bei {_out} °C außen", "u8", "°C", "confirmed")
+    CATALOG[8513 + _c] = (f"Circuit {_c} mode", f"Betriebsart Heizkreis {_c}", "u8", "", "confirmed")
+    CATALOG[8517 + _c] = (f"Circuit {_c} manual flow target", f"Heizkreis {_c} Vorlauf-Soll manuell",
+                          "u8", "°C", "confirmed")
+
+# Setting ranges from the service panel (decoded units), for registers that
+# do not report their own min/max as index 3/4.
+RANGES: dict[int, tuple] = {
+    8712: (0, 20), 8849: (0, 20), 8711: (20, 70), 14088: (0, 120), 8556: (35, 75),
+    8819: (-10, 40), 8816: (30, 100), 8817: (30, 100), 8841: (5, 100), 8790: (0, 200),
+    14084: (0, 100), 12300: (1, 100), 8848: (0, 20), 8811: (0, 5), 10650: (0, 100),
+    8818: (5.0, 30.0), 8850: (2.0, 10.0), 8526: (5.0, 15.0), 8530: (5.0, 15.0),
+    14092: (2, 6), 14091: (50, 300), 14080: (5, 180), 14101: (0, 60), 14102: (5, 30),
+    14103: (0, 50), 8791: (10, 150),
+    **{r: (0, 100) for r in range(8801, 8806)},
+    **{r: (20, 80) for r in (8901, 8902, 8905, 8906, 8909, 8910, 8518, 8519)},
+}
+
+# Names of enumerated values: reg -> {value: (en, de)}.
+_ONOFF = {0: ("off", "aus"), 1: ("on", "an")}
+VALUES: dict[int, dict] = {
+    8194: {0: ("time automatic", "Zeitautomatik"), 1: ("time manual", "Zeit manuell"),
+           2: ("automatic", "Automatik"), 3: ("manual", "Manuell")},
+    8197: _ONOFF, 8823: _ONOFF, 8857: _ONOFF,
+    8199: {0: ("off", "aus"), 1: ("ignition", "Zünden"), 2: ("glowing", "Glühen"),
+           5: ("modulation", "Modulation"), 7: ("cleaning", "Reinigung"), 10: ("error", "Fehler")},
+    8292: {0: ("off", "aus"), 1: ("economical", "Eco"), 2: ("temporary", "temporär"),
+           3: ("comfortable", "Komfort")},
+    13829: _ONOFF,
+    **{r: {0: ("manual", "manuell"), 1: ("weather", "witterungsgeführt")} for r in (8514, 8515)},
+}
+
 # Alarm ring buffer: slot k uses 16400+k (state << 16 | code), 16420+k start,
 # 16440+k end (0 while active).
 for _k in range(20):
@@ -238,10 +281,13 @@ class RegisterTable:
             if idx not in (1, 3, 4) and conf != "unknown":
                 conf = "guess"  # only index 1/3/4 (value/min/max) were ever seen
             shown = e["stable"] if e["stable"] is not None else e["raw"]
+            value = decode(shown, how)
+            name = VALUES.get(reg, {}).get(value) if idx == 1 else None
             out.append({
                 "reg": reg, "idx": idx, "label": label, "label_de": label_de, "unit": unit,
-                "conf": conf, "decode": how,
-                "raw": e["raw"], "stable": e["stable"], "value": decode(shown, how),
+                "conf": conf, "decode": how, "range": RANGES.get(reg) if idx == 1 else None,
+                "value_name": list(name) if name else None,
+                "raw": e["raw"], "stable": e["stable"], "value": value,
                 "first": e["first"], "last": e["last"], "stable_t": e.get("stable_t"),
                 "count": e["count"], "changes": e["changes"], "requested": e.get("requested"),
             })
