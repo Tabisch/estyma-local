@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estyma monitor</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f6f6f4; --surface: #fcfcfb; --border: #e3e2de; --grid: #ecebe7;
+  --text: #0b0b0b; --text-2: #52514e; --muted: #7d7c77;
+  --accent: #2a78d6;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --good: #1a7f37; --warn: #b26b00; --bad: #c62828;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #111110; --surface: #1a1a19; --border: #2e2e2c; --grid: #262624;
+    --text: #f0efec; --text-2: #c3c2b7; --muted: #8f8e88;
+    --accent: #3987e5;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --good: #4cc26a; --warn: #e0a030; --bad: #ef6b6b;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 system-ui, sans-serif; }
+main { max-width: 72rem; margin: 0 auto; padding: 1rem 16px 3rem; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem 1.5rem; }
+h1 { font-size: 1.35rem; margin: .2rem 0; }
+h2 { font-size: 1rem; margin: 1.6rem 0 .6rem; color: var(--text-2); font-weight: 600; }
+nav a { color: var(--accent); text-decoration: none; margin-right: 1rem; }
+nav a.on { color: var(--text); font-weight: 600; }
+.status { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; color: var(--text-2); font-size: .9rem; margin: .6rem 0 0; }
+.dot { display: inline-block; width: .6rem; height: .6rem; border-radius: 50%; margin-right: .35rem; vertical-align: baseline; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr)); gap: .6rem; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .65rem .8rem; }
+.tile .k { color: var(--text-2); font-size: .82rem; }
+.tile .v { font-size: 1.6rem; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: .1rem; }
+.tile .v small { font-size: .9rem; font-weight: 400; color: var(--text-2); margin-left: .15rem; }
+.tile .sub { color: var(--muted); font-size: .8rem; min-height: 1.1em; }
+.tile.stale .v { color: var(--muted); }
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 32rem), 1fr)); gap: .8rem; }
+.chart { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .7rem .8rem .4rem; position: relative; }
+.chart h3 { font-size: .9rem; margin: 0 0 .2rem; font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: .2rem .9rem; font-size: .8rem; color: var(--text-2); margin-bottom: .2rem; }
+.legend i { display: inline-block; width: .8rem; height: 2px; vertical-align: middle; margin-right: .3rem; border-radius: 1px; }
+svg { display: block; width: 100%; height: 190px; touch-action: pan-y; }
+svg text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: .35rem .5rem; font-size: .8rem; box-shadow: 0 2px 8px rgba(0,0,0,.15); white-space: nowrap; display: none; z-index: 2; }
+.tip b { font-weight: 600; }
+.tip i { display: inline-block; width: .6rem; height: .6rem; border-radius: 50%; margin-right: .3rem; }
+.range { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; vertical-align: middle; }
+.range button { background: var(--surface); color: var(--text-2); border: 0; padding: .3rem .7rem; font: inherit; font-size: .85rem; cursor: pointer; }
+.range button + button { border-left: 1px solid var(--border); }
+.range button.on { background: var(--accent); color: #fff; }
+table { border-collapse: collapse; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+th, td { text-align: left; padding: .45rem .7rem; border-bottom: 1px solid var(--border); font-size: .9rem; }
+th { color: var(--text-2); font-weight: 600; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.wrap { overflow-x: auto; }
+.muted { color: var(--muted); font-size: .85rem; }
+code { font-size: .85em; word-break: break-all; }
+</style></head><body><main>
+<header>
+  <h1>Estyma monitor</h1>
+  <nav><a class="on" href="/">Monitor</a><a href="/logs">Logs</a></nav>
+</header>
+<div class="status" id="status">Loading…</div>
+
+<h2>Now</h2>
+<div class="tiles" id="tiles"></div>
+
+<h2>History <span class="range" id="range">
+  <button data-h="1">1 h</button><button data-h="6">6 h</button><button data-h="24" class="on">24 h</button><button data-h="48">48 h</button>
+</span></h2>
+<div class="charts" id="charts"></div>
+
+<h2>Settings reported by the controller</h2>
+<div class="wrap"><table><thead><tr><th>Setting</th><th class="num">Value</th><th class="num">Min</th><th class="num">Max</th></tr></thead>
+<tbody id="settings"></tbody></table></div>
+
+<h2>Connection</h2>
+<div class="wrap"><table><tbody id="conn"></tbody></table></div>
+<p class="muted">Values are decoded from what the controller sends to the cloud through the proxy, about every 20 s. Readings outside a plausible range (corrupted CAN reads) are dropped. Refreshes every 10 s.</p>
+</main>
+<script>
+"use strict";
+const STALE_S = 120;
+let hours = 24, data = null;
+try { const h = +localStorage.getItem("estyma-hours"); if ([1, 6, 24, 48].includes(h)) hours = h; } catch (e) {}
+
+const CHARTS = [
+  { title: "Temperatures", unit: "°C", series: [["boiler", "--s1"], ["buffer_top", "--s2"], ["buffer_bottom", "--s3"], ["circuit1", "--s4"]] },
+  { title: "Flue gas temperature", unit: "°C", series: [["flue", "--s2"]] },
+  { title: "Burner power", unit: "%", series: [["power", "--s1"]], min: 0, max: 100 },
+  { title: "Oxygen in flue gas", unit: "%", series: [["o2", "--s3"]], min: 0 },
+];
+const BURNER_STATES = {}; // numeric meaning not confirmed yet
+
+const $ = (id) => document.getElementById(id);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmt = (v, d = 1) => v == null ? "–" : (Number.isInteger(v) && d === 1 ? String(v) : v.toFixed(d));
+const clock = (t) => new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+const stamp = (t) => new Date(t * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+function ago(s) {
+  s = Math.max(0, Math.round(s));
+  if (s < 90) return s + " s ago";
+  if (s < 5400) return Math.round(s / 60) + " min ago";
+  return (s / 3600).toFixed(1) + " h ago";
+}
+
+async function load() {
+  try {
+    const r = await fetch("/api/monitor?hours=" + hours, { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    data = await r.json();
+    render();
+  } catch (e) {
+    $("status").innerHTML = `<span><span class="dot" style="background:var(--bad)"></span>Monitor not reachable (${esc(e.message)})</span>`;
+  }
+}
+
+function render() {
+  const d = data, now = d.now, cur = d.current, F = d.fields;
+  const le = d.last_exchange;
+  // status line
+  const st = [];
+  if (!le) st.push(`<span><span class="dot" style="background:var(--muted)"></span>No traffic from the controller yet${d.loading ? " (still reading logs)" : ""}</span>`);
+  else {
+    const age = now - le.time, fresh = age < STALE_S, ok = le.status === 200;
+    const col = !fresh ? "var(--bad)" : ok ? "var(--good)" : "var(--warn)";
+    const word = !fresh ? "Controller silent" : ok ? "Online" : "Online, cloud answered " + (le.status || "error");
+    st.push(`<span><span class="dot" style="background:${col}"></span>${word} · last report ${ago(age)}</span>`);
+    if (d.last_hour.exchanges) st.push(`<span>Last hour: ${d.last_hour.ok}/${d.last_hour.exchanges} exchanges OK</span>`);
+    if (d.device.firmware) st.push(`<span>Firmware ${esc(d.device.firmware)}</span>`);
+    if (d.loading) st.push(`<span>Reading older logs…</span>`);
+  }
+  $("status").innerHTML = st.join("");
+
+  // tiles
+  const S = d.settings;
+  const T = [
+    ["boiler", 1, S.boiler_set && `target ${fmt(S.boiler_set.value)} °C`],
+    ["buffer_top", 1, S.buffer_top_set && `target ${fmt(S.buffer_top_set.value)} °C`],
+    ["buffer_bottom", 1, S.buffer_bottom_set && `target ${fmt(S.buffer_bottom_set.value)} °C`],
+    ["circuit1", 1], ["outside", 1], ["flue", 0], ["o2", 2], ["power", 0],
+    ["burner_state", 0, null, (v) => BURNER_STATES[v] || "state " + v],
+    ["boiler_pump", 0, null, (v) => v ? "On" : "Off"],
+    ["boiler_calc", 0], ["lambda_pwm", 0], ["fuel_counter", 0],
+  ];
+  $("tiles").innerHTML = T.map(([k, dec, sub, txt]) => {
+    const c = cur[k], f = F[k];
+    const stale = !c || now - c.time > STALE_S;
+    const v = !c ? "–" : txt ? esc(txt(c.value)) : fmt(c.value, dec) + (f.unit ? `<small>${f.unit}</small>` : "");
+    const extra = sub || (c && stale ? "as of " + ago(now - c.time) : "");
+    return `<div class="tile${stale ? " stale" : ""}"><div class="k">${esc(f.label)}</div><div class="v">${v}</div><div class="sub">${esc(extra || "")}</div></div>`;
+  }).join("");
+
+  // settings
+  const rows = Object.entries(S).map(([k, s]) =>
+    `<tr><td>${esc(F[k].label)}</td><td class="num">${fmt(s.value)} ${F[k].unit}</td><td class="num">${fmt(s.min)}</td><td class="num">${fmt(s.max)}</td></tr>`);
+  for (const k of ["boiler_mode", "circuit1_program"]) if (cur[k]) rows.push(`<tr><td>${esc(F[k].label)}</td><td class="num">${cur[k].value}</td><td></td><td></td></tr>`);
+  $("settings").innerHTML = rows.join("") || `<tr><td colspan="4" class="muted">Nothing reported yet.</td></tr>`;
+
+  // connection
+  const lw = d.last_write;
+  const c = [];
+  if (le) {
+    c.push(["Last exchange", `${stamp(le.time)} · ${le.status ? "HTTP " + le.status : esc(le.error || "no response")}${le.duration_ms != null ? " · " + Math.round(le.duration_ms) + " ms" : ""}`]);
+    c.push(["Registers reported", le.registers]);
+    if (le.server_info) c.push(["Server info", `<code>${esc(le.server_info)}</code>`]);
+  }
+  if (d.device.frame) c.push(["Frame number", esc(d.device.frame)]);
+  c.push(["Last write from the cloud", lw ? `${stamp(lw.time)} · <code>${esc(lw.values || "")}</code>` : "none seen"]);
+  $("conn").innerHTML = c.map(([a, b]) => `<tr><th>${a}</th><td>${b}</td></tr>`).join("");
+
+  drawCharts();
+}
+
+function drawCharts() {
+  const box = $("charts");
+  if (!box.children.length) box.innerHTML = CHARTS.map((c, i) =>
+    `<div class="chart" id="c${i}"><h3>${esc(c.title)} <span class="muted">(${c.unit})</span></h3>` +
+    (c.series.length > 1 ? `<div class="legend">${c.series.map(([k, col]) => `<span><i style="background:var(${col})"></i>${esc(data.fields[k].label)}</span>`).join("")}</div>` : "") +
+    `<svg></svg><div class="tip"></div></div>`).join("");
+  CHARTS.forEach((c, i) => drawChart($("c" + i), c));
+}
+
+function niceTicks(lo, hi, n) {
+  const span = hi - lo || 1, raw = span / n, mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw);
+  const out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(6));
+  return out;
+}
+
+function drawChart(el, cfg) {
+  const svg = el.querySelector("svg"), tip = el.querySelector(".tip");
+  const W = svg.clientWidth || 500, H = 190, L = 36, R = 8, Tp = 8, B = 22;
+  const h = data.history, t = h.t;
+  const tMax = data.now, tMin = tMax - hours * 3600;
+  let lo = Infinity, hi = -Infinity;
+  for (const [k] of cfg.series) for (const v of h[k]) if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+  if (lo === Infinity) {
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.innerHTML = `<text x="${W / 2}" y="${H / 2}" text-anchor="middle">No data in this range</text>`;
+    return;
+  }
+  if (cfg.min != null) lo = Math.min(lo, cfg.min);
+  if (cfg.max != null) hi = Math.max(hi, cfg.max);
+  const pad = (hi - lo) * 0.08 || 1; lo -= cfg.min != null && lo >= cfg.min ? 0 : pad; hi += cfg.max != null && hi >= cfg.max ? 0 : pad;
+  const ticks = niceTicks(lo, hi, 4); lo = Math.min(lo, ticks[0]); hi = Math.max(hi, ticks[ticks.length - 1]);
+  const x = (v) => L + (v - tMin) / (tMax - tMin) * (W - L - R);
+  const y = (v) => Tp + (hi - v) / (hi - lo) * (H - Tp - B);
+  const gap = Math.max(180, hours * 3600 / 200); // break the line over gaps in the data
+  let s = ticks.map((v) => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`).join("");
+  const pxPerS = (W - L - R) / (tMax - tMin);
+  const tstep = [600, 900, 1800, 3600, 7200, 3 * 3600, 4 * 3600, 6 * 3600, 8 * 3600, 12 * 3600, 86400]
+    .find((st) => st * pxPerS >= 80) || 86400;
+  const off = new Date().getTimezoneOffset() * 60;
+  for (let v = Math.ceil((tMin - off) / tstep) * tstep + off; v <= tMax; v += tstep)
+    if (x(v) > L + 15 && x(v) < W - R - 15) s += `<text x="${x(v)}" y="${H - 6}" text-anchor="middle">${clock(v)}</text>`;
+  for (const [k, col] of cfg.series) {
+    let dp = "", prev = null;
+    h[k].forEach((v, i) => {
+      if (v == null || t[i] < tMin) { return; }
+      dp += (prev == null || t[i] - prev > gap ? "M" : "L") + x(t[i]).toFixed(1) + "," + y(v).toFixed(1);
+      prev = t[i];
+    });
+    s += `<path d="${dp}" fill="none" stroke="var(${col})" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  }
+  s += `<g class="hover" style="display:none"><line y1="${Tp}" y2="${H - B}" stroke="var(--muted)" stroke-dasharray="3 3"/>` +
+    cfg.series.map(([, col]) => `<circle r="4" fill="var(${col})" stroke="var(--surface)" stroke-width="2"/>`).join("") + `</g>`;
+  s += `<rect x="${L}" y="0" width="${W - L - R}" height="${H}" fill="transparent"/>`;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.innerHTML = s;
+  const g = svg.querySelector(".hover"), line = g.querySelector("line"), dots = g.querySelectorAll("circle");
+  const move = (ev) => {
+    const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) * W / r.width;
+    const tv = tMin + (px - L) / (W - L - R) * (tMax - tMin);
+    let best = -1, bd = Infinity;
+    for (let i = 0; i < t.length; i++) { const dd = Math.abs(t[i] - tv); if (dd < bd) { bd = dd; best = i; } }
+    if (best < 0 || bd > gap) { leave(); return; }
+    const xi = x(t[best]);
+    line.setAttribute("x1", xi); line.setAttribute("x2", xi);
+    let rowsHtml = "";
+    cfg.series.forEach(([k, col], j) => {
+      const v = h[k][best];
+      dots[j].style.display = v == null ? "none" : "";
+      if (v != null) { dots[j].setAttribute("cx", xi); dots[j].setAttribute("cy", y(v)); }
+      rowsHtml += `<div><i style="background:var(${col})"></i>${cfg.series.length > 1 ? esc(data.fields[k].label) + ": " : ""}<b>${v == null ? "–" : fmt(v, k === "o2" ? 2 : 1)} ${cfg.unit}</b></div>`;
+    });
+    g.style.display = "";
+    tip.innerHTML = `<div class="muted">${stamp(t[best])}</div>` + rowsHtml;
+    tip.style.display = "block";
+    const cx = xi * r.width / W + svg.offsetLeft, tw = tip.offsetWidth;
+    tip.style.left = Math.min(Math.max(4, cx + 12), el.clientWidth - tw - 4) + "px";
+    tip.style.top = (svg.offsetTop + 8) + "px";
+  };
+  const leave = () => { g.style.display = "none"; tip.style.display = "none"; };
+  svg.onpointermove = move; svg.onpointerdown = move; svg.onpointerleave = leave;
+}
+
+$("range").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  hours = +b.dataset.h;
+  try { localStorage.setItem("estyma-hours", hours); } catch (err) {}
+  for (const x of $("range").children) x.classList.toggle("on", x === b);
+  load();
+});
+for (const x of $("range").children) x.classList.toggle("on", +x.dataset.h === hours);
+let resizeT; addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => data && drawCharts(), 150); });
+load();
+setInterval(load, 10000);
+</script>
+</body></html>
