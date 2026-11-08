@@ -16,19 +16,8 @@ from log_ui import start_log_ui
 ENV = {"ESTYMA_EMAIL": "user@example.com", "ESTYMA_PASSWORD": "secret"}
 
 
-class FakeResp:
-    def __init__(self, obj):
-        self.obj = obj
-
-    async def json(self, content_type=None):
-        return self.obj
-
-
 class FakeApi:
-    """The parts of EstymaApi the recorder uses."""
-    update_url = "{0}/update"
-    _http_url = "https://cloud.example"
-    fetchDevicedataBody = "id={0}"
+    """The public EstymaApi calls the cloud monitor uses."""
     fail_login = False
     logins = 0
 
@@ -48,11 +37,8 @@ class FakeApi:
         return {}
 
     async def getDeviceData(self, textToValues=False):
-        return {"123": {"temp_boiler_sub1": 70.5, "online": {"diffSeconds": 12}}}
-
-    async def _makeRequest(self, method, url, data=None):
-        return FakeResp({"kociol_temp_sub1": "70,5", "palnik_status_sub1_int": "5",
-                         "online": {"diff": "0d 0h:0m:12s"}})
+        return {"123": {"temp_boiler_sub1": "70.5", "current_status_burner_sub1_int": 5,
+                        "online": {"diffSeconds": 12}}}
 
     async def _logout(self):
         pass
@@ -72,12 +58,9 @@ class CloudMonitorTest(unittest.TestCase):
         self.dir = tempfile.mkdtemp()
         FakeApi.fail_login, FakeApi.logins = False, 0
 
-    async def _diag(self, *a):
-        return "wrong password"
-
     def make(self, env=ENV):
         mon = CM.CloudMonitor(self.dir, environ=env, interval=0.05,
-                              api_factory=FakeApi, diagnose=self._diag)
+                              api_factory=FakeApi)
         mon.start()
         return mon
 
@@ -102,7 +85,11 @@ class CloudMonitorTest(unittest.TestCase):
         self.assertEqual(st["devices"]["123"]["values"], {"boiler": 70.5, "burner_state": 5})
         self.assertEqual(st["devices"]["123"]["data_age_s"], 12)
         self.assertNotIn("secret", json.dumps(st))
-        self.assertTrue(any(n.startswith("cloud-") and n.endswith(".jsonl") for n in os.listdir(self.dir)))
+        logs = [n for n in os.listdir(self.dir) if n.startswith("cloud-") and n.endswith(".jsonl")]
+        with open(os.path.join(self.dir, logs[0])) as fh:
+            recs = [json.loads(line) for line in fh]
+        self.assertEqual(recs[0]["type"], "settings")
+        self.assertEqual(recs[1]["values"]["temp_boiler_sub1"], 70.5)
         with open(os.path.join(self.dir, "cloud-monitor.json")) as fh:
             self.assertTrue(json.load(fh)["enabled"])
         mon.set_enabled(False)
@@ -129,7 +116,7 @@ class CloudMonitorTest(unittest.TestCase):
         mon = self.make()
         mon.set_enabled(True)
         self.assertTrue(wait_for(lambda: mon.status()["state"] == "error"))
-        self.assertEqual(mon.status()["message"], "login failed: wrong password")
+        self.assertEqual(mon.status()["message"], "login failed: Exception: login failed")
         mon.set_enabled(False)  # also interrupts the retry wait
         self.assertTrue(wait_for(lambda: mon.status()["state"] == "off"))
 
