@@ -25,6 +25,14 @@ Configuration (environment variables or CLI flags, flags win):
   MONITOR_HISTORY_HOURS  hours of decoded values kept for the monitor charts
                    (default 48)
 
+Cloud monitoring (optional, switched on/off in the web UI, see cloud_monitor.py):
+
+  ESTYMA_EMAIL, ESTYMA_PASSWORD (or ESTYMA_PASSWORD_B64 / ESTYMA_PASSWORD_FILE)
+                   cloud account; without them the feature stays off
+  CLOUD_MONITOR    initial state before it is first switched in the UI (default 0)
+  CLOUD_INTERVAL   seconds between cloud polls (default 30)
+  ESTYMA_DOMAIN / ESTYMA_LANGUAGE  as for compare/cloud_recorder.py
+
 Local server (see README, "Operating modes"):
 
   MODE             proxy (forward only, default), hybrid (forward, may add
@@ -451,8 +459,18 @@ def main(argv=None) -> int:
         mon = Monitor(args.log_dir, args.monitor_history_hours)
         log.listeners.append(mon.ingest)
         mon.start()
+        cloud = None
+        try:
+            from cloud_monitor import CloudMonitor
+            cloud = CloudMonitor(args.log_dir)
+            cloud.start()
+            print(f"cloud monitor: {'configured' if cloud.configured else cloud.problem}, "
+                  f"{'on' if cloud.enabled and cloud.configured else 'off'} "
+                  f"(switch it in the web UI)", flush=True)
+        except Exception as exc:  # never keep the proxy from starting
+            print(f"cloud monitor unavailable: {type(exc).__name__}: {exc}", flush=True)
         start_log_ui(args.listen_host, args.ui_port, args.log_dir,
-                     args.ui_user, args.ui_password, monitor=mon, controller=ctl)
+                     args.ui_user, args.ui_password, monitor=mon, controller=ctl, cloud=cloud)
         auth = "basic auth on" if args.ui_user and args.ui_password else "no auth"
         print(f"log UI on http://{args.listen_host}:{args.ui_port}/ ({auth})", flush=True)
     try:

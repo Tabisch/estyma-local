@@ -9,6 +9,7 @@ COPY compare/ /app/compare/
 ENV PYTHONUNBUFFERED=1 LISTEN_PORT=80 LOG_DIR=/logs
 VOLUME /logs
 EXPOSE 80 8089
-# Default: the proxy. The cloud recorder runs from the same image with
+# Default: the proxy (with the optional cloud monitor). The standalone cloud
+# recorder can also run from the same image with
 #   command: ["python3", "/app/compare/cloud_recorder.py"]
 CMD ["python3", "/app/estyma_proxy.py"]

@@ -46,7 +46,11 @@ from datetime import datetime, timezone
 try:
     from EstymaApiWrapper import EstymaApi
 except ImportError:  # pragma: no cover - only hit when the wrapper is missing
-    sys.exit("EstymaApiWrapper is not installed: pip install -r compare/requirements.txt")
+    # The helpers below are also used by the proxy's cloud monitor
+    # (proxy/cloud_monitor.py), which reports the missing wrapper itself.
+    EstymaApi = None
+
+MISSING_WRAPPER = "EstymaApiWrapper is not installed: pip install -r compare/requirements.txt"
 
 
 def iso(ts: float) -> str:
@@ -85,17 +89,24 @@ def flatten(obj, prefix: str = "") -> dict:
     return out
 
 
-def load_credentials(args) -> tuple[str, str]:
-    email = os.environ.get("ESTYMA_EMAIL")
-    password = os.environ.get("ESTYMA_PASSWORD")
+def env_credentials(environ=None) -> tuple[str | None, str | None]:
+    """ESTYMA_EMAIL plus ESTYMA_PASSWORD / _B64 / _FILE; missing parts are None."""
+    env = os.environ if environ is None else environ
+    email = env.get("ESTYMA_EMAIL") or None
+    password = env.get("ESTYMA_PASSWORD") or None
     # Alternatives that survive tools which trim spaces from env values
     # (compose .env files, some UIs): base64, or a file (e.g. a Docker secret).
-    if os.environ.get("ESTYMA_PASSWORD_B64"):
+    if env.get("ESTYMA_PASSWORD_B64"):
         import base64
-        password = base64.b64decode(os.environ["ESTYMA_PASSWORD_B64"].strip()).decode("utf-8")
-    if os.environ.get("ESTYMA_PASSWORD_FILE"):
-        with open(os.environ["ESTYMA_PASSWORD_FILE"], encoding="utf-8") as fh:
+        password = base64.b64decode(env["ESTYMA_PASSWORD_B64"].strip()).decode("utf-8")
+    if env.get("ESTYMA_PASSWORD_FILE"):
+        with open(env["ESTYMA_PASSWORD_FILE"], encoding="utf-8") as fh:
             password = fh.read().rstrip("\r\n")
+    return email, password
+
+
+def load_credentials(args) -> tuple[str, str]:
+    email, password = env_credentials()
     if args.credentials:
         with open(os.path.expanduser(args.credentials), encoding="utf-8") as fh:
             cred = json.load(fh)
@@ -135,8 +146,10 @@ class Recorder:
         )
         return await resp.json(content_type=None)
 
-    async def poll_once(self, device_filter: set[str] | None) -> None:
+    async def poll_once(self, device_filter: set[str] | None) -> list[dict]:
+        """Poll every device once, write and return the records."""
         t = time.time()
+        records = []
         try:
             values_all = await self.api.getDeviceData(textToValues=True)
         except Exception as exc:  # keep recording even if one poll fails
@@ -165,9 +178,11 @@ class Recorder:
                     except Exception:
                         pass
             self.write(record)
+            records.append(record)
             n = len(record.get("raw", {}))
             print(f"{record['time']} device {device_id}: {n} raw fields, "
                   f"data age {record.get('data_age_s')} s", flush=True)
+        return records
 
 
 def describe_secret(name: str, value: str) -> str:
@@ -266,6 +281,8 @@ async def login(args, email: str, password: str, stop: asyncio.Event):
 
 
 async def run(args) -> int:
+    if EstymaApi is None:
+        sys.exit(MISSING_WRAPPER)
     email, password = load_credentials(args)
 
     stop = asyncio.Event()
