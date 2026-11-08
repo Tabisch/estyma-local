@@ -37,12 +37,28 @@ PAGE = """<!doctype html>
  .muted {{ color: #666; font-size: .9rem; }}
  @media (prefers-color-scheme: dark) {{ body {{ background: #111; color: #ddd; }} th, td {{ border-color: #333; }} a {{ color: #7aa7ff; }} }}
 </style></head><body>
-<p><a href="/">Monitor</a> &nbsp; <b>Logs</b></p>
-<h1>Estyma logs</h1>
-<p class="muted">{count} files, {total} in <code>{logdir}</code></p>
+<p><a href="/" data-i18n="monitor">Monitor</a> &nbsp; <b data-i18n="logs">Logs</b></p>
+<h1 data-i18n="title">Estyma logs</h1>
+<p class="muted"><span data-i18n="files" data-n="{count}">{count} files</span>, {total} <span data-i18n="in">in</span> <code>{logdir}</code></p>
 {zip_link}
-<table><thead><tr><th>File</th><th>Size</th><th>Modified</th></tr></thead>
+<table><thead><tr><th data-i18n="file">File</th><th data-i18n="size">Size</th><th data-i18n="modified">Modified</th></tr></thead>
 <tbody>{rows}</tbody></table>
+<script>
+// Same language choice as the monitor page (stored in this browser).
+(function () {{
+  var de = {{ monitor: "Monitor", logs: "Logs", title: "Estyma-Logs", files: "{{n}} Dateien", "in": "in",
+    file: "Datei", size: "Größe", modified: "Geändert", nologs: "Noch keine Logs.", zip: "Alle herunterladen (zip)" }};
+  var lang = "";
+  try {{ lang = localStorage.getItem("estyma-lang") || ""; }} catch (e) {{}}
+  if (!lang) lang = String((navigator.languages || [navigator.language || "en"])[0]).slice(0, 2).toLowerCase();
+  if (lang !== "de") return;
+  document.documentElement.lang = "de";
+  document.querySelectorAll("[data-i18n]").forEach(function (el) {{
+    var t = de[el.dataset.i18n];
+    if (t) el.textContent = t.replace("{{n}}", el.dataset.n || "");
+  }});
+}})();
+</script>
 </body></html>
 """
 
@@ -174,12 +190,12 @@ class LogUIHandler(BaseHTTPRequestHandler):
             f'<td class="num">{human_size(s)}</td>'
             f'<td>{datetime.fromtimestamp(m):%Y-%m-%d %H:%M:%S}</td></tr>'
             for n, s, m in files
-        ) or '<tr><td colspan="3" class="muted">No logs yet.</td></tr>'
+        ) or '<tr><td colspan="3" class="muted" data-i18n="nologs">No logs yet.</td></tr>'
         body = PAGE.format(
             count=len(files),
             total=human_size(sum(s for _, s, _ in files)),
             logdir=html.escape(self.log_dir),
-            zip_link='<a class="button" href="/all.zip">Download all (zip)</a>' if files else "",
+            zip_link='<a class="button" href="/all.zip" data-i18n="zip">Download all (zip)</a>' if files else "",
             rows=rows,
         ).encode()
         self._send(200, body, "text/html; charset=utf-8")
