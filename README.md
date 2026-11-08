@@ -135,7 +135,9 @@ docker exec <proxy-container> python3 /app/compare/compare_cloud_proxy.py /logs 
 ```
 
 Register meanings found so far with this comparison are in
-[docs/register-mapping.md](docs/register-mapping.md).
+[docs/register-mapping.md](docs/register-mapping.md). The Polish cloud field
+names, their English meaning and enum values are in
+[docs/cloud-translation.md](docs/cloud-translation.md).
 
 ## Environment variables
 
