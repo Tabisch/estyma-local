@@ -164,7 +164,7 @@ def _bucket(value, tol):
     return value if tol == 0 else int(value // tol)
 
 
-def score(pairs, min_pairs):
+def score(pairs, min_pairs, min_coverage=0.5):
     """Per cloud field and (register, transform): how often it matches."""
     hits = defaultdict(lambda: defaultdict(int))        # field -> (key, tf) -> hits
     distinct = defaultdict(lambda: defaultdict(set))    # cloud values that matched
@@ -211,6 +211,10 @@ def score(pairs, min_pairs):
             continue
         cands = []
         for (key, tf), h in hits[field].items():
+            # A register that only appeared in a few samples can reach 100 %
+            # by chance; require it to cover a good part of the field's samples.
+            if seen[field][key] < min_coverage * n:
+                continue
             rate = h / seen[field][key]
             cands.append({
                 "register": f"{key[0]},{key[1]}",
@@ -281,6 +285,8 @@ def main(argv=None) -> int:
     p.add_argument("--max-age", type=float, default=600,
                    help="ignore cloud data_age_s above this (cloud offline) (default 600)")
     p.add_argument("--min-pairs", type=int, default=3, help="skip fields with fewer samples")
+    p.add_argument("--min-coverage", type=float, default=0.5,
+                   help="ignore registers present in less than this share of a field's samples")
     p.add_argument("--threshold", type=float, default=0.9, help="match rate to count as a fit")
     p.add_argument("--top", type=int, default=3, help="candidates to print per field")
     p.add_argument("--only-raw", action="store_true", help="only Polish raw fields")
@@ -305,7 +311,7 @@ def main(argv=None) -> int:
         print("no overlap in time; run the proxy and the recorder at the same time")
         return 1
 
-    results = score(pairs, args.min_pairs)
+    results = score(pairs, args.min_pairs, args.min_coverage)
     unmatched = []
     for field in sorted(results):
         info = results[field]
