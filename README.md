@@ -236,6 +236,9 @@ latest cloud values next to the ones the controller reported locally.
 As JSON: `GET /api/cloud`, and `POST /api/cloud` with `{"enabled": true}` or
 `false` (`Content-Type: application/json`, basic auth).
 
+The wrapper is installed into the image automatically from
+`requirements.txt` (pinned version); nothing to install by hand.
+
 The standalone recorder `compare/cloud_recorder.py` is still in the image
 for one-off runs (`docker exec <proxy-container> python3
 /app/compare/cloud_recorder.py --count 1` with the same variables).

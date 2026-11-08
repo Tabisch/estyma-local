@@ -50,7 +50,7 @@ except ImportError:  # pragma: no cover - only hit when the wrapper is missing
     # (proxy/cloud_monitor.py), which reports the missing wrapper itself.
     EstymaApi = None
 
-MISSING_WRAPPER = "EstymaApiWrapper is not installed: pip install -r compare/requirements.txt"
+MISSING_WRAPPER = "EstymaApiWrapper is not installed: pip install -r requirements.txt"
 
 
 def iso(ts: float) -> str:
