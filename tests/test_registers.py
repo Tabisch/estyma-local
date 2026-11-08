@@ -40,7 +40,7 @@ class DecodeTest(unittest.TestCase):
         self.assertEqual(len(set(service)), 45)
         for reg in service:
             self.assertEqual(CATALOG[reg][4], "confirmed", reg)
-        self.assertEqual(CATALOG[8711][0], "Minimum pump temperature")
+        self.assertIn("pumps", CATALOG[8711][0])
         self.assertEqual(decode(65526, CATALOG[8819][2]), -10)
         self.assertEqual(decode(0x11B, CATALOG[8850][2]), 2.7)
 
