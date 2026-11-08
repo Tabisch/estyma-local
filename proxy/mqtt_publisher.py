@@ -235,6 +235,7 @@ class MqttPublisher:
         self.builder = StateBuilder(kwh_per_kg)
         self.connected = False
         self._online: bool | None = None
+        self._seen_live = False          # a fresh report was seen since start
         self._published_report: float | None = None
         self._stop = threading.Event()
         self._lock = threading.Lock()
@@ -302,8 +303,15 @@ class MqttPublisher:
             if online != self._online:
                 self._online = online
                 self._pub(f"{self.base}/availability", "online" if online else "offline")
-                if not online and last is not None:
+                if online:
+                    print("mqtt: controller reporting, online", flush=True)
+                elif last is None or not self._seen_live:
+                    # Right after a start the saved last report is from before
+                    # the restart; the first new one switches to online.
+                    print("mqtt: offline until the controller's next report", flush=True)
+                else:
                     print(f"mqtt: no report for {now - last:.0f} s, offline", flush=True)
+                self._seen_live = self._seen_live or online
             if last is None or last == self._published_report:
                 return
             self._published_report = last
@@ -331,6 +339,7 @@ class MqttPublisher:
                 info.wait_for_publish(2)
             except Exception:
                 pass
+        self.connected = False
         self.client.disconnect()
         self.client.loop_stop()
 
