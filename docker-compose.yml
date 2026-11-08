@@ -36,6 +36,15 @@ services:
       ESTYMA_PASSWORD_B64: "${ESTYMA_PASSWORD_B64:-}"  # use if the password starts/ends with a space
       CLOUD_MONITOR: "${CLOUD_MONITOR:-0}"         # initial state until switched in the UI
       CLOUD_INTERVAL: "${CLOUD_INTERVAL:-30}"      # seconds between cloud polls
+      # Optional MQTT publisher for Home Assistant (read-only, auto discovery).
+      # Off while MQTT_HOST is empty. See README "Home Assistant (MQTT)".
+      MQTT_HOST: "${MQTT_HOST:-}"                  # broker address, e.g. 192.168.1.10
+      MQTT_PORT: "${MQTT_PORT:-1883}"
+      MQTT_USER: "${MQTT_USER:-}"
+      MQTT_PASSWORD: "${MQTT_PASSWORD:-}"
+      MQTT_PREFIX: "${MQTT_PREFIX:-estyma}"
+      HA_DISCOVERY_PREFIX: "${HA_DISCOVERY_PREFIX:-homeassistant}"
+      FUEL_KWH_PER_KG: "${FUEL_KWH_PER_KG:-}"      # empty = controller setting, else 4.8
     volumes:
       - estyma-logs:/logs
 

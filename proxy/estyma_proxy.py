@@ -54,6 +54,12 @@ Local server (see README, "Operating modes"):
   CLOCK_SYNC_HOURS hours between clock syncs in local mode, 0 = off (default 6)
   POLL_DELAY       DELAY value sent in local replies (default 10)
   STATE_FILE       persisted register state (default LOG_DIR/state.json)
+
+MQTT / Home Assistant (optional, read-only, see mqtt_publisher.py):
+
+  MQTT_HOST        broker address; empty = off. MQTT_PORT, MQTT_USER,
+                   MQTT_PASSWORD, MQTT_TLS, MQTT_PREFIX, MQTT_DEVICE_ID,
+                   HA_DISCOVERY_PREFIX, MQTT_STALE_SECONDS, FUEL_KWH_PER_KG
 """
 
 from __future__ import annotations
@@ -495,11 +501,20 @@ def main(argv=None) -> int:
                      args.ui_user, args.ui_password, monitor=mon, controller=ctl, cloud=cloud)
         auth = "basic auth on" if args.ui_user and args.ui_password else "no auth"
         print(f"log UI on http://{args.listen_host}:{args.ui_port}/ ({auth})", flush=True)
+    mqtt = None
+    if env("MQTT_HOST"):
+        try:
+            from mqtt_publisher import from_env
+            mqtt = from_env(ctl)
+        except Exception as exc:  # never keep the proxy from starting
+            print(f"mqtt publisher unavailable: {type(exc).__name__}: {exc}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
+        if mqtt is not None:
+            mqtt.stop()
         server.server_close()
         ctl.save_state(force=True)
     return 0
