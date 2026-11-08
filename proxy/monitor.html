@@ -73,6 +73,11 @@ code { font-size: .85em; word-break: break-all; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .note { font-size: .82rem; color: var(--text-2); margin-top: .35rem; min-height: 1.1em; }
 .note.err { color: var(--bad); }
+.alarm-banner { margin-top: .8rem; padding: .6rem .8rem; border-radius: 8px; border: 1px solid var(--bad); color: var(--bad); background: var(--surface); font-weight: 600; }
+.alarm-banner .muted { font-weight: 400; }
+.pill { display: inline-block; padding: .05rem .5rem; border-radius: 999px; font-size: .8rem; border: 1px solid currentColor; }
+.pill.active, .pill.resetting { color: var(--bad); }
+.pill.cleared { color: var(--muted); }
 </style></head><body><main>
 <header>
   <h1>Estyma monitor</h1>
@@ -80,6 +85,7 @@ code { font-size: .85em; word-break: break-all; }
   <span class="range" id="lang" role="group" aria-label="Language"><button data-l="en" lang="en">EN</button><button data-l="de" lang="de">DE</button></span>
 </header>
 <div class="status" id="status" data-i18n="loading">Loading…</div>
+<div class="alarm-banner" id="alarm-banner" role="alert" hidden></div>
 
 <h2 data-i18n="h.now">Now</h2>
 <div class="tiles" id="tiles"></div>
@@ -96,6 +102,13 @@ code { font-size: .85em; word-break: break-all; }
   <button data-h="1">1 h</button><button data-h="6">6 h</button><button data-h="24" class="on">24 h</button><button data-h="48">48 h</button>
 </span></h2>
 <div class="charts" id="charts"></div>
+
+<div id="alarm-box" hidden>
+<h2 data-i18n="h.alarms">Alarms</h2>
+<div class="wrap"><table><thead><tr><th data-i18n="col.alarm">Alarm</th><th data-i18n="col.state">State</th><th data-i18n="col.start">Since</th><th data-i18n="col.end">Until</th></tr></thead>
+<tbody id="alarms"></tbody></table></div>
+<p class="muted" data-i18n="alarm.clock">Times come from the controller's clock, which runs about 45 minutes behind.</p>
+</div>
 
 <h2 data-i18n="h.settings">Settings reported by the controller</h2>
 <div class="wrap"><table><thead><tr><th data-i18n="col.setting">Setting</th><th class="num" data-i18n="col.value">Value</th><th class="num" data-i18n="col.min">Min</th><th class="num" data-i18n="col.max">Max</th></tr></thead>
@@ -146,6 +159,11 @@ const I18N = {
     "k.nowrites": "No writes yet.", "k.was": "was {v}", "k.polls": "{n} polls",
     "ev.sent": "sent", "ev.confirmed": "confirmed", "ev.failed": "failed", "ev.noop": "no change", "ev.rejected": "rejected",
     "ev.replaced": "replaced", "ev.superseded": "superseded", "ev.cancelled": "cancelled", "ev.requested": "requested",
+    "h.alarms": "Alarms", "col.alarm": "Alarm", "col.state": "State", "col.start": "Since", "col.end": "Until",
+    "alarm.clock": "Times come from the controller's clock, which runs about 45 minutes behind.",
+    "alarm.banner": "Alarm: {t}", "alarm.since": "since {t}", "alarm.unknown": "Alarm active (burner state: error)",
+    "alarm.code": "Code {c}", "alarm.140": "Missing fuel / ignition failed",
+    "as.active": "active", "as.resetting": "being reset", "as.cleared": "cleared",
   },
   de: {
     "nav.monitor": "Monitor", "nav.logs": "Logs", "loading": "Lädt…",
@@ -180,6 +198,11 @@ const I18N = {
     "k.nowrites": "Noch keine Schreibbefehle.", "k.was": "vorher {v}", "k.polls": "{n} Abfragen",
     "ev.sent": "gesendet", "ev.confirmed": "bestätigt", "ev.failed": "fehlgeschlagen", "ev.noop": "keine Änderung", "ev.rejected": "abgelehnt",
     "ev.replaced": "ersetzt", "ev.superseded": "überholt", "ev.cancelled": "abgebrochen", "ev.requested": "angefordert",
+    "h.alarms": "Alarme", "col.alarm": "Alarm", "col.state": "Zustand", "col.start": "Seit", "col.end": "Bis",
+    "alarm.clock": "Die Zeiten stammen von der Uhr des Reglers, die etwa 45 Minuten nachgeht.",
+    "alarm.banner": "Alarm: {t}", "alarm.since": "seit {t}", "alarm.unknown": "Alarm aktiv (Brennerstatus: Fehler)",
+    "alarm.code": "Code {c}", "alarm.140": "Brennstoffmangel / Zündung fehlgeschlagen",
+    "as.active": "aktiv", "as.resetting": "wird zurückgesetzt", "as.cleared": "behoben",
   },
 };
 // Messages the server sends in English (controller.py); translated by pattern.
@@ -280,6 +303,21 @@ function render() {
     if (d.loading) st.push(`<span>${T("st.older")}</span>`);
   }
   $("status").innerHTML = st.join("");
+
+  // alarms
+  const A = d.alarms || { active: false, items: [] };
+  const alarmText = (a) => (I18N[lang]["alarm." + a.code] || I18N.en["alarm." + a.code] ? T("alarm." + a.code) + " · " : "") + T("alarm.code", { c: a.code });
+  // Controller clock = local wall time stored as Unix time, so show it as UTC.
+  const ctime = (t) => t ? new Date(t * 1000).toLocaleString(lang, { timeZone: "UTC", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "–";
+  const open = A.items.filter((a) => a.state !== "cleared" && !a.end);
+  const banner = $("alarm-banner");
+  banner.hidden = !A.active;
+  if (A.active) banner.innerHTML = open.length
+    ? open.map((a) => `${esc(T("alarm.banner", { t: alarmText(a) }))} <span class="muted">${esc(T("alarm.since", { t: ctime(a.start) }))}</span>`).join("<br>")
+    : esc(T("alarm.unknown"));
+  $("alarm-box").hidden = !A.items.length;
+  $("alarms").innerHTML = A.items.map((a) =>
+    `<tr><td>${esc(alarmText(a))}</td><td><span class="pill ${a.state}">${esc(T("as." + a.state))}</span></td><td>${ctime(a.start)}</td><td>${a.end ? ctime(a.end) : "–"}</td></tr>`).join("");
 
   // tiles
   const S = d.settings;
