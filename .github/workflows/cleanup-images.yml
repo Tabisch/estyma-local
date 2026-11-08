@@ -1,0 +1,29 @@
+name: Clean up images
+
+# Manual: Actions -> Clean up images -> Run workflow.
+# Deletes every version of ghcr.io/<owner>/estyma-local except the image
+# tagged "latest" (multi-arch aware: latest's platform images are kept).
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only list what would be deleted"
+        type: boolean
+        default: true
+
+permissions:
+  packages: write
+
+jobs:
+  cleanup:
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    steps:
+      - uses: dataaxiom/ghcr-cleanup-action@v1
+        with:
+          package: estyma-local
+          delete-tags: "*"
+          exclude-tags: latest
+          delete-untagged: true
+          delete-partial-images: true
+          validate: true
+          dry-run: ${{ inputs.dry_run }}

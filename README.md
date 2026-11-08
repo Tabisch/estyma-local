@@ -288,6 +288,13 @@ plus the tag name for `v*` tags). It builds when:
 |---------------------|---------|---------|
 | `RUNNER`            | (unset) | Unset = build on GitHub's runners; `self-hosted` = build on your own runner |
 
+### Removing old images
+
+Every build adds a version to the GHCR package. *Actions → Clean up images →
+Run workflow* deletes all versions except the image tagged `latest` (its
+platform images stay). It starts as a dry run that only lists what it would
+delete; untick *Only list what would be deleted* to really delete.
+
 ### Building on your own GitHub Actions runner
 
 By default the workflow runs on GitHub's hosted runners. To run it on your
