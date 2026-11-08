@@ -7,9 +7,10 @@ HTTP.
 Step 1: a **transparent logging proxy** between the heating controller and the
 provider's server. It forwards every request unchanged and records each
 request/response pair, so the protocol can be reverse engineered and a local
-replacement built later. An optional **cloud recorder** polls the provider's
-web API at the same time, so cloud values can be matched to raw controller
-data.
+replacement built later. The image also contains an optional **cloud
+recorder** that polls the provider's web API, so cloud values can be matched
+to raw controller data. It is not part of the compose stack; run it by hand
+when needed (see "Cloud recorder" below).
 
 This README covers one setup: Docker (Portainer stack or docker compose) plus
 a NAT rule on the firewall/router.
@@ -20,9 +21,8 @@ a NAT rule on the firewall/router.
                       firewall DNAT
 heating controller --- provider_ip:80 ---> proxy_host:8088 (estyma-proxy) ---> provider server
                                                   |
-cloud-recorder (optional) --- provider web API    +--> volume estyma-logs
-        |                                                 exchanges-YYYY-MM-DD.jsonl
-        +-----------------------------------------------> cloud-YYYY-MM-DD.jsonl
+                                                  +--> volume estyma-logs
+                                                          exchanges-YYYY-MM-DD.jsonl
                                                   |
                                    browser ---> proxy_host:8089 (monitor + log download UI)
 ```
@@ -70,11 +70,10 @@ controller still shows as online in the provider's web UI.
 ## 2. Deploy
 
 The image is `ghcr.io/tabisch/estyma-local:latest` (amd64 only for now). It
-contains both the proxy and the cloud recorder. `docker-compose.yml` defines:
+contains the proxy and the (optional) cloud recorder. `docker-compose.yml` defines:
 
 - `estyma-proxy`: the proxy (host port 8088) and the web UI with the live monitor and log downloads (host port 8089)
-- `cloud-recorder`: polls the provider's web API; idles if no credentials are set
-- `estyma-logs`: named volume shared by both
+- `estyma-logs`: named volume for the logs
 
 Before deploying, check `UPSTREAM` in `docker-compose.yml`: it is where the
 proxy forwards to. Because the NAT rule only matches the controller, the
@@ -86,8 +85,7 @@ provider's normal hostname works there.
    editor, or choose *Repository* with this repo's URL, reference
    `refs/heads/main` and compose path `docker-compose.yml`.
 2. Under *Environment variables* add what you need (see the table below),
-   typically `ESTYMA_EMAIL` and `ESTYMA_PASSWORD` for the cloud recorder and
-   `UI_USER` / `UI_PASSWORD` to protect the log UI.
+   typically `UI_USER` / `UI_PASSWORD` to protect the log UI.
 3. *Deploy the stack*.
 4. To update after a new image was built: open the stack, *Update the stack*
    with *Re-pull image and redeploy* enabled (or *Pull and redeploy* for a
@@ -252,11 +250,19 @@ Values below are defaults or placeholders.
 `UPSTREAM` is not needed in `local` mode unless `CLOUD_MIRROR` or
 `LOCAL_FALLBACK` is on.
 
-### Cloud recorder (`cloud-recorder` service)
+### Cloud recorder (not in the compose stack)
 
-The service is always created. If `ESTYMA_EMAIL` / `ESTYMA_PASSWORD` are
-missing it logs `cloud recorder disabled` and idles; set both and redeploy to
-start recording.
+The recorder ships in the same image but is not part of `docker-compose.yml`.
+Run it by hand while you need cloud data; it writes into the same volume as
+the proxy (the volume is `<stack>_estyma-logs`, e.g. `estyma-local_estyma-logs`):
+
+```sh
+docker run -d --name estyma-cloud-recorder --restart unless-stopped \
+  -e ESTYMA_EMAIL=you@example.com -e ESTYMA_PASSWORD=change-me \
+  -v estyma-local_estyma-logs:/logs \
+  ghcr.io/tabisch/estyma-local:latest python3 /app/compare/cloud_recorder.py
+docker rm -f estyma-cloud-recorder     # stop it again
+```
 
 | Variable          | Default in image | Meaning |
 |-------------------|------------------|---------|
@@ -268,7 +274,7 @@ start recording.
 | `ESTYMA_LANGUAGE` | `english`        | Language for the wrapper's value names |
 | `INTERVAL`        | `30`             | Seconds between polls |
 | `LOG_DIR`         | `/logs`          | Where `cloud-YYYY-MM-DD.jsonl` is written (same volume as the proxy) |
-| `IDLE_IF_UNCONFIGURED` | (unset; `1` in compose) | Idle instead of exiting when credentials are missing |
+| `IDLE_IF_UNCONFIGURED` | (unset)     | `1` = idle instead of exiting when credentials are missing |
 
 ### Compose / `.env` (host side)
 
@@ -281,9 +287,8 @@ start recording.
 | `UI_PORT`         | `8089`  | Host port of the web UI (inside the container it stays 8089) |
 | `UI_USER` / `UI_PASSWORD` | (empty) | Passed to the proxy, see above |
 | `MODE`, `WRITES_ENABLED`, `ALLOW_POWER_WRITES`, `LOCAL_FALLBACK`, `CLOUD_MIRROR`, `CONTROLLER_TZ` | see above | Passed to the proxy |
-| `ESTYMA_EMAIL` / `ESTYMA_PASSWORD` | (empty) | Passed to the cloud recorder, see above |
 
-`UPSTREAM`, `UPSTREAM_TIMEOUT`, `ESTYMA_DOMAIN` and `INTERVAL` are set
+`UPSTREAM` and `UPSTREAM_TIMEOUT` are set
 directly in `docker-compose.yml`; edit them there.
 
 ## Image build
