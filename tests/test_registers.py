@@ -8,7 +8,7 @@ import unittest
 from fixtures import cloud_reply, report, request_body  # noqa: F401  (sets sys.path)
 
 from monitor import Monitor
-from registers import CATALOG, RegisterTable, decode
+from registers import CATALOG, RegisterTable, decode, looks_glitched
 from log_ui import start_log_ui
 
 
@@ -57,11 +57,34 @@ class TableTest(unittest.TestCase):
         rows = {(r["reg"], r["idx"]): r for r in t.snapshot()}
         self.assertEqual(rows[(8193, 1)]["value"], 70.5)
         self.assertEqual(rows[(8193, 1)]["raw"], 31981648)
+        self.assertTrue(rows[(8193, 1)]["glitch"])
         self.assertEqual(rows[(8790, 1)]["label"], "Initial fuel dose")
         self.assertIsNone(rows[(8790, 1)]["stable"])                 # seen once
         self.assertEqual(rows[(8790, 1)]["value"], 90)
         self.assertEqual(rows[(8790, 1)]["first"], 120)
         self.assertEqual(rows[(8816, 1)]["value"], 30)                # 0x100 + 30
+
+    def test_small_change_is_pending_not_glitch(self):
+        t = RegisterTable(self.dir)
+        t.observe(100, {(8193, 1): 568, (8818, 1): 144})
+        t.observe(120, {(8193, 1): 568, (8818, 1): 144})
+        t.observe(140, {(8193, 1): 567, (8818, 1): 400})              # 0.1 degrees down; 40.0 out of range
+        rows = {(r["reg"], r["idx"]): r for r in t.snapshot()}
+        self.assertTrue(rows[(8193, 1)]["pending"])
+        self.assertFalse(rows[(8193, 1)]["glitch"])
+        self.assertEqual(rows[(8193, 1)]["value"], 56.8)
+        self.assertTrue(rows[(8818, 1)]["glitch"])
+        t.observe(160, {(8193, 1): 567})
+        rows = {(r["reg"], r["idx"]): r for r in t.snapshot()}
+        self.assertFalse(rows[(8193, 1)]["pending"])
+        self.assertEqual(rows[(8193, 1)]["value"], 56.7)
+
+    def test_glitch_heuristic(self):
+        self.assertFalse(looks_glitched(0x105, 0x005, "u8"))          # 8-bit flag bit flips
+        self.assertFalse(looks_glitched(65530, 65540, "x1"))          # counter carry
+        self.assertTrue(looks_glitched(31981648, 705, "d10"))
+        self.assertFalse(looks_glitched(1762000000, 0, "time"))       # alarm start time set
+        self.assertFalse(looks_glitched(None, 5, "x1"))
 
     def test_value_names_and_ranges(self):
         t = RegisterTable(self.dir)

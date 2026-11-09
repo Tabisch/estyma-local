@@ -8,8 +8,10 @@ service panel added to the read list) gets a row of its own, labelled from
 directory, so registers that were read only once survive a restart.
 
 Corrupted CAN reads last for one report, so a value only counts as "stable"
-once two reports in a row agree. The page shows the stable value and flags a
-raw value that differs from it.
+once two reports in a row agree. The page shows the stable value. A newer raw
+value that differs from it is normally just a change waiting for its second
+report; it is only flagged as a glitch when it looks corrupted (see
+``looks_glitched``).
 
 The web UI (log_ui.py) serves the page (registers.html) and ``/api/registers``.
 """
@@ -192,6 +194,30 @@ def decode(raw: int, how: str):
     return val / scale if scale != 1 else val
 
 
+# Decodes whose raw value is a plain number, so a huge jump means corruption.
+# "time", "hex" and "alarm" registers legitimately change in their upper bits.
+_NUMERIC = ("x1", "d10", "d100", "u8", "u16", "s16", "u8/10", "u16/10")
+# Corrupted reads seen so far keep the low 16 bits and garble the upper ones
+# (e.g. 705 -> 31981648), so a jump this big between two reports is a glitch.
+GLITCH_JUMP = 0xFFFF
+
+
+def looks_glitched(raw, stable, how: str, rng=None) -> bool:
+    """True if ``raw`` (not yet confirmed) looks like a corrupted read of a
+    register whose last stable value is ``stable``. A normal change, such as
+    a temperature moving by 0.1 degrees, is not a glitch: it is simply waiting
+    for the second report that confirms it."""
+    if raw is None or stable is None or raw == stable or how not in _NUMERIC:
+        return False
+    if abs(raw - stable) > GLITCH_JUMP:
+        return True
+    if rng is not None:
+        val = decode(raw, how)
+        if isinstance(val, (int, float)) and not rng[0] <= val <= rng[1]:
+            return True
+    return False
+
+
 # --------------------------------------------------------------------------
 # Table
 # --------------------------------------------------------------------------
@@ -291,11 +317,14 @@ class RegisterTable:
             shown = e["stable"] if e["stable"] is not None else e["raw"]
             value = decode(shown, how)
             name = VALUES.get(reg, {}).get(value) if idx == 1 else None
+            rng = RANGES.get(reg) if idx == 1 else None
+            pending = e["stable"] is not None and e["raw"] is not None and e["raw"] != e["stable"]
             out.append({
                 "reg": reg, "idx": idx, "label": label, "label_de": label_de, "unit": unit,
-                "conf": conf, "decode": how, "range": RANGES.get(reg) if idx == 1 else None,
+                "conf": conf, "decode": how, "range": rng,
                 "value_name": list(name) if name else None,
                 "raw": e["raw"], "stable": e["stable"], "value": value,
+                "pending": pending, "glitch": pending and looks_glitched(e["raw"], e["stable"], how, rng),
                 "first": e["first"], "last": e["last"], "stable_t": e.get("stable_t"),
                 "count": e["count"], "changes": e["changes"], "requested": e.get("requested"),
             })
