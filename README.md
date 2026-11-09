@@ -444,7 +444,11 @@ plus the tag name for `v*` tags). It builds when:
 - a push to `main` contains a commit whose message includes `[build]`, e.g.
   `git commit -m "Add register decoding [build]"`; other pushes are skipped,
 - a `v*` tag is pushed,
-- it is started by hand: *Actions → Docker image → Run workflow*.
+- it is started by hand: *Actions → Tests and Docker image → Run workflow*.
+
+Before every build, and on every push to `main`, tag and pull request, the
+workflow runs the unit tests (see "Tests"). The image is only built and pushed
+when they pass. Pull requests only run the tests and never push an image.
 
 | Repository variable | Default | Meaning |
 |---------------------|---------|---------|
