@@ -146,7 +146,7 @@ class ServerTest(unittest.TestCase):
         c = http.client.HTTPConnection("127.0.0.1", self.ui_port, timeout=5)
         c.request("GET", "/settings", headers={"Authorization": "Basic " + base64.b64encode(b"u:p").decode()})
         r = c.getresponse(); r.read()
-        self.assertEqual((r.status, r.getheader("Location")), (302, "/heating"))
+        self.assertEqual(r.status, 404)  # kept free for app settings, no redirect
         code, res = self.ui("POST", "/api/set", {"key": "hyst_on", "value": 8})
         self.assertEqual(code, 200, res)
         _, text = self.poll(report(r8712_1=10))

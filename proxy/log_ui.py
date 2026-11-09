@@ -179,10 +179,6 @@ class LogUIHandler(BaseHTTPRequestHandler):
             return self._json(200, snap)
         if path in ("/heating", "/heating/") and self.controller:
             return self._page("settings.html")
-        if path in ("/settings", "/settings/") and self.controller:
-            # Old address of the heating settings page; /settings is kept free
-            # for a later page with settings of this app itself.
-            return self._send(302, b"", "text/plain", [("Location", "/heating")])
         if path == "/api/settings" and self.controller:
             snap = self.controller.settings_snapshot()
             snap["ui_auth"] = self.auth is not None

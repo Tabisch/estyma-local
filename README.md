@@ -135,8 +135,7 @@ Open `http://<proxy_host>:8089/`.
   reports in a row agree; a different raw value is flagged as a possible
   glitch. The table is kept in `registers.json` in the log volume, so
   registers read only once survive a restart. JSON at `/api/registers`.
-- **Heating settings** (`/heating`; the old address `/settings` redirects
-  there): the heating controller's settings, grouped like the
+- **Heating settings** (`/heating`): the heating controller's settings, grouped like the
   cloud panels: user settings (on/off, boiler target and mode, buffer
   targets, room temperatures, circuit 1 program), boiler (hystereses, pump
   temperature and overrun, return protection), burner (power, blower curve,
