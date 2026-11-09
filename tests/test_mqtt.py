@@ -82,6 +82,20 @@ class StateTest(unittest.TestCase):
         self.assertIsNone(st["boiler"])
         self.assertIsNone(st["burner_state"])
 
+    def test_single_glitch_keeps_last_value(self):
+        b = MP.StateBuilder()
+        self.ctl.observe_report(report())
+        self.assertEqual(b.build(self.ctl)[0]["boiler_on"], "ON")
+        self.clock.t += 20
+        self.ctl.observe_report(report(r8197_1=0x6020001, r8193_1=705 + (5 << 16)))
+        st = b.build(self.ctl)[0]
+        self.assertEqual(st["boiler_on"], "ON")
+        self.assertEqual(st["boiler"], 70.5)
+        # Still invalid after HOLD_SECONDS: unknown.
+        self.clock.t += b.HOLD_SECONDS + 20
+        self.ctl.observe_report(report(r8197_1=0x1))
+        self.assertIsNone(b.build(self.ctl)[0]["boiler_on"])
+
     def test_fuel_counter_monotonic(self):
         b = MP.StateBuilder(kwh_per_kg=5)
         self.ctl.observe_report(report())

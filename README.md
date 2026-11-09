@@ -324,6 +324,9 @@ calorific value is `FUEL_KWH_PER_KG` if set, otherwise the controller's own
 setting (8850, read in `hybrid`/`local` mode), otherwise 4.8 kWh/kg. Changing
 it makes the total jump, so set it once. A fuel counter reading that goes
 down or jumps implausibly is treated as a corrupted read and skipped.
+Other values keep their last valid reading for up to 10 minutes when a
+single report carries a corrupted value, so entities don't flicker to
+*unknown*.
 
 The device goes *unavailable* when the controller has not reported for
 `MQTT_STALE_SECONDS`, or when the server stops (MQTT last will).

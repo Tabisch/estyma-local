@@ -112,6 +112,7 @@ class StateBuilder:
     def __init__(self, kwh_per_kg: float | None = None) -> None:
         self.kwh_per_kg = kwh_per_kg
         self._fuel: tuple | None = None   # (ts, kg) last accepted
+        self._good: dict = {}             # key -> (ts, last valid value)
 
     def _live(self, regs: dict, key: str):
         reg, idx, how, lo, hi = _LIVE[key]
@@ -193,7 +194,24 @@ class StateBuilder:
         st["last_report"] = (datetime.fromtimestamp(last, timezone.utc).isoformat(timespec="seconds")
                              if last else None)
         st["mode"] = mode
+        self._hold(st, last)
         return st, alarm
+
+    # A single corrupted CAN read (e.g. 8197 reported as 0x0001 instead of
+    # 0x101) decodes to None. Keep the last valid value for HOLD_SECONDS so
+    # the entity does not flicker to "unknown" for one report.
+    HOLD_SECONDS = 600
+    _NO_HOLD = ("alarm", "alarm_code", "last_report", "mode", "kwh_per_kg")
+
+    def _hold(self, st: dict, now) -> None:
+        now = now or time.time()
+        for k, v in st.items():
+            if k in self._NO_HOLD:
+                continue
+            if v is not None:
+                self._good[k] = (now, v)
+            elif k in self._good and now - self._good[k][0] <= self.HOLD_SECONDS:
+                st[k] = self._good[k][1]
 
 
 def discovery(device_id: str, base: str, disc_prefix: str) -> list[tuple[str, str]]:
