@@ -444,7 +444,11 @@ plus the tag name for `v*` tags). It builds when:
 - a push to `main` contains a commit whose message includes `[build]`, e.g.
   `git commit -m "Add register decoding [build]"`; other pushes are skipped,
 - a `v*` tag is pushed,
-- it is started by hand: *Actions → Docker image → Run workflow*.
+- it is started by hand: *Actions → Tests and Docker image → Run workflow*.
+
+Before every build, and on every push to `main`, tag and pull request, the
+workflow runs the unit tests (see "Tests"). The image is only built and pushed
+when they pass. Pull requests only run the tests and never push an image.
 
 | Repository variable | Default | Meaning |
 |---------------------|---------|---------|
@@ -470,7 +474,7 @@ own machine instead:
    then restart the service.
 3. *Settings → Secrets and variables → Actions → Variables*: add `RUNNER` with
    the value `self-hosted`. Delete the variable to go back to GitHub's runners.
-4. Re-run the workflow (*Actions → Docker image → Run workflow*).
+4. Re-run the workflow (*Actions → Tests and Docker image → Run workflow*).
 
 The build is amd64 only, so use an x86-64 machine as the runner. To build
 for ARM again, add the platforms in `docker.yml` and put back the
