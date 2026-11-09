@@ -130,6 +130,7 @@ page and have not been recorded yet.
 
 | Code | Meaning |
 |---|---|
+| 139 (0x8B) | start failure ("Fehler beim Starten" on the controller display) |
 | 140 (0x8C) | missing fuel / ignition failed |
 
 **Timers** (`co1_timer_*`): every day is `4194240` = `0x3FFFC0`, bits 6 to 21

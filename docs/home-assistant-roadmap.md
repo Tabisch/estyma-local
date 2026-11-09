@@ -262,7 +262,7 @@ The existing HA integration uses EstymaApi against the cloud. Plan:
 | Burner states 3, 4, 6, 8, 9 | enum completeness | keep recording |
 | Operation mode / heating program values | select options | change in cloud UI |
 | Timer bitmask encoding and weekday order | timer support | change one hour of Monday |
-| Alarm codes besides 140 | alarm texts | collect over time, vendor manual |
+| Alarm codes besides 139, 140 | alarm texts | collect over time, vendor manual |
 | Alarm time offset (~45 min) | correct timestamps | compare controller clock after sync |
 | Behaviour when the server is unreachable for long | safety of local mode | stop local server briefly, watch the controller |
 | Firmware updates via the cloud | could change the protocol | keep logging; pin behaviour per `SOFT_VER` |

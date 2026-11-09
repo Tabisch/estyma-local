@@ -48,7 +48,6 @@ import registers as R
 
 REPO_URL = "https://github.com/Tabisch/estyma-local"
 DEFAULT_KWH_PER_KG = 4.8   # typical wood pellets
-ALARM_TEXT = {140: "missing fuel / ignition failure"}
 
 _LIVE = {k: (reg, idx, how, lo, hi) for k, _, reg, idx, how, _, lo, hi in M.LIVE}
 
@@ -88,6 +87,7 @@ ENTITIES = [
                                                                   "icon": "mdi:pump"}),
     ("binary_sensor", "alarm", "Alarm", {"device_class": "problem"}),
     ("sensor", "alarm_code", "Alarm code", {"icon": "mdi:alert-circle-outline"}),
+    ("sensor", "alarm_text", "Alarm text", {"icon": "mdi:alert-circle-outline"}),
     ("sensor", "lambda_pwm", "Lambda PWM", dict(_DIAG, state_class="measurement",
                                                 enabled_by_default=False)),
     ("sensor", "last_report", "Last report", dict(_DIAG, device_class="timestamp")),
@@ -149,7 +149,7 @@ class StateBuilder:
         raw = ctl.raw(P.ALARM_CODE_BASE + slot)
         if raw is not None and raw >= 0:
             code, state = raw & 0xFF, (raw >> 16) & 0xFFFF
-            out.update(code=code, text=ALARM_TEXT.get(code),
+            out.update(code=code, text=M.ALARM_TEXT.get(code),
                        state=M.ALARM_STATES.get(state, f"state {state}"))
         # Controller clock: local wall time encoded as Unix time, shown as is.
         for key, base in (("start", P.ALARM_START_BASE), ("end", P.ALARM_END_BASE)):
@@ -190,6 +190,12 @@ class StateBuilder:
         st["kwh_per_kg"] = kwh
         st["alarm"] = "ON" if alarm["active"] else "OFF"
         st["alarm_code"] = alarm["code"] if alarm["active"] else 0
+        if not alarm["active"]:
+            st["alarm_text"] = "none"
+        elif alarm["code"] is None:
+            st["alarm_text"] = "alarm"
+        else:
+            st["alarm_text"] = alarm["text"] or f"code {alarm['code']}"
         st["last_report"] = (datetime.fromtimestamp(last, timezone.utc).isoformat(timespec="seconds")
                              if last else None)
         st["mode"] = mode

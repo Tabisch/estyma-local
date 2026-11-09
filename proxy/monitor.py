@@ -108,6 +108,12 @@ def parse_registers(value: str) -> dict:
 ALARM_SLOTS = 20
 ALARM_CODE, ALARM_START, ALARM_END, ALARM_COUNTER = 16400, 16420, 16440, 16460
 ALARM_STATES = {0: "cleared", 3: "active", 7: "resetting"}
+# Alarm code -> text, as the controller display shows it (German) in English.
+# Add new codes as they show up; unknown ones are shown as "Code n".
+ALARM_TEXT = {
+    139: "start failure",                     # "Fehler beim Starten"
+    140: "missing fuel / ignition failure",
+}
 MIN_TIME = 1_500_000_000  # anything older is a glitch
 
 

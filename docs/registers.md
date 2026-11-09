@@ -116,7 +116,7 @@ service panel, whose rows name their register.
 | Register | Function | Encoding | Range / values |
 |---|---|---|---|
 | 16460 | Alarm counter, +1 on every new alarm | 8-bit | count |
-| 16400+k (k = 0..19) | Alarm slot k: state in bits 16+, alarm code in the low byte | x1 | state 3 active, 7 being reset, 0 cleared; code 140 = missing fuel / ignition failure |
+| 16400+k (k = 0..19) | Alarm slot k: state in bits 16+, alarm code in the low byte | x1 | state 3 active, 7 being reset, 0 cleared; code 139 = start failure, 140 = missing fuel / ignition failure |
 | 16420+k | Alarm slot k start time | Unix time | controller clock |
 | 16440+k | Alarm slot k end time | Unix time | 0 while active |
 
