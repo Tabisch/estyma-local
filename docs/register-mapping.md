@@ -43,15 +43,25 @@ switched off/on in between to reset).
 | Register | Meaning |
 |---|---|
 | 16460,1 | Alarm counter, `0x100 + n`; +1 on every new alarm (268 -> 269 -> 270 -> 271) |
-| 16411 + k, 1 | Alarm slot k: state in bits 16+ and alarm code in the low byte. `0x3008C` = active, `0x7008C` = being reset, `0x8C` = cleared. Code 140 (0x8C) = missing fuel / ignition failure |
+| 16411 + k, 1 | Alarm slot k: state in bits 16+ and alarm code in the low byte. `0x3008C` = active, `0x7008C` = being reset, `0x8C` = cleared. Code 140 (0x8C) = missing fuel / no fire ("Brennstoffmangel / Feuermangel"), 139 (0x8B) = start failure ("Fehler beim Starten"); more codes in cloud-translation.md |
 | 16431 + k, 1 | Alarm slot k start time (Unix time, controller clock) |
-| 16451 + k, 1 | Alarm slot k end time; 0 while the alarm is active |
+| 16451 + k, 1 | Alarm slot k acknowledge time ("Bestätigung" on the display); 0 until the alarm is acknowledged or reset |
 
 The slot that is used follows the counter: counter 268 -> slot 16411/16431/16451
 (an older code-140 alarm from 2026-11-05), 269 -> 16412/..., 270 -> 16413/...,
 271 -> 16414/.... When the counter goes up the cloud adds the new slot's three
 registers to its `ODCZYT` request list (63 -> 66 entries) and drops older ones
 later, so it only ever asks for the latest one or two slots.
+
+The 20 slots are the controller's whole alarm history, the same list the
+display shows under "Alarm Aufilstung" (Num 1 = newest, Num 20 = oldest).
+The counter's n runs 1..20 and wraps (271 on 2026-11-08, 264 on 2026-11-09),
+so the newest alarm is in slot (n - 1) % 20 and the oldest in slot n % 20.
+Checked on 2026-11-09 with n = 8: slot 7 = code 139 from 19:00 (display Num 1),
+slot 8 = code 140 from 2026-11-02 06:19, acknowledged 06:27 (display Num 20,
+same times to the minute). The end-time register is the display's
+"Bestätigung" (acknowledge) time, and the register times are exactly the
+display's times.
 
 The alarm timestamps are about 45 minutes behind the real time even though the
 cloud syncs `8549` (controller clock, local time) every few minutes; the cause

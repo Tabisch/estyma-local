@@ -125,15 +125,38 @@ class StateTest(unittest.TestCase):
         self.assertEqual(st["alarm_code"], 140)
         self.assertEqual(alarm["slot"], 11)
         self.assertEqual(alarm["state"], "active")
-        self.assertEqual(alarm["text"], "missing fuel / ignition failure")
+        self.assertEqual(alarm["text"], "missing fuel / no fire")
         self.assertEqual(alarm["end"], 0)
         self.assertTrue(alarm["start"].startswith("2026-"))
+        self.assertEqual(st["alarm_text"], "missing fuel / no fire")
+
+    def test_start_failure_alarm(self):
+        # Code 139 "Fehler beim Starten" as seen on the controller display.
+        self.ctl.observe_report(report(r16411_1=(3 << 16) | 139, r16451_1=0))
+        st, alarm = MP.StateBuilder().build(self.ctl)
+        self.assertEqual(st["alarm"], "ON")
+        self.assertEqual(st["alarm_code"], 139)
+        self.assertEqual(st["alarm_text"], "start failure")
+        self.assertEqual(alarm["text"], "start failure")
+
+    def test_alarm_texts_match_monitor_page(self):
+        import monitor as M, pathlib, re
+        html = (pathlib.Path(M.__file__).parent / "monitor.html").read_text()
+        for code in M.ALARM_TEXT:
+            self.assertEqual(len(re.findall(r'"alarm\.%d":' % code, html)), 2, code)
+
+    def test_unknown_alarm_code(self):
+        self.ctl.observe_report(report(r16411_1=(3 << 16) | 77, r16451_1=0))
+        st, alarm = MP.StateBuilder().build(self.ctl)
+        self.assertEqual(st["alarm_text"], "code 77")
+        self.assertIsNone(alarm["text"])
 
     def test_cleared_alarm(self):
         self.ctl.observe_report(report())   # fixture: code 140 state 0, ended
         st, alarm = MP.StateBuilder().build(self.ctl)
         self.assertEqual(st["alarm"], "OFF")
         self.assertEqual(st["alarm_code"], 0)
+        self.assertEqual(st["alarm_text"], "none")
         self.assertEqual(alarm["code"], 140)
         self.assertEqual(alarm["state"], "cleared")
 

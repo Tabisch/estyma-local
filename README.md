@@ -119,8 +119,8 @@ Open `http://<proxy_host>:8089/`.
   hours; click a name in the temperature chart's legend to hide or show its
   line. Values outside a plausible range (corrupted CAN reads) are dropped.
   An active alarm shows as a red banner at the top, and an *Alarms* table
-  lists the alarms seen in the reports (code, state, start and end time from
-  the controller's clock).
+  lists the alarms seen in the reports (code, state, start and acknowledge time
+  from the controller's clock, same as the display's alarm list).
   The history is kept in memory and rebuilt from the logs in the volume when
   the container starts. The same data is available as JSON at
   `/api/monitor?hours=24`.
@@ -315,7 +315,7 @@ Entities:
 | Oxygen in flue gas, burner power, burner state (off, ignition, glowing, modulation, cleaning, error) | 8480, 16389, 8199 |
 | Boiler on, boiler pump, heating circuit 1 pump (on/off) | 8197, 8823, 8857 |
 | Fuel consumed (kg), fuel energy (kWh) | 8484 |
-| Alarm (problem on/off, newest alarm slot as attributes), alarm code | 16400..16460 |
+| Alarm (problem on/off, newest alarm slot as attributes), alarm code, alarm text (e.g. "start failure"; `none` when no alarm) | 16400..16460 |
 | Last report, server mode, lambda PWM (diagnostic; lambda PWM disabled by default) | |
 
 *Fuel energy* is fuel consumed × calorific value, for the **Energy

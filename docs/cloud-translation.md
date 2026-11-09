@@ -130,7 +130,11 @@ page and have not been recorded yet.
 
 | Code | Meaning |
 |---|---|
-| 140 (0x8C) | missing fuel / ignition failed |
+| 2 (0x02) | boiler overheating ("Überhitzung des Kessels") |
+| 139 (0x8B) | start failure ("Fehler beim Starten" on the controller display) |
+| 140 (0x8C) | missing fuel / no fire ("Brennstoffmangel / Feuermangel") |
+| 201 (0xC9) | burner fan damaged ("Beschädigung des Brennergebläses") |
+| 203 (0xCB) | oxygen level very low |
 
 **Timers** (`co1_timer_*`): every day is `4194240` = `0x3FFFC0`, bits 6 to 21
 set. This fits a 24-bit hour mask with comfort from 06:00 to 22:00 (bit n =

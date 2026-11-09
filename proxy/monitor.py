@@ -101,13 +101,24 @@ def parse_registers(value: str) -> dict:
     return regs
 
 
-# Alarm ring buffer (see docs/register-mapping.md): slot k has its code and
-# state in 16400+k (state in bits 16+, code in the low byte), start time in
-# 16420+k and end time in 16440+k (controller clock, 0 while active). The
-# counter 16460,1 (0x100 + n) points at slot (n - 1) % 20.
+# Alarm ring buffer (see docs/register-mapping.md): the controller keeps the
+# last 20 alarms. Slot k has its code and state in 16400+k (state in bits 16+,
+# code in the low byte), start time in 16420+k and acknowledge time in 16440+k
+# (controller clock, 0 until acknowledged on the display or reset by off/on).
+# The counter 16460,1 (0x100 + n) points at the newest slot, (n - 1) % 20;
+# the next slot, n % 20, holds the oldest alarm (display "Num 20").
 ALARM_SLOTS = 20
 ALARM_CODE, ALARM_START, ALARM_END, ALARM_COUNTER = 16400, 16420, 16440, 16460
 ALARM_STATES = {0: "cleared", 3: "active", 7: "resetting"}
+# Alarm code -> text, as the controller display shows it (German) in English.
+# Add new codes as they show up; unknown ones are shown as "Code n".
+ALARM_TEXT = {
+    2: "boiler overheating",                  # "Überhitzung des Kessels"
+    139: "start failure",                     # "Fehler beim Starten"
+    140: "missing fuel / no fire",            # "Brennstoffmangel / Feuermangel"
+    201: "burner fan damaged",                # "Beschädigung des Brennergebläses"
+    203: "oxygen level very low",
+}
 MIN_TIME = 1_500_000_000  # anything older is a glitch
 
 

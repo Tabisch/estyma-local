@@ -116,9 +116,9 @@ service panel, whose rows name their register.
 | Register | Function | Encoding | Range / values |
 |---|---|---|---|
 | 16460 | Alarm counter, +1 on every new alarm | 8-bit | count |
-| 16400+k (k = 0..19) | Alarm slot k: state in bits 16+, alarm code in the low byte | x1 | state 3 active, 7 being reset, 0 cleared; code 140 = missing fuel / ignition failure |
+| 16400+k (k = 0..19) | Alarm slot k: state in bits 16+, alarm code in the low byte | x1 | state 3 active, 7 being reset, 0 cleared; code 2 = boiler overheating, 139 = start failure, 140 = missing fuel / no fire, 201 = burner fan damaged, 203 = oxygen level very low |
 | 16420+k | Alarm slot k start time | Unix time | controller clock |
-| 16440+k | Alarm slot k end time | Unix time | 0 while active |
+| 16440+k | Alarm slot k acknowledge time ("Bestätigung" on the display) | Unix time | 0 until acknowledged |
 
 The slot in use follows the counter. Timestamps run about 45 minutes behind real time.
 
