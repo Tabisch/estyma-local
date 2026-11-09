@@ -474,7 +474,7 @@ own machine instead:
    then restart the service.
 3. *Settings → Secrets and variables → Actions → Variables*: add `RUNNER` with
    the value `self-hosted`. Delete the variable to go back to GitHub's runners.
-4. Re-run the workflow (*Actions → Docker image → Run workflow*).
+4. Re-run the workflow (*Actions → Tests and Docker image → Run workflow*).
 
 The build is amd64 only, so use an x86-64 machine as the runner. To build
 for ARM again, add the platforms in `docker.yml` and put back the
