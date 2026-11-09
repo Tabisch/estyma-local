@@ -113,8 +113,11 @@ ALARM_STATES = {0: "cleared", 3: "active", 7: "resetting"}
 # Alarm code -> text, as the controller display shows it (German) in English.
 # Add new codes as they show up; unknown ones are shown as "Code n".
 ALARM_TEXT = {
+    2: "boiler overheating",                  # "Überhitzung des Kessels"
     139: "start failure",                     # "Fehler beim Starten"
-    140: "missing fuel / no fire",          # "Brennstoffmangel / Feuermangel"
+    140: "missing fuel / no fire",            # "Brennstoffmangel / Feuermangel"
+    201: "burner fan damaged",                # "Beschädigung des Brennergebläses"
+    203: "oxygen level very low",
 }
 MIN_TIME = 1_500_000_000  # anything older is a glitch
 

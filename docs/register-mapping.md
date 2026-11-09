@@ -43,7 +43,7 @@ switched off/on in between to reset).
 | Register | Meaning |
 |---|---|
 | 16460,1 | Alarm counter, `0x100 + n`; +1 on every new alarm (268 -> 269 -> 270 -> 271) |
-| 16411 + k, 1 | Alarm slot k: state in bits 16+ and alarm code in the low byte. `0x3008C` = active, `0x7008C` = being reset, `0x8C` = cleared. Code 140 (0x8C) = missing fuel / no fire ("Brennstoffmangel / Feuermangel"), 139 (0x8B) = start failure ("Fehler beim Starten") |
+| 16411 + k, 1 | Alarm slot k: state in bits 16+ and alarm code in the low byte. `0x3008C` = active, `0x7008C` = being reset, `0x8C` = cleared. Code 140 (0x8C) = missing fuel / no fire ("Brennstoffmangel / Feuermangel"), 139 (0x8B) = start failure ("Fehler beim Starten"); more codes in cloud-translation.md |
 | 16431 + k, 1 | Alarm slot k start time (Unix time, controller clock) |
 | 16451 + k, 1 | Alarm slot k acknowledge time ("Bestätigung" on the display); 0 until the alarm is acknowledged or reset |
 
