@@ -135,7 +135,8 @@ Open `http://<proxy_host>:8089/`.
   reports in a row agree; a different raw value is flagged as a possible
   glitch. The table is kept in `registers.json` in the log volume, so
   registers read only once survive a restart. JSON at `/api/registers`.
-- **Settings** (`/settings`): the controller's settings, grouped like the
+- **Heating settings** (`/heating`; the old address `/settings` redirects
+  there): the heating controller's settings, grouped like the
   cloud panels: user settings (on/off, boiler target and mode, buffer
   targets, room temperatures, circuit 1 program), boiler (hystereses, pump
   temperature and overrun, return protection), burner (power, blower curve,
@@ -143,7 +144,8 @@ Open `http://<proxy_host>:8089/`.
   heating circuits CO1 / CO2 (mode, manual target, weather curve). Each shows
   the reported value, its register, when it was read and the allowed range.
   Changing them works like the boiler target (see "Operating modes" below)
-  and asks for confirmation first. JSON at `/api/settings`.
+  and asks for confirmation first. This is the only page that writes to the
+  controller; the monitor page only shows values. JSON at `/api/settings`.
 - **Logs** (`/logs`): every log file in the volume with size and date, a
   download link per file and a "Download all (zip)" button. Each `.jsonl`
   file has a *Delete* button, and *Delete all .jsonl* clears them all (both
@@ -194,7 +196,7 @@ from the cloud:
 |---|---|---|---|
 | Boiler target | `8195,1` | whole °C, 60..80 and within the controller's own min/max | `WRITES_ENABLED=1` |
 | Boiler on/off | `8197,1` | 0 / 1 | `WRITES_ENABLED=1` and `ALLOW_POWER_WRITES=1` |
-| Every other setting on the settings page | see [docs/registers.md](docs/registers.md) | the cloud panel's range, within the controller's own min/max | `WRITES_ENABLED=1` and `ALLOW_UNTESTED_WRITES=1` |
+| Every other setting on the heating settings page | see [docs/registers.md](docs/registers.md) | the cloud panel's range, within the controller's own min/max | `WRITES_ENABLED=1` and `ALLOW_UNTESTED_WRITES=1` |
 
 Only `8195` and `8197` were seen being written on the real controller. The
 other settings use the same `ZAPIS` path and the cloud panel's ranges, but
@@ -214,8 +216,7 @@ read.
 
 How a write works:
 
-- Set it on the **Control** panel of the monitor page or on the **Settings**
-  page (`:8089`). Writing from
+- Set it on the **Heating settings** page (`:8089/heating`). Writing from
   the page also needs `UI_USER` / `UI_PASSWORD`, so nobody on the LAN can
   change the heating without logging in.
 - The write is sent like the cloud does it, `ZAPIS&;8195,1=62;4112,1=1;&KONIEC`,
@@ -284,7 +285,7 @@ The standalone recorder `compare/cloud_recorder.py` is still in the image
 for one-off runs (`docker exec <proxy-container> python3
 /app/compare/cloud_recorder.py --count 1` with the same variables).
 
-The panel's data is also available as JSON: `GET /api/control`, and
+The write state is also available as JSON: `GET /api/control`, and
 `POST /api/set` with `{"key": "boiler_target", "value": 62}` (or
 `boiler_on`, 0/1) and `POST /api/cancel` with `{"key": ...}`; both need
 `Content-Type: application/json` and basic auth.

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Estyma settings</title>
+<title>Estyma heating settings</title>
 <style>
 :root {
   color-scheme: light;
@@ -66,8 +66,8 @@ th { color: var(--text-2); font-weight: 600; }
 }
 </style></head><body><main>
 <header>
-  <h1 data-i18n="title">Settings</h1>
-  <nav><a href="/" data-i18n="nav.monitor">Monitor</a><a class="on" href="/settings" data-i18n="nav.settings">Settings</a><a href="/registers" data-i18n="nav.registers">Registers</a><a href="/logs" data-i18n="nav.logs">Logs</a></nav>
+  <h1 data-i18n="title">Heating settings</h1>
+  <nav><a href="/" data-i18n="nav.monitor">Monitor</a><a class="on" href="/heating" data-i18n="nav.settings">Heating settings</a><a href="/registers" data-i18n="nav.registers">Registers</a><a href="/logs" data-i18n="nav.logs">Logs</a></nav>
   <span class="range" id="lang" role="group" aria-label="Language"><button data-l="en" lang="en">EN</button><button data-l="de" lang="de">DE</button></span>
 </header>
 <div class="status" id="status" data-i18n="loading">Loading…</div>
@@ -82,7 +82,7 @@ th { color: var(--text-2); font-weight: 600; }
 "use strict";
 const I18N = {
   en: {
-    "title": "Settings", "nav.monitor": "Monitor", "nav.settings": "Settings", "nav.registers": "Registers", "nav.logs": "Logs", "loading": "Loading…",
+    "title": "Heating settings", "nav.monitor": "Monitor", "nav.settings": "Heating settings", "nav.registers": "Registers", "nav.logs": "Logs", "loading": "Loading…",
     "writes": "Recent writes", "col.time": "Time", "col.write": "Write", "col.event": "Event", "col.detail": "Detail",
     "footer": "Values are the controller's own reports. The settings are not part of the normal report, so in hybrid and local mode the server adds them to the read list on start, every SETTINGS_READ_MINUTES and when you press \"Read settings now\", the same way the cloud's service panel does. A write is sent on every poll until the controller reports the new value. Ranges are the ones the cloud panels offer, narrowed by the minimum and maximum the controller reports.",
     "st.mode": "Mode {m}", "st.writes": "Writes {s}", "st.on": "on", "st.off": "off", "st.untested": "untested settings {s}",
@@ -104,7 +104,7 @@ const I18N = {
     "ago.s": "{n} s ago", "ago.min": "{n} min ago", "ago.h": "{n} h ago", "ago.d": "{n} d ago",
   },
   de: {
-    "title": "Einstellungen", "nav.monitor": "Monitor", "nav.settings": "Einstellungen", "nav.registers": "Register", "nav.logs": "Logs", "loading": "Lädt…",
+    "title": "Heizungseinstellungen", "nav.monitor": "Monitor", "nav.settings": "Heizungseinstellungen", "nav.registers": "Register", "nav.logs": "Logs", "loading": "Lädt…",
     "writes": "Letzte Schreibvorgänge", "col.time": "Zeit", "col.write": "Schreiben", "col.event": "Ereignis", "col.detail": "Details",
     "footer": "Die Werte sind die eigenen Meldungen des Reglers. Die Einstellungen sind nicht Teil der normalen Meldung, deshalb setzt der Server sie im Hybrid- und Lokal-Modus beim Start, alle SETTINGS_READ_MINUTES und bei \"Einstellungen jetzt lesen\" auf die Leseliste, so wie es das Servicepanel der Cloud macht. Ein Schreibvorgang wird bei jeder Abfrage gesendet, bis der Regler den neuen Wert meldet. Die Bereiche sind die der Cloud-Panels, eingeengt durch Minimum und Maximum, die der Regler meldet.",
     "st.mode": "Modus {m}", "st.writes": "Schreiben {s}", "st.on": "an", "st.off": "aus", "st.untested": "ungetestete Einstellungen {s}",
