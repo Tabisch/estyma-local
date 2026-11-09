@@ -111,10 +111,10 @@ class StateTest(unittest.TestCase):
         self.assertEqual(st["alarm_code"], 140)
         self.assertEqual(alarm["slot"], 11)
         self.assertEqual(alarm["state"], "active")
-        self.assertEqual(alarm["text"], "missing fuel / ignition failure")
+        self.assertEqual(alarm["text"], "missing fuel / no fire")
         self.assertEqual(alarm["end"], 0)
         self.assertTrue(alarm["start"].startswith("2026-"))
-        self.assertEqual(st["alarm_text"], "missing fuel / ignition failure")
+        self.assertEqual(st["alarm_text"], "missing fuel / no fire")
 
     def test_start_failure_alarm(self):
         # Code 139 "Fehler beim Starten" as seen on the controller display.

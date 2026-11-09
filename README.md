@@ -119,8 +119,8 @@ Open `http://<proxy_host>:8089/`.
   hours; click a name in the temperature chart's legend to hide or show its
   line. Values outside a plausible range (corrupted CAN reads) are dropped.
   An active alarm shows as a red banner at the top, and an *Alarms* table
-  lists the alarms seen in the reports (code, state, start and end time from
-  the controller's clock).
+  lists the alarms seen in the reports (code, state, start and acknowledge time
+  from the controller's clock, same as the display's alarm list).
   The history is kept in memory and rebuilt from the logs in the volume when
   the container starts. The same data is available as JSON at
   `/api/monitor?hours=24`.

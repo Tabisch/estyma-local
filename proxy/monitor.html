@@ -105,7 +105,7 @@ code { font-size: .85em; word-break: break-all; }
 
 <div id="alarm-box" hidden>
 <h2 data-i18n="h.alarms">Alarms</h2>
-<div class="wrap"><table><thead><tr><th data-i18n="col.alarm">Alarm</th><th data-i18n="col.state">State</th><th data-i18n="col.start">Since</th><th data-i18n="col.end">Until</th></tr></thead>
+<div class="wrap"><table><thead><tr><th data-i18n="col.alarm">Alarm</th><th data-i18n="col.state">State</th><th data-i18n="col.start">Since</th><th data-i18n="col.end">Acknowledged</th></tr></thead>
 <tbody id="alarms"></tbody></table></div>
 <p class="muted" data-i18n="alarm.clock">Times come from the controller's clock, which runs about 45 minutes behind.</p>
 </div>
@@ -150,10 +150,10 @@ const I18N = {
     "f.boiler_mode": "Boiler mode", "f.circuit1_program": "Circuit 1 program (probable)",
     "f.boiler_set": "Boiler target", "f.buffer_top_set": "Buffer top target", "f.buffer_bottom_set": "Buffer bottom target",
     "f.room_comfort": "Room comfort, circuit 1", "f.room_eco": "Room eco, circuit 1",
-    "h.alarms": "Alarms", "col.alarm": "Alarm", "col.state": "State", "col.start": "Since", "col.end": "Until",
+    "h.alarms": "Alarms", "col.alarm": "Alarm", "col.state": "State", "col.start": "Since", "col.end": "Acknowledged",
     "alarm.clock": "Times come from the controller's clock, which runs about 45 minutes behind.",
     "alarm.banner": "Alarm: {t}", "alarm.since": "since {t}", "alarm.unknown": "Alarm active (burner state: error)",
-    "alarm.code": "Code {c}", "alarm.139": "Start failure", "alarm.140": "Missing fuel / ignition failed",
+    "alarm.code": "Code {c}", "alarm.139": "Start failure", "alarm.140": "Missing fuel / no fire",
     "as.active": "active", "as.resetting": "being reset", "as.cleared": "cleared",
     "h.cloud": "Cloud monitoring",
     "cl.about": "Polls the Estyma cloud with the account from the container environment (ESTYMA_EMAIL / ESTYMA_PASSWORD) and writes cloud-*.jsonl next to the other logs. The credentials never pass through this page.",
@@ -187,10 +187,10 @@ const I18N = {
     "f.boiler_mode": "Kesselmodus", "f.circuit1_program": "Programm Heizkreis 1 (vermutlich)",
     "f.boiler_set": "Kessel-Soll", "f.buffer_top_set": "Puffer oben Soll", "f.buffer_bottom_set": "Puffer unten Soll",
     "f.room_comfort": "Raum Komfort, Heizkreis 1", "f.room_eco": "Raum Eco, Heizkreis 1",
-    "h.alarms": "Alarme", "col.alarm": "Alarm", "col.state": "Zustand", "col.start": "Seit", "col.end": "Bis",
+    "h.alarms": "Alarme", "col.alarm": "Alarm", "col.state": "Zustand", "col.start": "Seit", "col.end": "Bestätigt",
     "alarm.clock": "Die Zeiten stammen von der Uhr des Reglers, die etwa 45 Minuten nachgeht.",
     "alarm.banner": "Alarm: {t}", "alarm.since": "seit {t}", "alarm.unknown": "Alarm aktiv (Brennerstatus: Fehler)",
-    "alarm.code": "Code {c}", "alarm.139": "Fehler beim Starten", "alarm.140": "Brennstoffmangel / Zündung fehlgeschlagen",
+    "alarm.code": "Code {c}", "alarm.139": "Fehler beim Starten", "alarm.140": "Brennstoffmangel / Feuermangel",
     "as.active": "aktiv", "as.resetting": "wird zurückgesetzt", "as.cleared": "behoben",
     "h.cloud": "Cloud-Überwachung",
     "cl.about": "Fragt die Estyma-Cloud mit dem Konto aus der Container-Umgebung ab (ESTYMA_EMAIL / ESTYMA_PASSWORD) und schreibt cloud-*.jsonl neben die anderen Logs. Die Zugangsdaten laufen nie über diese Seite.",
