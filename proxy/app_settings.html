@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estyma app settings</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f6f6f4; --surface: #fcfcfb; --border: #e3e2de;
+  --text: #0b0b0b; --text-2: #52514e; --muted: #7d7c77;
+  --accent: #2a78d6;
+  --good: #1a7f37; --warn: #b26b00; --bad: #c62828;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #111110; --surface: #1a1a19; --border: #2e2e2c;
+    --text: #f0efec; --text-2: #c3c2b7; --muted: #8f8e88;
+    --accent: #3987e5;
+    --good: #4cc26a; --warn: #e0a030; --bad: #ef6b6b;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 system-ui, sans-serif; }
+main { max-width: 60rem; margin: 0 auto; padding: 1rem 16px 3rem; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem 1.5rem; }
+h1 { font-size: 1.35rem; margin: .2rem 0; }
+h2 { font-size: 1.05rem; margin: 1.6rem 0 .5rem; }
+nav a { color: var(--accent); text-decoration: none; margin-right: 1rem; white-space: nowrap; }
+nav a.on { color: var(--text); font-weight: 600; }
+.range { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; vertical-align: middle; margin-left: auto; }
+.range button { background: var(--surface); color: var(--text-2); border: 0; padding: .3rem .7rem; font: inherit; font-size: .85rem; cursor: pointer; }
+.range button + button { border-left: 1px solid var(--border); }
+.range button.on { background: var(--accent); color: #fff; }
+.intro { color: var(--text-2); font-size: .9rem; margin: .6rem 0 0; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .8rem .9rem; }
+.row { display: flex; gap: .6rem 1rem; align-items: center; flex-wrap: wrap; justify-content: space-between; }
+.row .what b { display: block; }
+.row .what .sub { color: var(--muted); font-size: .82rem; }
+.status { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; color: var(--text-2); font-size: .9rem; margin: .7rem 0 0; }
+.status b { color: var(--text); }
+.dot { display: inline-block; width: .6rem; height: .6rem; border-radius: 50%; margin-right: .35rem; }
+.btn { font: inherit; font-size: .88rem; padding: .32rem .75rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.note { font-size: .82rem; color: var(--text-2); margin-top: .5rem; }
+.note.err { color: var(--bad); }
+.note:empty { display: none; }
+.muted { color: var(--muted); font-size: .85rem; }
+code { font-size: .85em; }
+</style></head><body><main>
+<header>
+  <h1 data-i18n="title">Settings</h1>
+  <nav><a href="/" data-i18n="nav.monitor">Monitor</a><a href="/heating" data-i18n="nav.heating">Heating settings</a><a href="/registers" data-i18n="nav.registers">Registers</a><a href="/logs" data-i18n="nav.logs">Logs</a><a class="on" href="/settings" data-i18n="nav.app">Settings</a></nav>
+  <span class="range" id="lang" role="group" aria-label="Language"><button data-l="en" lang="en">EN</button><button data-l="de" lang="de">DE</button></span>
+</header>
+<p class="intro" data-i18n="intro">Settings of this app. The heating controller's own settings are on the "Heating settings" page.</p>
+
+<h2 data-i18n="h.cloud">Cloud monitoring</h2>
+<div class="card">
+  <div class="row">
+    <div class="what"><b data-i18n="cl.name">Poll the Estyma cloud</b><span class="sub" data-i18n="cl.sub">Reads the values the cloud shows, to compare them with the local ones.</span></div>
+    <button class="btn" id="cloud-toggle" type="button" disabled></button>
+  </div>
+  <div class="status" id="cloud-status" data-i18n="loading">Loading…</div>
+  <div class="note" id="cloud-note"></div>
+</div>
+<p class="muted" data-i18n="cl.about">Polls the Estyma cloud with the account from the container environment (ESTYMA_EMAIL / ESTYMA_PASSWORD) and writes cloud-*.jsonl next to the other logs. The credentials never pass through this page. The latest cloud values are shown on the monitor page while this is on.</p>
+</main>
+<script>
+"use strict";
+const I18N = {
+  en: {
+    "title": "Settings", "nav.monitor": "Monitor", "nav.heating": "Heating settings", "nav.registers": "Registers", "nav.logs": "Logs", "nav.app": "Settings",
+    "loading": "Loading…", "unreachable": "Not reachable ({e})",
+    "intro": "Settings of this app. The heating controller's own settings are on the \"Heating settings\" page.",
+    "h.cloud": "Cloud monitoring", "cl.name": "Poll the Estyma cloud", "cl.sub": "Reads the values the cloud shows, to compare them with the local ones.",
+    "cl.about": "Polls the Estyma cloud with the account from the container environment (ESTYMA_EMAIL / ESTYMA_PASSWORD) and writes cloud-*.jsonl next to the other logs. The credentials never pass through this page. The latest cloud values are shown on the monitor page while this is on.",
+    "cl.on": "Switch on", "cl.off": "Switch off", "cl.confirmoff": "Stop polling the cloud?",
+    "cl.s.off": "Off", "cl.s.unconfigured": "Not configured", "cl.s.connecting": "Logging in…", "cl.s.running": "Running", "cl.s.error": "Problem",
+    "cl.lastpoll": "last poll {ago}", "cl.every": "every {n} s", "cl.retry": "retry in {n} s",
+    "cl.needauth": "Set UI_USER / UI_PASSWORD to switch this from the page",
+    "cl.unavailable": "Not available: the cloud monitor did not start (see the container log).",
+    "ago.s": "{n} s ago", "ago.min": "{n} min ago", "ago.h": "{n} h ago", "ago.d": "{n} d ago",
+  },
+  de: {
+    "title": "Einstellungen", "nav.monitor": "Monitor", "nav.heating": "Heizungseinstellungen", "nav.registers": "Register", "nav.logs": "Logs", "nav.app": "Einstellungen",
+    "loading": "Lädt…", "unreachable": "Nicht erreichbar ({e})",
+    "intro": "Einstellungen dieser App. Die Einstellungen des Heizungsreglers selbst stehen auf der Seite \"Heizungseinstellungen\".",
+    "h.cloud": "Cloud-Überwachung", "cl.name": "Estyma-Cloud abfragen", "cl.sub": "Liest die Werte, die die Cloud anzeigt, um sie mit den lokalen zu vergleichen.",
+    "cl.about": "Fragt die Estyma-Cloud mit dem Konto aus der Container-Umgebung ab (ESTYMA_EMAIL / ESTYMA_PASSWORD) und schreibt cloud-*.jsonl neben die anderen Logs. Die Zugangsdaten laufen nie über diese Seite. Solange dies an ist, zeigt die Monitor-Seite die letzten Cloud-Werte.",
+    "cl.on": "Einschalten", "cl.off": "Ausschalten", "cl.confirmoff": "Cloud-Abfrage beenden?",
+    "cl.s.off": "Aus", "cl.s.unconfigured": "Nicht eingerichtet", "cl.s.connecting": "Anmeldung…", "cl.s.running": "Läuft", "cl.s.error": "Problem",
+    "cl.lastpoll": "letzte Abfrage {ago}", "cl.every": "alle {n} s", "cl.retry": "neuer Versuch in {n} s",
+    "cl.needauth": "UI_USER / UI_PASSWORD setzen, um dies von der Seite zu schalten",
+    "cl.unavailable": "Nicht verfügbar: Die Cloud-Überwachung ist nicht gestartet (siehe Container-Log).",
+    "ago.s": "vor {n} s", "ago.min": "vor {n} min", "ago.h": "vor {n} h", "ago.d": "vor {n} T",
+  },
+};
+// Server messages (cloud_monitor.py / log_ui.py) -> German.
+const SERVER_MSG = {
+  de: [
+    [/^Content-Type must be application\/json$/, "Content-Type muss application/json sein"],
+    [/^invalid JSON$/, "ungültiges JSON"],
+    [/^set ESTYMA_EMAIL and ESTYMA_PASSWORD in the container environment$/, "ESTYMA_EMAIL und ESTYMA_PASSWORD in der Container-Umgebung setzen"],
+    [/^EstymaApiWrapper is not installed$/, "EstymaApiWrapper ist nicht installiert"],
+    [/^credentials could not be read: (.+)$/, "Zugangsdaten nicht lesbar: $1"],
+    [/^set UI_USER and UI_PASSWORD to allow switching cloud monitoring from the web UI$/, "UI_USER und UI_PASSWORD setzen, um die Cloud-Überwachung aus der Web-Oberfläche zu schalten"],
+    [/^enabled must be true or false$/, "enabled muss true oder false sein"],
+    [/^login failed: (.+)$/, "Anmeldung fehlgeschlagen: $1"],
+    [/^no device data$/, "keine Gerätedaten"],
+    [/^cloud monitoring is not configured$/, "Cloud-Überwachung ist nicht eingerichtet"],
+  ],
+};
+
+let lang = "";
+try { lang = localStorage.getItem("estyma-lang") || ""; } catch (e) {}
+if (!I18N[lang]) lang = (navigator.languages || [navigator.language || "en"]).map((l) => String(l).slice(0, 2).toLowerCase()).find((l) => I18N[l]) || "en";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const T = (key, vars) => {
+  let s = I18N[lang][key] ?? I18N.en[key] ?? key;
+  for (const [k, v] of Object.entries(vars || {})) s = s.replace("{" + k + "}", v);
+  return s;
+};
+const srvMsg = (m) => {
+  if (!m) return "";
+  for (const [re, out] of SERVER_MSG[lang] || []) if (re.test(m)) return m.replace(re, out);
+  return m;
+};
+const ago = (s) => s < 90 ? T("ago.s", { n: Math.max(0, Math.round(s)) }) : s < 5400 ? T("ago.min", { n: Math.round(s / 60) })
+  : s < 172800 ? T("ago.h", { n: Math.round(s / 3600) }) : T("ago.d", { n: Math.round(s / 86400) });
+
+// -- cloud monitoring --------------------------------------------------------
+// cloud: last /api/cloud answer; "missing" when the server has no cloud monitor.
+let cloud = null, cloudErr = null, cloudNote = null;
+async function loadCloud() {
+  try {
+    const r = await fetch("/api/cloud", { cache: "no-store" });
+    if (r.status === 404) { cloud = "missing"; cloudErr = null; }
+    else if (!r.ok) throw new Error("HTTP " + r.status);
+    else { cloud = await r.json(); cloudErr = null; }
+  } catch (e) { cloudErr = e.message; }
+  renderCloud();
+}
+function renderCloud() {
+  const b = $("cloud-toggle"), st = $("cloud-status"), note = $("cloud-note");
+  if (cloudErr && !cloud) { st.textContent = T("unreachable", { e: cloudErr }); b.textContent = T("cl.on"); return; }
+  if (!cloud) return;
+  if (cloud === "missing") {
+    st.textContent = T("cl.unavailable");
+    b.textContent = T("cl.on"); b.disabled = true; b.classList.remove("primary");
+    return;
+  }
+  const c = cloud, on = c.enabled && c.configured;
+  const col = { running: "var(--good)", connecting: "var(--warn)", error: "var(--bad)" }[c.state] || "var(--muted)";
+  const parts = [`<span><span class="dot" style="background:${col}"></span><b>${esc(T("cl.s." + c.state))}</b>${c.message ? " · " + esc(srvMsg(c.message)) : ""}</span>`];
+  if (!c.configured && c.problem) parts.push(`<span>${esc(srvMsg(c.problem))}</span>`);
+  if (on) {
+    if (c.last_poll) parts.push(`<span>${esc(T("cl.lastpoll", { ago: ago(c.now - c.last_poll) }))}</span>`);
+    parts.push(`<span>${esc(T("cl.every", { n: Math.round(c.interval) }))}</span>`);
+    if (c.state === "error" && c.retry_in) parts.push(`<span>${esc(T("cl.retry", { n: Math.round(c.retry_in) }))}</span>`);
+  }
+  if (cloudErr) parts.push(`<span style="color:var(--bad)">${esc(T("unreachable", { e: cloudErr }))}</span>`);
+  st.innerHTML = parts.join("");
+  b.textContent = on ? T("cl.off") : T("cl.on");
+  b.classList.toggle("primary", !on);
+  b.disabled = !c.configured || !c.ui_auth;
+  note.className = "note" + (cloudNote && cloudNote.err ? " err" : "");
+  note.textContent = cloudNote ? srvMsg(cloudNote.text) : c.configured && !c.ui_auth ? T("cl.needauth") : "";
+}
+$("cloud-toggle").addEventListener("click", async () => {
+  if (!cloud || cloud === "missing") return;
+  const on = !(cloud.enabled && cloud.configured);
+  if (!on && !confirm(T("cl.confirmoff"))) return;
+  try {
+    const r = await fetch("/api/cloud", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: on }) });
+    const j = await r.json().catch(() => ({ message: "HTTP " + r.status }));
+    cloudNote = !r.ok || j.ok === false ? { text: j.message, err: true } : null;
+  } catch (e) { cloudNote = { text: e.message, err: true }; }
+  if (cloudNote) setTimeout(() => { cloudNote = null; renderCloud(); }, 8000);
+  loadCloud();
+});
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = T(el.dataset.i18n); });
+  for (const b of $("lang").children) b.classList.toggle("on", b.dataset.l === lang);
+  renderCloud();
+}
+$("lang").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b || b.dataset.l === lang) return;
+  lang = b.dataset.l;
+  try { localStorage.setItem("estyma-lang", lang); } catch (err) {}
+  applyLang();
+});
+applyLang();
+loadCloud();
+setInterval(loadCloud, 10000);
+</script>
+</body></html>
