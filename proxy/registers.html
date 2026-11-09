@@ -53,6 +53,7 @@ tr.flash td.val { animation: flash 2s ease-out; }
 .pill.unknown { color: var(--muted); }
 .pill.new { color: var(--accent); }
 .pill.glitch { color: var(--bad); }
+.pill.pending { color: var(--muted); }
 .unk { color: var(--muted); font-style: italic; }
 .muted { color: var(--muted); font-size: .85rem; }
 /* Phone: one card per register (number and value on top, use, then raw and last seen). */
@@ -89,7 +90,7 @@ tr.flash td.val { animation: flash 2s ease-out; }
 <div class="wrap"><table>
 <thead><tr><th data-i18n="col.reg">Register</th><th data-i18n="col.use">Likely use</th><th class="num" data-i18n="col.value">Value</th><th class="num" data-i18n="col.raw">Raw</th><th data-i18n="col.seen">Last seen</th></tr></thead>
 <tbody id="rows"></tbody></table></div>
-<p class="muted" data-i18n="footer">Every register the controller reported (or the server asked for), with the latest value. Index 1 is the value, 3 and 4 its minimum and maximum. A value only counts once two reports in a row agree; a raw value that differs is marked as a possible glitch. New registers, for example ones the cloud's service panel reads, are added automatically. Refreshes every 10 s.</p>
+<p class="muted" data-i18n="footer">Every register the controller reported (or the server asked for), with the latest value. Index 1 is the value, 3 and 4 its minimum and maximum. A value only counts once two reports in a row agree; a newer raw value is marked as unconfirmed until the next report, and as a possible glitch only if it looks corrupted (a huge jump or outside the setting range). New registers, for example ones the cloud's service panel reads, are added automatically. Refreshes every 10 s.</p>
 </main>
 <script>
 "use strict";
@@ -99,12 +100,12 @@ const I18N = {
     "search": "Filter: number or name", "onlyunknown": "Only unknown", "showalarms": "Alarm slots", "sort": "Sort",
     "sort.reg": "Register", "sort.first": "Newest discovered", "sort.change": "Most changes",
     "col.reg": "Register", "col.use": "Likely use", "col.value": "Value", "col.raw": "Raw", "col.seen": "Last seen",
-    "footer": "Every register the controller reported (or the server asked for), with the latest value. Index 1 is the value, 3 and 4 its minimum and maximum. A value only counts once two reports in a row agree; a raw value that differs is marked as a possible glitch. New registers, for example ones the cloud's service panel reads, are added automatically. Refreshes every 10 s.",
+    "footer": "Every register the controller reported (or the server asked for), with the latest value. Index 1 is the value, 3 and 4 its minimum and maximum. A value only counts once two reports in a row agree; a newer raw value is marked as unconfirmed until the next report, and as a possible glitch only if it looks corrupted (a huge jump or outside the setting range). New registers, for example ones the cloud's service panel reads, are added automatically. Refreshes every 10 s.",
     "st.count": "{n} registers", "st.unknown": "{n} unknown", "st.newest": "newest: {r} ({ago})", "st.reading": "Reading older logs…",
     "unreachable": "Not reachable ({e})", "none": "No registers seen yet.", "nomatch": "No register matches the filter.",
     "unknown": "unknown", "c.confirmed": "confirmed", "c.likely": "likely", "c.guess": "guess", "c.unknown": "unknown",
     "range": "range {lo}..{hi}{u}", "idx.3": "minimum", "idx.4": "maximum", "idx.n": "index {n}",
-    "new": "new", "glitch": "glitch?", "glitch.t": "Latest raw {v} differs from the last stable value", "once": "seen once",
+    "new": "new", "glitch": "glitch?", "glitch.t": "Latest raw {v} looks corrupted (huge jump or out of range)", "pending": "unconfirmed", "pending.t": "Latest raw {v} differs from the shown value; it counts once the next report agrees", "once": "seen once",
     "requested": "requested, no answer yet", "reports": "{n} reports", "reports.1": "1 report", "changes": "{n} changes", "changes.1": "1 change", "first": "first seen {t}",
     "ago.s": "{n} s ago", "ago.min": "{n} min ago", "ago.h": "{n} h ago", "ago.d": "{n} d ago",
   },
@@ -113,12 +114,12 @@ const I18N = {
     "search": "Filter: Nummer oder Name", "onlyunknown": "Nur unbekannte", "showalarms": "Alarm-Plätze", "sort": "Sortierung",
     "sort.reg": "Register", "sort.first": "Zuletzt entdeckt", "sort.change": "Meiste Änderungen",
     "col.reg": "Register", "col.use": "Vermutliche Bedeutung", "col.value": "Wert", "col.raw": "Rohwert", "col.seen": "Zuletzt gesehen",
-    "footer": "Alle Register, die der Regler gemeldet (oder der Server angefragt) hat, mit dem letzten Wert. Index 1 ist der Wert, 3 und 4 Minimum und Maximum. Ein Wert gilt erst, wenn zwei Meldungen hintereinander übereinstimmen; ein abweichender Rohwert wird als mögliche Störung markiert. Neue Register, zum Beispiel aus Lesungen des Cloud-Servicepanels, kommen automatisch dazu. Aktualisiert alle 10 s.",
+    "footer": "Alle Register, die der Regler gemeldet (oder der Server angefragt) hat, mit dem letzten Wert. Index 1 ist der Wert, 3 und 4 Minimum und Maximum. Ein Wert gilt erst, wenn zwei Meldungen hintereinander übereinstimmen; ein neuerer Rohwert gilt bis zur nächsten Meldung als unbestätigt und wird nur als mögliche Störung markiert, wenn er beschädigt aussieht (riesiger Sprung oder außerhalb des Einstellbereichs). Neue Register, zum Beispiel aus Lesungen des Cloud-Servicepanels, kommen automatisch dazu. Aktualisiert alle 10 s.",
     "st.count": "{n} Register", "st.unknown": "{n} unbekannt", "st.newest": "zuletzt entdeckt: {r} ({ago})", "st.reading": "Ältere Logs werden gelesen…",
     "unreachable": "Nicht erreichbar ({e})", "none": "Noch keine Register gesehen.", "nomatch": "Kein Register passt zum Filter.",
     "unknown": "unbekannt", "c.confirmed": "bestätigt", "c.likely": "wahrscheinlich", "c.guess": "Vermutung", "c.unknown": "unbekannt",
     "range": "Bereich {lo}..{hi}{u}", "idx.3": "Minimum", "idx.4": "Maximum", "idx.n": "Index {n}",
-    "new": "neu", "glitch": "Störung?", "glitch.t": "Letzter Rohwert {v} weicht vom letzten stabilen Wert ab", "once": "einmal gesehen",
+    "new": "neu", "glitch": "Störung?", "glitch.t": "Letzter Rohwert {v} sieht beschädigt aus (riesiger Sprung oder außerhalb des Bereichs)", "pending": "unbestätigt", "pending.t": "Letzter Rohwert {v} weicht vom angezeigten Wert ab; er gilt, sobald die nächste Meldung übereinstimmt", "once": "einmal gesehen",
     "requested": "angefragt, noch keine Antwort", "reports": "{n} Meldungen", "reports.1": "1 Meldung", "changes": "{n} Änderungen", "changes.1": "1 Änderung", "first": "zuerst gesehen {t}",
     "ago.s": "vor {n} s", "ago.min": "vor {n} min", "ago.h": "vor {n} h", "ago.d": "vor {n} T",
   },
@@ -218,8 +219,8 @@ function render() {
     let raw = "–", rawSub = "";
     if (r.raw != null) {
       raw = esc(r.raw);
-      const glitch = r.stable != null && r.raw !== r.stable;
-      if (glitch) raw += `<span class="pill glitch" title="${esc(T("glitch.t", { v: r.raw }))}">${esc(T("glitch"))}</span>`;
+      if (r.glitch) raw += `<span class="pill glitch" title="${esc(T("glitch.t", { v: r.raw }))}">${esc(T("glitch"))}</span>`;
+      else if (r.pending) raw += `<span class="pill pending" title="${esc(T("pending.t", { v: r.raw }))}">${esc(T("pending"))}</span>`;
       rawSub = "0x" + (r.raw >>> 0).toString(16).toUpperCase();
       if (r.stable == null) rawSub += " · " + T("once");
     }
