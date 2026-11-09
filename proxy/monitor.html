@@ -65,9 +65,6 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .wrap { overflow-x: auto; }
 .muted { color: var(--muted); font-size: .85rem; }
 code { font-size: .85em; word-break: break-all; }
-.ctl { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr)); gap: .6rem; }
-.ctl .tile .row { display: flex; gap: .4rem; align-items: center; margin-top: .4rem; flex-wrap: wrap; }
-.ctl input { width: 5rem; font: inherit; padding: .3rem .4rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
 .btn { font: inherit; font-size: .88rem; padding: .32rem .75rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
@@ -80,10 +77,11 @@ code { font-size: .85em; word-break: break-all; }
 .pill.cleared { color: var(--muted); }
 #cloud-box .row { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
 #cloud-box .note { margin-top: 0; }
+.h2link { font-size: .85rem; font-weight: 400; color: var(--accent); text-decoration: none; margin-left: .5rem; }
 </style></head><body><main>
 <header>
   <h1>Estyma monitor</h1>
-  <nav><a class="on" href="/" data-i18n="nav.monitor">Monitor</a><a href="/settings" data-i18n="nav.settings">Settings</a><a href="/registers" data-i18n="nav.registers">Registers</a><a href="/logs" data-i18n="nav.logs">Logs</a></nav>
+  <nav><a class="on" href="/" data-i18n="nav.monitor">Monitor</a><a href="/heating" data-i18n="nav.settings">Heating settings</a><a href="/registers" data-i18n="nav.registers">Registers</a><a href="/logs" data-i18n="nav.logs">Logs</a></nav>
   <span class="range" id="lang" role="group" aria-label="Language"><button data-l="en" lang="en">EN</button><button data-l="de" lang="de">DE</button></span>
 </header>
 <div class="status" id="status" data-i18n="loading">Loading…</div>
@@ -91,14 +89,6 @@ code { font-size: .85em; word-break: break-all; }
 
 <h2 data-i18n="h.now">Now</h2>
 <div class="tiles" id="tiles"></div>
-
-<div id="control-box" hidden>
-<h2 data-i18n="h.control">Control</h2>
-<div class="status" id="ctl-status"></div>
-<div class="ctl" id="ctl" style="margin-top:.6rem"></div>
-<div class="wrap" style="margin-top:.6rem"><table><thead><tr><th data-i18n="col.time">Time</th><th data-i18n="col.write">Write</th><th data-i18n="col.event">Event</th><th data-i18n="col.detail">Detail</th></tr></thead>
-<tbody id="writes"></tbody></table></div>
-</div>
 
 <div id="cloud-box" hidden>
 <h2 data-i18n="h.cloud">Cloud monitoring</h2>
@@ -120,7 +110,7 @@ code { font-size: .85em; word-break: break-all; }
 <p class="muted" data-i18n="alarm.clock">Times come from the controller's clock, which runs about 45 minutes behind.</p>
 </div>
 
-<h2 data-i18n="h.settings">Settings reported by the controller</h2>
+<h2><span data-i18n="h.settings">Heating settings reported by the controller</span> <a class="h2link" href="/heating" data-i18n="h.settings.edit">Change</a></h2>
 <div class="wrap"><table><thead><tr><th data-i18n="col.setting">Setting</th><th class="num" data-i18n="col.value">Value</th><th class="num" data-i18n="col.min">Min</th><th class="num" data-i18n="col.max">Max</th></tr></thead>
 <tbody id="settings"></tbody></table></div>
 
@@ -137,9 +127,8 @@ const STALE_S = 120;
 // #lang. Missing keys fall back to English.
 const I18N = {
   en: {
-    "nav.monitor": "Monitor", "nav.settings": "Settings", "nav.registers": "Registers", "nav.logs": "Logs", "loading": "Loading…",
-    "h.now": "Now", "h.control": "Control", "h.history": "History", "h.settings": "Settings reported by the controller", "h.connection": "Connection",
-    "col.time": "Time", "col.write": "Write", "col.event": "Event", "col.detail": "Detail",
+    "nav.monitor": "Monitor", "nav.settings": "Heating settings", "nav.registers": "Registers", "nav.logs": "Logs", "loading": "Loading…",
+    "h.now": "Now", "h.history": "History", "h.settings": "Heating settings reported by the controller", "h.settings.edit": "Change", "h.connection": "Connection",
     "col.setting": "Setting", "col.value": "Value", "col.min": "Min", "col.max": "Max",
     "footer": "Values are decoded from what the controller reports, about every 20 s. Readings outside a plausible range (corrupted CAN reads) are dropped. Refreshes every 10 s.",
     "ago.s": "{n} s ago", "ago.min": "{n} min ago", "ago.h": "{n} h ago",
@@ -161,14 +150,6 @@ const I18N = {
     "f.boiler_mode": "Boiler mode", "f.circuit1_program": "Circuit 1 program (probable)",
     "f.boiler_set": "Boiler target", "f.buffer_top_set": "Buffer top target", "f.buffer_bottom_set": "Buffer bottom target",
     "f.room_comfort": "Room comfort, circuit 1", "f.room_eco": "Room eco, circuit 1",
-    "w.boiler_target": "Boiler target", "w.boiler_on": "Boiler on",
-    "k.mode": "Mode {m}", "k.writes": "Writes {s}", "k.enabled": "enabled", "k.writesoff": "off", "k.nopower": " (on/off not allowed)",
-    "k.alarm": "Alarm active", "k.needauth": "Set UI_USER / UI_PASSWORD to write from this page",
-    "k.on": "Switch on", "k.off": "Switch off", "k.set": "Set", "k.cancel": "Cancel", "k.locked": "Locked: {r}",
-    "k.pending": "Pending: {v}, sent {n}×, waiting for read-back", "k.confirm": "Really switch the boiler {v}?", "k.onw": "on", "k.offw": "off",
-    "k.nowrites": "No writes yet.", "k.was": "was {v}", "k.polls": "{n} polls",
-    "ev.sent": "sent", "ev.confirmed": "confirmed", "ev.failed": "failed", "ev.noop": "no change", "ev.rejected": "rejected",
-    "ev.replaced": "replaced", "ev.superseded": "superseded", "ev.cancelled": "cancelled", "ev.requested": "requested",
     "h.alarms": "Alarms", "col.alarm": "Alarm", "col.state": "State", "col.start": "Since", "col.end": "Until",
     "alarm.clock": "Times come from the controller's clock, which runs about 45 minutes behind.",
     "alarm.banner": "Alarm: {t}", "alarm.since": "since {t}", "alarm.unknown": "Alarm active (burner state: error)",
@@ -183,9 +164,8 @@ const I18N = {
     "cl.nodata": "No cloud data yet.",
   },
   de: {
-    "nav.monitor": "Monitor", "nav.settings": "Einstellungen", "nav.registers": "Register", "nav.logs": "Logs", "loading": "Lädt…",
-    "h.now": "Aktuell", "h.control": "Steuerung", "h.history": "Verlauf", "h.settings": "Vom Regler gemeldete Einstellungen", "h.connection": "Verbindung",
-    "col.time": "Zeit", "col.write": "Schreiben", "col.event": "Ereignis", "col.detail": "Details",
+    "nav.monitor": "Monitor", "nav.settings": "Heizungseinstellungen", "nav.registers": "Register", "nav.logs": "Logs", "loading": "Lädt…",
+    "h.now": "Aktuell", "h.history": "Verlauf", "h.settings": "Vom Regler gemeldete Heizungseinstellungen", "h.settings.edit": "Ändern", "h.connection": "Verbindung",
     "col.setting": "Einstellung", "col.value": "Wert", "col.min": "Min", "col.max": "Max",
     "footer": "Die Werte stammen aus den Meldungen des Reglers, etwa alle 20 s. Unplausible Werte (fehlerhafte CAN-Lesungen) werden verworfen. Aktualisiert alle 10 s.",
     "ago.s": "vor {n} s", "ago.min": "vor {n} min", "ago.h": "vor {n} h",
@@ -207,14 +187,6 @@ const I18N = {
     "f.boiler_mode": "Kesselmodus", "f.circuit1_program": "Programm Heizkreis 1 (vermutlich)",
     "f.boiler_set": "Kessel-Soll", "f.buffer_top_set": "Puffer oben Soll", "f.buffer_bottom_set": "Puffer unten Soll",
     "f.room_comfort": "Raum Komfort, Heizkreis 1", "f.room_eco": "Raum Eco, Heizkreis 1",
-    "w.boiler_target": "Kessel-Soll", "w.boiler_on": "Kessel an",
-    "k.mode": "Modus {m}", "k.writes": "Schreiben {s}", "k.enabled": "aktiv", "k.writesoff": "aus", "k.nopower": " (An/Aus nicht erlaubt)",
-    "k.alarm": "Alarm aktiv", "k.needauth": "UI_USER / UI_PASSWORD setzen, um von dieser Seite zu schreiben",
-    "k.on": "Einschalten", "k.off": "Ausschalten", "k.set": "Setzen", "k.cancel": "Abbrechen", "k.locked": "Gesperrt: {r}",
-    "k.pending": "Ausstehend: {v}, {n}× gesendet, warte auf Bestätigung", "k.confirm": "Kessel wirklich {v}?", "k.onw": "einschalten", "k.offw": "ausschalten",
-    "k.nowrites": "Noch keine Schreibbefehle.", "k.was": "vorher {v}", "k.polls": "{n} Abfragen",
-    "ev.sent": "gesendet", "ev.confirmed": "bestätigt", "ev.failed": "fehlgeschlagen", "ev.noop": "keine Änderung", "ev.rejected": "abgelehnt",
-    "ev.replaced": "ersetzt", "ev.superseded": "überholt", "ev.cancelled": "abgebrochen", "ev.requested": "angefordert",
     "h.alarms": "Alarme", "col.alarm": "Alarm", "col.state": "Zustand", "col.start": "Seit", "col.end": "Bis",
     "alarm.clock": "Die Zeiten stammen von der Uhr des Reglers, die etwa 45 Minuten nachgeht.",
     "alarm.banner": "Alarm: {t}", "alarm.since": "seit {t}", "alarm.unknown": "Alarm aktiv (Brennerstatus: Fehler)",
@@ -482,60 +454,6 @@ function drawChart(el, cfg) {
   svg.onpointermove = move; svg.onpointerdown = move; svg.onpointerleave = leave;
 }
 
-// -- control panel ---------------------------------------------------------
-let ctl = null, ctlNote = {};
-async function loadControl() {
-  try {
-    const r = await fetch("/api/control", { cache: "no-store" });
-    if (!r.ok) return;
-    ctl = await r.json();
-    renderControl();
-  } catch (e) {}
-}
-function renderControl() {
-  const c = ctl; $("control-box").hidden = false;
-  const st = [`<span>${T("k.mode", { m: `<b>${esc(c.mode)}</b>` })}</span>`,
-    `<span>${T("k.writes", { s: c.writes_enabled ? `<b>${T("k.enabled")}</b>` : T("k.writesoff") })}${c.writes_enabled && !c.allow_power_writes ? T("k.nopower") : ""}</span>`];
-  if (c.alarm_active) st.push(`<span><span class="dot" style="background:var(--bad)"></span>${T("k.alarm")}</span>`);
-  if (c.writes_enabled && !c.ui_auth) st.push(`<span>${T("k.needauth")}</span>`);
-  $("ctl-status").innerHTML = st.join("");
-  const pend = Object.fromEntries(c.pending.map((p) => [p.key, p]));
-  const active = document.activeElement && document.activeElement.id;
-  const keepVal = $("in-boiler_target") ? $("in-boiler_target").value : null;
-  $("ctl").innerHTML = Object.entries(c.writable).map(([k, w]) => {
-    const p = pend[k], dis = w.allowed && c.ui_auth ? "" : " disabled";
-    const cur = w.value == null ? "–" : w.kind === "bool" ? (w.value ? T("on") : T("off")) : w.value + (w.unit ? `<small>${w.unit}</small>` : "");
-    let row;
-    if (w.kind === "bool") row = `<button class="btn" data-k="${k}" data-v="1"${dis}>${T("k.on")}</button><button class="btn" data-k="${k}" data-v="0"${dis}>${T("k.off")}</button>`;
-    else row = `<input id="in-${k}" type="number" min="${w.min}" max="${w.max}" step="1" value="${w.value ?? ""}"${dis}><button class="btn primary" data-k="${k}" data-in="1"${dis}>${T("k.set")}</button><span class="muted">${w.min}–${w.max}</span>`;
-    if (p) row += `<button class="btn" data-cancel="${k}">${T("k.cancel")}</button>`;
-    const n = ctlNote[k], why = !w.allowed ? T("k.locked", { r: srvMsg(w.reason) }) : "";
-    const pnote = p ? T("k.pending", { v: w.kind === "bool" ? (p.value ? T("on") : T("off")) : p.value, n: p.sent }) : "";
-    return `<div class="tile"><div class="k">${esc(I18N[lang]["w." + k] || w.label)} <span class="muted">(${esc(w.register)})</span></div><div class="v">${cur}</div>
-      <div class="row">${row}</div><div class="note${n && n.err ? " err" : ""}">${esc((n && srvMsg(n.text)) || pnote || why)}</div></div>`;
-  }).join("");
-  if (keepVal != null && active === "in-boiler_target") { const i = $("in-boiler_target"); i.value = keepVal; i.focus(); }
-  $("writes").innerHTML = c.recent.map((r) => `<tr><td>${esc(new Date(r.time).toLocaleString(lang))}</td><td><code>${esc((r.register || r.key) + (r.value != null ? "=" + r.value : ""))}</code></td><td>${esc(I18N[lang]["ev." + r.event] || r.event)}</td><td>${esc([r.source, srvMsg(r.reason), r.old != null ? T("k.was", { v: r.old }) : "", r.polls ? T("k.polls", { n: r.polls }) : ""].filter(Boolean).join(" · "))}</td></tr>`).join("")
-    || `<tr><td colspan="4" class="muted">${T("k.nowrites")}</td></tr>`;
-}
-async function post(url, body, k) {
-  try {
-    const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const j = await r.json().catch(() => ({ message: "HTTP " + r.status }));
-    ctlNote[k] = { text: j.message, err: !r.ok || j.ok === false };
-  } catch (e) { ctlNote[k] = { text: e.message, err: true }; }
-  setTimeout(() => { delete ctlNote[k]; ctl && renderControl(); }, 8000);
-  loadControl();
-}
-$("ctl").addEventListener("click", (e) => {
-  const b = e.target.closest("button"); if (!b) return;
-  if (b.dataset.cancel) return post("/api/cancel", { key: b.dataset.cancel }, b.dataset.cancel);
-  const k = b.dataset.k, w = ctl.writable[k];
-  const v = b.dataset.in ? Number($("in-" + k).value) : Number(b.dataset.v);
-  if (w.kind === "bool" && !confirm(T("k.confirm", { v: v ? T("k.onw") : T("k.offw") }))) return;
-  post("/api/set", { key: k, value: v }, k);
-});
-
 // -- cloud monitoring --------------------------------------------------------
 let cloud = null, cloudNote = null;
 async function loadCloud() {
@@ -611,7 +529,6 @@ $("lang").addEventListener("click", (e) => {
   try { localStorage.setItem("estyma-lang", lang); } catch (err) {}
   applyStatic();
   if (data) render();
-  if (ctl) renderControl();
   if (cloud) renderCloud();
 });
 $("charts").addEventListener("click", (e) => {
@@ -625,9 +542,8 @@ $("charts").addEventListener("click", (e) => {
 });
 applyStatic();
 let resizeT; addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => data && drawCharts(), 150); });
-load(); loadControl(); loadCloud();
+load(); loadCloud();
 setInterval(load, 10000);
 setInterval(loadCloud, 10000);
-setInterval(loadControl, 5000);
 </script>
 </body></html>
