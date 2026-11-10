@@ -21,131 +21,77 @@ from collections import deque
 from datetime import datetime
 
 import catalog as C
-from protocol import parse_read_list
+import decode as D
+from protocol import loose_form, parse_read_list, parse_report
 from registers import RegisterTable
 
 # --------------------------------------------------------------------------
 # Register mapping
 # --------------------------------------------------------------------------
-# Labels, units and decoding come from catalog.py. decode here: "d10"
-# value/10, "d100" value/100, "x1" as is, "low" low byte of a 0x0nn / 0x1nn
-# flag register (catalog "u8"). lo/hi: plausible range of the decoded value;
-# anything outside is treated as a corrupted CAN read and dropped.
-
-_HOW = {"u8": "low"}
+# Labels, units, decoding and the plausible range of each value come from
+# catalog.py; decode.py drops corrupted reads (see there).
 
 
-def _field(key, reg, lo, hi, idx=1, label=None):
-    """(key, label, register, index, decode, unit, lo, hi) from the catalog."""
+def _field(key, reg):
+    """(key, label, register, unit) from the catalog."""
     r = C.get(reg)
-    return (key, label or r.label, reg, idx, _HOW.get(r.decode, r.decode), r.unit, lo, hi)
+    return (key, r.label, reg, r.unit)
 
 
 LIVE = [
-    _field("boiler", 8193, -20, 120),
-    _field("buffer_top", 8466, -20, 120),
-    _field("buffer_bottom", 8467, -20, 120),
-    _field("circuit1", 16385, -20, 120),
-    _field("outside", 8543, -50, 60),
-    _field("flue", 8473, 0, 255),
-    _field("o2", 8480, 0, 25),
-    _field("power", 16389, 0, 100),
-    _field("lambda_pwm", 16391, 0, 255),
-    _field("burner_state", 8199, 0, 30),
-    _field("boiler_pump", 8823, 0, 1),
-    _field("boiler_calc", 8196, 0, 120),
-    _field("fuel_counter", 8484, 0, 2**31 - 1),
+    _field("boiler", 8193),
+    _field("buffer_top", 8466),
+    _field("buffer_bottom", 8467),
+    _field("circuit1", 16385),
+    _field("outside", 8543),
+    _field("flue", 8473),
+    _field("o2", 8480),
+    _field("power", 16389),
+    _field("lambda_pwm", 16391),
+    _field("burner_state", 8199),
+    _field("boiler_pump", 8823),
+    _field("boiler_calc", 8196),
+    _field("fuel_counter", 8484),
 ]
-
-# key, label, register, decode, unit, lo, hi (index 1 value, 3 min, 4 max)
-SETTINGS = [f[:3] + f[4:] for f in (
-    _field("boiler_set", 8195, 0, 120),
-    _field("buffer_top_set", 8468, 0, 120),
-    _field("buffer_bottom_set", 8469, 0, 120),
-    _field("room_comfort", 8242, 0, 40),
-    _field("room_eco", 8264, 0, 40),
-)]
+# Settings shown with their min/max (index 1 value, 3 min, 4 max).
+SETTINGS = [
+    _field("boiler_set", 8195),
+    _field("buffer_top_set", 8468),
+    _field("buffer_bottom_set", 8469),
+    _field("room_comfort", 8242),
+    _field("room_eco", 8264),
+]
 SINGLE_SETTINGS = [
-    _field("boiler_mode", 8194, 0, 255),
-    _field("circuit1_program", 8292, 0, 255),
+    _field("boiler_mode", 8194),
+    _field("circuit1_program", 8292),
 ]
+KEY_REG = {k: reg for k, _, reg, _ in LIVE + SINGLE_SETTINGS + SETTINGS}
 
 # Values kept in the history (for the charts); the rest is "current" only.
 HISTORY_KEYS = ["boiler", "buffer_top", "buffer_bottom", "circuit1", "outside",
                 "flue", "o2", "power", "burner_state", "boiler_pump", "boiler_calc"]
 
 
-def decode(raw: int, how: str, lo: float, hi: float):
-    if how == "low":
-        if raw >> 8 not in (0, 1):  # flag registers are 0x0nn or 0x1nn
-            return None
-        val = raw & 0xFF
-    elif how == "d10":
-        val = raw / 10
-    elif how == "d100":
-        val = raw / 100
-    else:
-        val = raw
-    return val if lo <= val <= hi else None
-
-
-def loose_form(text: str) -> dict:
-    """Split the NUL-padded, not URL-encoded form body of the controller."""
-    out = {}
-    for part in text.rstrip("\0").split("&"):
-        if "=" in part:
-            k, v = part.split("=", 1)
-            out[k.strip()] = v
-    return out
-
-
-def parse_registers(value: str) -> dict:
-    regs = {}
-    for item in value.split(";"):
-        bits = item.strip().split(",")
-        if len(bits) != 3:
-            continue
-        try:
-            regs[(int(bits[0]), int(bits[1]))] = int(bits[2])
-        except ValueError:
-            pass
-    return regs
-
-
-# Alarm ring buffer (see docs/register-mapping.md): the controller keeps the
-# last 20 alarms. Slot k has its code and state in 16400+k (state in bits 16+,
-# code in the low byte), start time in 16420+k and acknowledge time in 16440+k
-# (controller clock, 0 until acknowledged on the display or reset by off/on).
-# The counter 16460,1 (0x100 + n) points at the newest slot, (n - 1) % 20;
-# the next slot, n % 20, holds the oldest alarm (display "Num 20").
-from catalog import (ALARM_CODE, ALARM_COUNTER, ALARM_END, ALARM_SLOTS,  # noqa: E402,F401
-                     ALARM_START, ALARM_STATES, ALARM_TEXT)
-
-MIN_TIME = 1_500_000_000  # anything older is a glitch
-
-
+# Alarm ring buffer (see catalog.py): the controller keeps the last 20 alarms.
+# The counter 16460,1 points at the newest slot, (n - 1) % 20; the next slot,
+# n % 20, holds the oldest alarm (display "Num 20").
 def decode_alarms(regs: dict, now: float) -> tuple[dict, int | None]:
     """Slot -> partial {code, state, start, end} from one report; plus the counter."""
     slots: dict = {}
     for (reg, idx), raw in regs.items():
-        if idx != 1 or not ALARM_CODE <= reg < ALARM_END + ALARM_SLOTS:
+        if idx != 1 or not C.ALARM_CODE <= reg < C.ALARM_END + C.ALARM_SLOTS:
             continue
-        k = (reg - ALARM_CODE) % ALARM_SLOTS
-        if reg < ALARM_START:
-            state = (raw >> 16) & 0xFFFF
-            if raw < 0 or state not in ALARM_STATES:
-                continue
-            slots.setdefault(k, {}).update(code=raw & 0xFF, state=ALARM_STATES[state])
+        k = (reg - C.ALARM_CODE) % C.ALARM_SLOTS
+        if reg < C.ALARM_START:
+            entry = D.alarm_code(raw)
+            if entry is not None:
+                slots.setdefault(k, {}).update(code=entry[0], state=entry[1])
         else:
-            key = "start" if reg < ALARM_END else "end"
-            if raw == 0 and key == "end":
-                slots.setdefault(k, {})[key] = 0
-            elif MIN_TIME <= raw <= now + 2 * 86400:
-                slots.setdefault(k, {})[key] = raw
-    counter = None
-    raw = regs.get((ALARM_COUNTER, 1))
-    if raw is not None and raw >> 8 in (0, 1):
-        counter = raw & 0xFF
+            t = D.alarm_time(raw, now)
+            key = "start" if reg < C.ALARM_END else "end"
+            if t is not None and (t or key == "end"):
+                slots.setdefault(k, {})[key] = t
+    counter = D.alarm_counter(regs.get((C.ALARM_COUNTER, 1)))
     return slots, counter
 
 
@@ -154,21 +100,16 @@ def parse_time(s: str) -> float:
 
 
 def decode_registers(regs: dict) -> tuple[dict, dict]:
+    """One report -> (live values, settings [value, min, max]); corrupted
+    reads are left out (decode.value)."""
     live = {}
-    for key, _, reg, idx, how, _, lo, hi in LIVE:
-        if (reg, idx) in regs:
-            v = decode(regs[(reg, idx)], how, lo, hi)
-            if v is not None:
-                live[key] = v
-    for key, _, reg, idx, how, _, lo, hi in SINGLE_SETTINGS:
-        if (reg, idx) in regs:
-            v = decode(regs[(reg, idx)], how, lo, hi)
-            if v is not None:
-                live[key] = v
+    for key, _, reg, _ in LIVE + SINGLE_SETTINGS:
+        v = D.value(reg, regs.get((reg, 1)))
+        if v is not None:
+            live[key] = v
     settings = {}
-    for key, _, reg, how, _, lo, hi in SETTINGS:
-        triple = [decode(regs[(reg, i)], how, lo, hi) if (reg, i) in regs else None
-                  for i in (1, 3, 4)]
+    for key, _, reg, _ in SETTINGS:
+        triple = [D.value(reg, regs.get((reg, i)), i) for i in (1, 3, 4)]
         if any(v is not None for v in triple):
             settings[key] = triple
     return live, settings
@@ -176,9 +117,7 @@ def decode_registers(regs: dict) -> tuple[dict, dict]:
 
 def meta():
     """Labels and units for the page."""
-    fields = {k: {"label": l, "unit": u} for k, l, _, _, _, u, _, _ in LIVE + SINGLE_SETTINGS}
-    fields.update({k: {"label": l, "unit": u} for k, l, _, _, u, _, _ in SETTINGS})
-    return fields
+    return {k: {"label": l, "unit": u} for k, l, _, u in LIVE + SINGLE_SETTINGS + SETTINGS}
 
 
 # --------------------------------------------------------------------------
@@ -221,7 +160,7 @@ class Monitor:
         status = resp.get("status") if resp else None
         resp_text = ((resp or {}).get("body") or {}).get("text", "")
 
-        regs = parse_registers(form.get("ZAPISZ_ODCZYT", ""))
+        regs = parse_report(form.get("ZAPISZ_ODCZYT", ""))
         live, settings = decode_registers(regs)
         self.registers.observe(ts, regs, parse_read_list(resp_text) if resp_text else None)
 

@@ -140,9 +140,9 @@ class StateTest(unittest.TestCase):
         self.assertEqual(alarm["text"], "start failure")
 
     def test_alarm_texts_match_monitor_page(self):
-        import monitor as M, pathlib, re
+        import catalog as CAT, monitor as M, pathlib, re
         html = (pathlib.Path(M.__file__).parent / "monitor.html").read_text()
-        for code in M.ALARM_TEXT:
+        for code in CAT.ALARM_TEXT:
             self.assertEqual(len(re.findall(r'"alarm\.%d":' % code, html)), 2, code)
 
     def test_unknown_alarm_code(self):

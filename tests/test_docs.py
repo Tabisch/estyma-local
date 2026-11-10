@@ -70,8 +70,9 @@ class EnvVarsTest(unittest.TestCase):
 
 class CatalogTest(unittest.TestCase):
     def test_monitor_fields_come_from_catalog(self):
-        for key, label, reg, idx, how, unit, lo, hi in monitor.LIVE + monitor.SINGLE_SETTINGS:
+        for key, label, reg, unit in monitor.LIVE + monitor.SINGLE_SETTINGS + monitor.SETTINGS:
             self.assertEqual((label, unit), (C.get(reg).label, C.get(reg).unit), key)
+            self.assertIsNotNone(C.get(reg).plausible or C.get(reg).range, f"{key}: no valid range")
 
     def test_settings_ranges_within_catalog(self):
         for w in controller.WRITABLE.values():
