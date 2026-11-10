@@ -13,8 +13,7 @@ in between and can
 - publish everything to **Home Assistant** over MQTT,
 - poll the Estyma cloud for comparison (**cloud monitoring**, optional).
 
-This README covers the setup: Docker (Portainer stack or docker compose) plus
-a NAT rule on the firewall/router. Everything else is in [docs/](docs/README.md).
+Setup is in [docs/setup.md](docs/setup.md), everything else in [docs/](docs/README.md).
 
 ## How it works
 
@@ -34,80 +33,15 @@ heating controller --- provider_ip:80 ---> proxy_host:8088 (estyma-proxy) ---> p
 - If the provider is unreachable the controller gets a `502` and the attempt
   is still logged.
 
-## 1. Firewall NAT rule
+## Setup
 
-The controller always connects to `provider_ip:80`. A DNAT rule on the
-firewall/router sends that traffic to the proxy instead:
+1. Redirect the controller's traffic to the proxy host: a firewall NAT
+   rule (recommended) or a DNS rewrite (untested).
+2. Deploy the container as a Portainer stack or with docker compose.
 
-| Match                                                        | Rewrite to             |
-|--------------------------------------------------------------|------------------------|
-| source `<controller_ip>`, destination `<provider_ip>`, TCP 80 | `<proxy_host>:8088`    |
+Both steps are described in [docs/setup.md](docs/setup.md).
 
-Find `<provider_ip>` in the firewall's connection log for the controller.
-
-- Match **only the controller's source IP**. The proxy itself must still reach
-  the real provider, otherwise its upstream requests would loop back to it.
-- If the controller and the proxy host are in the same subnet, also add a
-  masquerade/SNAT rule for that traffic, so the proxy's replies go back
-  through the firewall and the controller accepts them.
-
-iptables / OpenWrt (fw3) example:
-
-```sh
-iptables -t nat -A PREROUTING  -s <controller_ip> -d <provider_ip> -p tcp --dport 80 \
-  -j DNAT --to-destination <proxy_host>:8088
-# only needed when controller and proxy host share a subnet
-iptables -t nat -A POSTROUTING -s <controller_ip> -d <proxy_host> -p tcp --dport 8088 -j MASQUERADE
-```
-
-On OpenWrt's web UI this is *Network → Firewall → Port Forwards*: source IP =
-controller, external IP = provider IP, external port 80, internal IP = proxy
-host, internal port 8088. Other firewalls (OPNsense/pfSense, MikroTik, ...)
-call it a destination NAT / port forward rule with the same fields.
-
-Check it works: the proxy logs one line per request (`docker logs`), and the
-controller still shows as online in the provider's web UI.
-
-## 2. Deploy
-
-The image is `ghcr.io/tabisch/estyma-local:latest` (amd64 only for now). It
-contains the proxy, the web UI and the optional cloud monitoring. `docker-compose.yml` defines:
-
-- `estyma-proxy`: the proxy (host port 8088) and the web UI with the live monitor and log downloads (host port 8089)
-- `estyma-logs`: named volume for the logs
-
-Before deploying, check `UPSTREAM` in `docker-compose.yml`: it is where the
-proxy forwards to. Because the NAT rule only matches the controller, the
-provider's normal hostname works there.
-
-### Portainer
-
-1. *Stacks → Add stack*. Either paste `docker-compose.yml` into the web
-   editor, or choose *Repository* with this repo's URL, reference
-   `refs/heads/main` and compose path `docker-compose.yml`.
-2. Under *Environment variables* add what you need (see
-   [docs/configuration.md](docs/configuration.md)),
-   typically `UI_USER` / `UI_PASSWORD` to protect the log UI, and
-   `ESTYMA_EMAIL` / `ESTYMA_PASSWORD` if you want cloud monitoring.
-3. *Deploy the stack*.
-4. To update after a new image was built: open the stack, *Update the stack*
-   with *Re-pull image and redeploy* enabled (or *Pull and redeploy* for a
-   repository stack).
-
-If the GHCR package is private, add GHCR under *Registries* (username = your
-GitHub user, password = a token with `read:packages`), or make the package
-public in its GitHub package settings.
-
-### docker compose
-
-```sh
-cp .env.example .env          # fill in credentials, ports, UI login
-docker compose pull
-docker compose up -d
-docker compose logs -f estyma-proxy     # one line per captured exchange
-```
-
-## 3. Use it
+## Use it
 
 Open `http://<proxy_host>:8089/`. Then, depending on what you want:
 
