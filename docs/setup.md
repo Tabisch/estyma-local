@@ -46,10 +46,6 @@ controller still shows as online in the provider's web UI.
 
 ### DNS rewrite (alternative, untested)
 
-> **Not tested.** The maintainer has never tried this method; it is
-> described here only as an option. The NAT rule above is the setup that is
-> known to work.
-
 If the controller looks up the provider's host name (`igneo.pl`) through your
 DNS server, a local DNS override can point that name at the proxy host
 instead, e.g. a *Local DNS record* in Pi-hole / AdGuard Home, a host override
@@ -93,10 +89,6 @@ provider's normal hostname works there.
 4. To update after a new image was built: open the stack, *Update the stack*
    with *Re-pull image and redeploy* enabled (or *Pull and redeploy* for a
    repository stack).
-
-If the GHCR package is private, add GHCR under *Registries* (username = your
-GitHub user, password = a token with `read:packages`), or make the package
-public in its GitHub package settings.
 
 ### docker compose
 
