@@ -38,6 +38,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 import protocol as P
+import catalog as Cat
 import registers as R
 
 # --------------------------------------------------------------------------
@@ -119,20 +120,32 @@ class Writable:
         return f"{self.num(raw)} {self.unit}".strip()
 
 
-def _setting(key, reg, group, lo, hi, *, kind="int", scale=1, limits=True, conf="confirmed",
-             options=None, tested=False, **kw) -> Writable:
-    """A settings page entry; labels, decoding and unit come from registers.py.
+def _setting(key, reg, group, lo=None, hi=None, *, kind="int", limits=True, options=None,
+             tested=False, **kw) -> Writable:
+    """A settings page entry; labels, decoding, unit, scale, confidence and the
+    allowed range come from catalog.py.
 
-    ``lo``/``hi`` are in shown units (e.g. 5.0..15.0 %); stored in raw units.
+    ``lo``/``hi`` (shown units, e.g. 5.0..15.0 %) narrow the catalog range;
+    enums default to their value names. Stored in raw units.
     ``limits``: the controller also reports min/max as index 3/4.
     """
-    en, de, how, unit, _ = R.CATALOG[reg]
-    decode = {"u8/10": "u8", "u16/10": "u16", "d10": "u16", "x1": "u16"}.get(how, how)
-    return Writable(key, kw.pop("label", en), reg, 1, kind, round(lo * scale), round(hi * scale),
-                    limit_regs=((reg, 3), (reg, 4)) if limits else None, unit=unit,
-                    label_de=kw.pop("label_de", de), decode=decode, scale=scale, tested=tested,
-                    group=group, options=options if options is not None else R.VALUES.get(reg),
-                    conf=conf, **kw)
+    r = Cat.get(reg)
+    if options is None:
+        options = r.values
+    if r.range:
+        lo = r.range[0] if lo is None else lo
+        hi = r.range[1] if hi is None else hi
+    elif options:
+        lo = min(options) if lo is None else lo
+        hi = max(options) if hi is None else hi
+    if lo is None or hi is None:
+        raise ValueError(f"setting {key}: register {reg} has no range in catalog.py")
+    decode = {"u8/10": "u8", "u16/10": "u16", "d10": "u16", "x1": "u16"}.get(r.decode, r.decode)
+    s = r.scale
+    return Writable(key, kw.pop("label", r.label), reg, 1, kind, round(lo * s), round(hi * s),
+                    limit_regs=((reg, 3), (reg, 4)) if limits else None, unit=r.unit,
+                    label_de=kw.pop("label_de", r.label_de), decode=decode, scale=s, tested=tested,
+                    group=group, options=options, conf=r.conf, **kw)
 
 
 # Settings page sections, in order: key -> (English, German).
@@ -151,53 +164,53 @@ _B = "burner"
 _SETTINGS = [
     Writable("boiler_on", "Boiler on", 8197, 1, "bool", 0, 1, power=True, label_de="Kessel an",
              tested=True, group="user", options=R.VALUES[8197], main=True),
-    _setting("boiler_target", 8195, "user", 60, 80, tested=True, main=True, label="Boiler target"),
-    _setting("boiler_mode", 8194, "user", 0, 3, kind="enum", limits=False),
-    _setting("buffer_top_target", 8468, "user", 7, 80),
-    _setting("buffer_bottom_target", 8469, "user", 7, 80),
-    _setting("room_comfort_1", 8242, "user", 15.0, 30.0, scale=10),
-    _setting("room_eco_1", 8264, "user", 10.0, 30.0, scale=10),
-    _setting("circuit1_program", 8292, "user", 0, 3, kind="enum", limits=False, conf="likely"),
+    _setting("boiler_target", 8195, "user", tested=True, main=True, label="Boiler target"),
+    _setting("boiler_mode", 8194, "user", kind="enum", limits=False),
+    _setting("buffer_top_target", 8468, "user"),
+    _setting("buffer_bottom_target", 8469, "user"),
+    _setting("room_comfort_1", 8242, "user"),
+    _setting("room_eco_1", 8264, "user"),
+    _setting("circuit1_program", 8292, "user", kind="enum", limits=False),
     # Boiler (service panel "Kocioł")
-    _setting("hyst_on", 8712, "boiler", 0, 20),
-    _setting("hyst_off", 8849, "boiler", 0, 20),
-    _setting("pump_min_temp", 8711, "boiler", 20, 70),
-    _setting("pump_overrun", 14088, "boiler", 0, 120),
-    _setting("return_min_temp", 8556, "boiler", 35, 75),
+    _setting("hyst_on", 8712, "boiler"),
+    _setting("hyst_off", 8849, "boiler"),
+    _setting("pump_min_temp", 8711, "boiler"),
+    _setting("pump_overrun", 14088, "boiler"),
+    _setting("return_min_temp", 8556, "boiler"),
     # Burner (service panel "Palnik"). Air correction goes down to -10 %, but
     # how negative values are written is unknown, so only 0..40 is offered.
     _setting("air_correction", 8819, _B, 0, 40),
-    _setting("power_min", 8816, _B, 30, 100),
-    _setting("power_max", 8817, _B, 30, 100),
-    *[_setting(f"blower_{p}", 8800 + i, _B, 0, 100) for i, p in enumerate((20, 40, 60, 80, 100), 1)],
-    _setting("blower_ignition", 8841, _B, 5, 100),
-    _setting("initial_dose", 8790, _B, 0, 200),
-    _setting("blower_glowing", 14084, _B, 0, 100),
-    _setting("blower_burnout", 12300, _B, 1, 100),
-    _setting("glowing_time", 8848, _B, 0, 20),
-    _setting("burnout_time", 8811, _B, 0, 5),
-    _setting("fuel_glowing", 10650, _B, 0, 100),
-    _setting("feeder_output", 8818, _B, 5.0, 30.0, scale=10),
-    _setting("calorific_value", 8850, _B, 2.0, 10.0, scale=10),
-    _setting("lambda_control", 13829, _B, 0, 1, kind="enum", limits=False),
-    _setting("o2_30", 8526, _B, 5.0, 15.0, scale=10),
-    _setting("o2_100", 8530, _B, 5.0, 15.0, scale=10),
-    _setting("ignition_min_time", 14092, _B, 2, 6),
-    _setting("burner_feeder_pct", 14091, _B, 50, 300),
-    _setting("feeder_period", 14080, _B, 5, 180),
-    _setting("pause_time", 14101, _B, 0, 60),
-    _setting("pause_power", 14102, _B, 5, 30),
-    _setting("pause_blower", 14103, _B, 0, 50),
-    _setting("feed_max", 8791, _B, 10, 150),
+    _setting("power_min", 8816, _B),
+    _setting("power_max", 8817, _B),
+    *[_setting(f"blower_{p}", 8800 + i, _B) for i, p in enumerate((20, 40, 60, 80, 100), 1)],
+    _setting("blower_ignition", 8841, _B),
+    _setting("initial_dose", 8790, _B),
+    _setting("blower_glowing", 14084, _B),
+    _setting("blower_burnout", 12300, _B),
+    _setting("glowing_time", 8848, _B),
+    _setting("burnout_time", 8811, _B),
+    _setting("fuel_glowing", 10650, _B),
+    _setting("feeder_output", 8818, _B),
+    _setting("calorific_value", 8850, _B),
+    _setting("lambda_control", 13829, _B, kind="enum", limits=False),
+    _setting("o2_30", 8526, _B),
+    _setting("o2_100", 8530, _B),
+    _setting("ignition_min_time", 14092, _B),
+    _setting("burner_feeder_pct", 14091, _B),
+    _setting("feeder_period", 14080, _B),
+    _setting("pause_time", 14101, _B),
+    _setting("pause_power", 14102, _B),
+    _setting("pause_blower", 14103, _B),
+    _setting("feed_max", 8791, _B),
 ]
 for _c in (1, 2):
     _g, _o = f"circuit{_c}", _c - 1  # CO2 registers are CO1 + 1
     _SETTINGS += [
-        _setting(f"co{_c}_mode", 8514 + _o, _g, 0, 1, kind="enum", limits=False),
-        _setting(f"co{_c}_manual_target", 8518 + _o, _g, 20, 80),
-        _setting(f"co{_c}_curve_m20", 8901 + _o, _g, 20, 80),
-        _setting(f"co{_c}_curve_0", 8905 + _o, _g, 20, 80),
-        _setting(f"co{_c}_curve_10", 8909 + _o, _g, 20, 80),
+        _setting(f"co{_c}_mode", 8514 + _o, _g, kind="enum", limits=False),
+        _setting(f"co{_c}_manual_target", 8518 + _o, _g),
+        _setting(f"co{_c}_curve_m20", 8901 + _o, _g),
+        _setting(f"co{_c}_curve_0", 8905 + _o, _g),
+        _setting(f"co{_c}_curve_10", 8909 + _o, _g),
     ]
 
 WRITABLE = {w.key: w for w in _SETTINGS}

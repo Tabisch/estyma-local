@@ -27,7 +27,7 @@ Done:
   value; there is no other acknowledgement. While a write is pending the
   controller polls faster (about 14 s instead of 20 s).
 
-Phase 2 first cut (local server core, see README "Operating modes"):
+Phase 2 first cut (local server core, see [operating-modes.md](operating-modes.md)):
 `MODE=proxy|hybrid|local`, protocol parser and reply builder
 (`proxy/protocol.py`), register state persisted in `state.json`, write queue
 with allow-list, range checks, rate limit, read-back confirmation, timeout

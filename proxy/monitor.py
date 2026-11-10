@@ -20,43 +20,54 @@ import time
 from collections import deque
 from datetime import datetime
 
+import catalog as C
 from protocol import parse_read_list
 from registers import RegisterTable
 
 # --------------------------------------------------------------------------
 # Register mapping
 # --------------------------------------------------------------------------
-# decode: "d10" value/10, "d100" value/100, "x1" as is, "low" low byte of a
-# 0x1nn flag register (256 + value). lo/hi: plausible range of the decoded
-# value; anything outside is treated as a corrupted CAN read and dropped.
+# Labels, units and decoding come from catalog.py. decode here: "d10"
+# value/10, "d100" value/100, "x1" as is, "low" low byte of a 0x0nn / 0x1nn
+# flag register (catalog "u8"). lo/hi: plausible range of the decoded value;
+# anything outside is treated as a corrupted CAN read and dropped.
 
-# key, label, register, index, decode, unit, lo, hi
+_HOW = {"u8": "low"}
+
+
+def _field(key, reg, lo, hi, idx=1, label=None):
+    """(key, label, register, index, decode, unit, lo, hi) from the catalog."""
+    r = C.get(reg)
+    return (key, label or r.label, reg, idx, _HOW.get(r.decode, r.decode), r.unit, lo, hi)
+
+
 LIVE = [
-    ("boiler", "Boiler", 8193, 1, "d10", "°C", -20, 120),
-    ("buffer_top", "Buffer top", 8466, 1, "d10", "°C", -20, 120),
-    ("buffer_bottom", "Buffer bottom", 8467, 1, "d10", "°C", -20, 120),
-    ("circuit1", "Heating circuit 1", 16385, 1, "d10", "°C", -20, 120),
-    ("outside", "Outside", 8543, 1, "d10", "°C", -50, 60),
-    ("flue", "Flue gas", 8473, 1, "low", "°C", 0, 255),
-    ("o2", "Oxygen (flue)", 8480, 1, "d100", "%", 0, 25),
-    ("power", "Burner power", 16389, 1, "x1", "%", 0, 100),
-    ("lambda_pwm", "Lambda PWM", 16391, 1, "low", "", 0, 255),
-    ("burner_state", "Burner state", 8199, 1, "low", "", 0, 30),
-    ("boiler_pump", "Boiler pump", 8823, 1, "low", "", 0, 1),
-    ("boiler_calc", "Boiler target (calculated)", 8196, 1, "x1", "°C", 0, 120),
-    ("fuel_counter", "Fuel counter", 8484, 1, "d10", "kg", 0, 2**31 - 1),
+    _field("boiler", 8193, -20, 120),
+    _field("buffer_top", 8466, -20, 120),
+    _field("buffer_bottom", 8467, -20, 120),
+    _field("circuit1", 16385, -20, 120),
+    _field("outside", 8543, -50, 60),
+    _field("flue", 8473, 0, 255),
+    _field("o2", 8480, 0, 25),
+    _field("power", 16389, 0, 100),
+    _field("lambda_pwm", 16391, 0, 255),
+    _field("burner_state", 8199, 0, 30),
+    _field("boiler_pump", 8823, 0, 1),
+    _field("boiler_calc", 8196, 0, 120),
+    _field("fuel_counter", 8484, 0, 2**31 - 1),
 ]
 
-SETTINGS = [
-    ("boiler_set", "Boiler target", 8195, "x1", "°C", 0, 120),
-    ("buffer_top_set", "Buffer top target", 8468, "x1", "°C", 0, 120),
-    ("buffer_bottom_set", "Buffer bottom target", 8469, "x1", "°C", 0, 120),
-    ("room_comfort", "Room comfort, circuit 1", 8242, "d10", "°C", 0, 40),
-    ("room_eco", "Room eco, circuit 1", 8264, "d10", "°C", 0, 40),
-]
+# key, label, register, decode, unit, lo, hi (index 1 value, 3 min, 4 max)
+SETTINGS = [f[:3] + f[4:] for f in (
+    _field("boiler_set", 8195, 0, 120),
+    _field("buffer_top_set", 8468, 0, 120),
+    _field("buffer_bottom_set", 8469, 0, 120),
+    _field("room_comfort", 8242, 0, 40),
+    _field("room_eco", 8264, 0, 40),
+)]
 SINGLE_SETTINGS = [
-    ("boiler_mode", "Boiler mode", 8194, 1, "x1", "", 0, 255),
-    ("circuit1_program", "Circuit 1 program (probable)", 8292, 1, "low", "", 0, 255),
+    _field("boiler_mode", 8194, 0, 255),
+    _field("circuit1_program", 8292, 0, 255),
 ]
 
 # Values kept in the history (for the charts); the rest is "current" only.
@@ -107,18 +118,9 @@ def parse_registers(value: str) -> dict:
 # (controller clock, 0 until acknowledged on the display or reset by off/on).
 # The counter 16460,1 (0x100 + n) points at the newest slot, (n - 1) % 20;
 # the next slot, n % 20, holds the oldest alarm (display "Num 20").
-ALARM_SLOTS = 20
-ALARM_CODE, ALARM_START, ALARM_END, ALARM_COUNTER = 16400, 16420, 16440, 16460
-ALARM_STATES = {0: "cleared", 3: "active", 7: "resetting"}
-# Alarm code -> text, as the controller display shows it (German) in English.
-# Add new codes as they show up; unknown ones are shown as "Code n".
-ALARM_TEXT = {
-    2: "boiler overheating",                  # "Überhitzung des Kessels"
-    139: "start failure",                     # "Fehler beim Starten"
-    140: "missing fuel / no fire",            # "Brennstoffmangel / Feuermangel"
-    201: "burner fan damaged",                # "Beschädigung des Brennergebläses"
-    203: "oxygen level very low",
-}
+from catalog import (ALARM_CODE, ALARM_COUNTER, ALARM_END, ALARM_SLOTS,  # noqa: E402,F401
+                     ALARM_START, ALARM_STATES, ALARM_TEXT)
+
 MIN_TIME = 1_500_000_000  # anything older is a glitch
 
 

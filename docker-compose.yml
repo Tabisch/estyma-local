@@ -1,3 +1,4 @@
+# Every variable is described in docs/configuration.md.
 services:
   estyma-proxy:
     # Published by .github/workflows/docker.yml
@@ -19,7 +20,7 @@ services:
       # Optional basic auth for the log UI (set both in .env)
       UI_USER: "${UI_USER:-}"
       UI_PASSWORD: "${UI_PASSWORD:-}"
-      # Local server, see README "Operating modes". Defaults keep today's
+      # Local server, see docs/operating-modes.md. Defaults keep today's
       # behaviour: forward only, no writes.
       MODE: "${MODE:-proxy}"                       # proxy | hybrid | local
       WRITES_ENABLED: "${WRITES_ENABLED:-0}"       # 1 = allow boiler target writes
@@ -37,12 +38,15 @@ services:
       CLOUD_MONITOR: "${CLOUD_MONITOR:-0}"         # initial state until switched in the UI
       CLOUD_INTERVAL: "${CLOUD_INTERVAL:-30}"      # seconds between cloud polls
       # Optional MQTT publisher for Home Assistant (read-only, auto discovery).
-      # Off while MQTT_HOST is empty. See README "Home Assistant (MQTT)".
+      # Off while MQTT_HOST is empty. See docs/home-assistant.md.
       MQTT_HOST: "${MQTT_HOST:-}"                  # broker address, e.g. 192.168.1.10
       MQTT_PORT: "${MQTT_PORT:-1883}"
       MQTT_USER: "${MQTT_USER:-}"
       MQTT_PASSWORD: "${MQTT_PASSWORD:-}"
+      MQTT_TLS: "${MQTT_TLS:-0}"                   # 1 = TLS; also set MQTT_PORT (usually 8883)
       MQTT_PREFIX: "${MQTT_PREFIX:-estyma}"
+      MQTT_DEVICE_ID: "${MQTT_DEVICE_ID:-boiler}"
+      MQTT_STALE_SECONDS: "${MQTT_STALE_SECONDS:-300}"
       HA_DISCOVERY_PREFIX: "${HA_DISCOVERY_PREFIX:-homeassistant}"
       FUEL_KWH_PER_KG: "${FUEL_KWH_PER_KG:-}"      # empty = controller setting, else 4.8
     volumes:

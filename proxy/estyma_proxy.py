@@ -33,7 +33,7 @@ Cloud monitoring (optional, switched on/off in the web UI, see cloud_monitor.py)
   CLOUD_INTERVAL   seconds between cloud polls (default 30)
   ESTYMA_DOMAIN / ESTYMA_LANGUAGE  as for compare/cloud_recorder.py
 
-Local server (see README, "Operating modes"):
+Local server (see docs/operating-modes.md):
 
   MODE             proxy (forward only, default), hybrid (forward, may add
                    local writes to the cloud's reply) or local (answer the
