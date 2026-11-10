@@ -41,7 +41,7 @@ jobs:
       (github.event_name == 'push' &&
        contains(join(github.event.commits.*.message, ' '), '[build]'))
     # Repo variable RUNNER picks the runner: unset = GitHub-hosted,
-    # "self-hosted" = your own runner (see README).
+    # "self-hosted" = your own runner (see docs/development.md).
     runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
