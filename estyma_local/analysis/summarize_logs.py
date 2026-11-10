@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Summarize captured exchanges: which endpoints exist and which parameters they use.
 
-Usage: python3 summarize_logs.py [LOG_DIR_OR_FILES...]   (default: ./logs)
+Usage: python3 -m estyma_local.analysis.summarize_logs [LOG_DIR_OR_FILES...]   (default: ./logs)
 """
 
 from __future__ import annotations

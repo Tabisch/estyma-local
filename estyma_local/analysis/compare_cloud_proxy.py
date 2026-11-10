@@ -9,8 +9,8 @@ simple transform (as is, /10, /100, low byte, ...). It prints the best
 candidates per field.
 
 Usage:
-    python3 compare/compare_cloud_proxy.py [LOG_DIR_OR_FILES...]     (default: logs)
-    python3 compare/compare_cloud_proxy.py logs --csv aligned.csv --json mapping.json
+    python3 -m estyma_local.analysis.compare_cloud_proxy [LOG_DIR_OR_FILES...]     (default: logs)
+    python3 -m estyma_local.analysis.compare_cloud_proxy logs --csv aligned.csv --json mapping.json
 
 Files named ``exchanges-*.jsonl`` are read as proxy logs and ``cloud-*.jsonl``
 as cloud logs; other names are detected from their content.
@@ -29,6 +29,8 @@ import os
 import sys
 from collections import defaultdict
 from datetime import datetime
+
+from ..protocol import loose_form, parse_report
 
 # name, function(register value) -> expected cloud value, tolerance
 TRANSFORMS = [
@@ -69,29 +71,6 @@ def iter_lines(path):
                     continue
 
 
-def loose_form(text: str) -> dict:
-    """The controller's form body: k=v&..., NUL padded, values not encoded."""
-    out = {}
-    for part in text.rstrip("\0").split("&"):
-        if "=" in part:
-            k, v = part.split("=", 1)
-            out[k.strip()] = v
-    return out
-
-
-def parse_registers(value: str) -> dict:
-    regs = {}
-    for item in value.split(";"):
-        bits = item.strip().split(",")
-        if len(bits) != 3:
-            continue
-        try:
-            regs[(int(bits[0]), int(bits[1]))] = int(bits[2])
-        except ValueError:
-            continue
-    return regs
-
-
 def proxy_sample(rec: dict):
     req = rec.get("request") or {}
     if not str(req.get("path", "")).endswith("/device/connect"):
@@ -104,7 +83,7 @@ def proxy_sample(rec: dict):
         field = dict(body.get("form") or []).get("ZAPISZ_ODCZYT")
     if not field:
         return None
-    regs = parse_registers(field)
+    regs = parse_report(field)
     return (parse_time(rec["time"]), regs) if regs else None
 
 

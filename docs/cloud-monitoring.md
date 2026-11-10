@@ -3,7 +3,7 @@
 The proxy can also poll the Estyma cloud (through the
 [EstymaApi wrapper](https://github.com/Tabisch/EstymaApi)) and write what the
 cloud reports to `cloud-YYYY-MM-DD.jsonl` in the logs volume, next to the
-proxy logs, for `compare_cloud_proxy.py`. It is switched on and off on the
+proxy logs, for the comparison tool (`estyma_local/analysis/compare_cloud_proxy.py`). It is switched on and off on the
 *Settings* page (`/settings`), which also shows the state (off, logging in,
 running, problem) and the time of the last poll. While it is on, the monitor
 page has a *Cloud monitoring* section with the latest cloud values next to
@@ -28,8 +28,8 @@ As JSON: `GET /api/cloud`, and `POST /api/cloud` with `{"enabled": true}` or
 The wrapper is installed into the image automatically from
 `requirements.txt` (pinned version); nothing to install by hand.
 
-The standalone recorder `compare/cloud_recorder.py` is still in the image
+The standalone recorder `estyma_local/cloud_recorder.py` is still in the image
 for one-off runs (`docker exec <proxy-container> python3
-/app/compare/cloud_recorder.py --count 1` with the same variables).
+-m estyma_local.cloud_recorder --count 1` with the same variables).
 
 All variables are listed in [configuration.md](configuration.md#cloud-monitoring).

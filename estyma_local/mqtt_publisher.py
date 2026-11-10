@@ -41,10 +41,10 @@ import threading
 import time
 from datetime import datetime, timezone
 
-import catalog as CAT
-import decode as D
-import monitor as M
-import protocol as P
+from . import catalog as CAT
+from . import decode as D
+from . import monitor as M
+from . import protocol as P
 
 REPO_URL = "https://github.com/Tabisch/estyma-local"
 DEFAULT_KWH_PER_KG = 4.8   # typical wood pellets

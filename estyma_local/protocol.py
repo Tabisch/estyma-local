@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timedelta, timezone, tzinfo
 
-import catalog as C
+from . import catalog as C
 
 # Commit/"apply" flag the cloud sends with every write.
 APPLY_FLAG = (4112, 1)

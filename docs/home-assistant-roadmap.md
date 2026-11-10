@@ -29,9 +29,9 @@ Done:
 
 Phase 2 first cut (local server core, see [operating-modes.md](operating-modes.md)):
 `MODE=proxy|hybrid|local`, protocol parser and reply builder
-(`proxy/protocol.py`), register state persisted in `state.json`, write queue
+(`estyma_local/protocol.py`), register state persisted in `state.json`, write queue
 with allow-list, range checks, rate limit, read-back confirmation, timeout
-and audit log (`proxy/controller.py`), controls on the monitor page, local
+and audit log (`estyma_local/controller.py`), controls on the monitor page, local
 replies with clock sync and alarm slot tracking, optional cloud mirror and
 local fallback. Writable: `8195` and `8197` only. Tests in `tests/` use
 synthetic messages. Not yet run against the real controller in `hybrid` or

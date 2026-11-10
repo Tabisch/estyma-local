@@ -6,7 +6,7 @@ named values (temperatures, burner power, O2, ...) and kept in memory for
 ``MONITOR_HISTORY_HOURS``. On start the history is refilled from the newest
 ``exchanges-*.jsonl`` files, so a restart does not lose the charts.
 
-The web UI (log_ui.py) serves the page and ``/api/monitor``.
+The web UI (web.py) serves the page and ``/api/monitor``.
 """
 
 from __future__ import annotations
@@ -20,10 +20,10 @@ import time
 from collections import deque
 from datetime import datetime
 
-import catalog as C
-import decode as D
-from protocol import loose_form, parse_read_list, parse_report
-from registers import RegisterTable
+from . import catalog as C
+from . import decode as D
+from .protocol import loose_form, parse_read_list, parse_report
+from .registers import RegisterTable
 
 # --------------------------------------------------------------------------
 # Register mapping

@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "estyma-local"
+version = "0.1.0"
+description = "Local replacement for the Estyma heating system's cloud server"
+readme = "README.md"
+requires-python = ">=3.11"
+# The server itself only needs the standard library. Pinned versions for the
+# Docker image are in requirements.txt.
+dependencies = []
+
+[project.optional-dependencies]
+mqtt = ["paho-mqtt>=2.1"]
+cloud = ["EstymaApiWrapper", "aiohttp", "beautifulsoup4"]
+
+[project.scripts]
+estyma-local = "estyma_local.app:main"
+
+[project.urls]
+Repository = "https://github.com/Tabisch/estyma-local"
+
+[tool.setuptools]
+packages = ["estyma_local", "estyma_local.analysis"]
+
+[tool.setuptools.package-data]
+estyma_local = ["pages/*.html"]

@@ -8,10 +8,9 @@ import tempfile
 import time
 import unittest
 
-import fixtures  # noqa: F401  (puts proxy/ on sys.path)
 
-import cloud_monitor as CM
-from log_ui import start_log_ui
+from estyma_local import cloud_monitor as CM
+from estyma_local.web import start_web
 
 ENV = {"ESTYMA_EMAIL": "user@example.com", "ESTYMA_PASSWORD": "secret"}
 
@@ -134,7 +133,7 @@ class CloudApiTest(unittest.TestCase):
 
     def ui(self, auth):
         user, pw = auth or (None, None)
-        srv = start_log_ui("127.0.0.1", 0, self.dir, user, pw, cloud=self.mon)
+        srv = start_web("127.0.0.1", 0, self.dir, user, pw, cloud=self.mon)
         self.servers.append(srv)
         return srv.server_address[1]
 

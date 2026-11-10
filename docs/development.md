@@ -2,42 +2,55 @@
 
 ## Code layout
 
+Everything is one Python package, `estyma_local/`; start it with
+`python3 -m estyma_local` (that is also the image's command). The server
+itself only needs the standard library; `requirements.txt` adds the optional
+cloud wrapper, the MQTT client and tzdata. `pyproject.toml` makes it
+installable (`pip install .`, extras `mqtt` and `cloud`).
+
 | Path | What it is |
 |---|---|
-| `proxy/estyma_proxy.py` | Entry point: the HTTP server the controller talks to (proxy / hybrid / local), wires everything together |
-| `proxy/protocol.py` | Parsing and building the controller's messages (`ZAPISZ_ODCZYT`, `ZAPIS`, `ODCZYT`) |
-| `proxy/controller.py` | Controller state, settings (`WRITABLE`) and the safe write queue |
-| `proxy/catalog.py` | **Everything known about the registers**: labels, decoding, ranges, value names, alarm texts |
-| `proxy/config.py` | **Every environment variable** with default and description |
-| `proxy/decode.py` | **Decoding of raw values and the one rule for corrupted reads**, used by the monitor, registers page, settings and MQTT |
-| `proxy/monitor.py` | Decoded values and history for the monitor page and MQTT |
-| `proxy/registers.py` | Raw register table for `/registers` |
-| `proxy/log_ui.py` + `*.html` | Web UI on port 8089 |
-| `proxy/mqtt_publisher.py` | MQTT publisher with Home Assistant discovery |
-| `proxy/cloud_monitor.py` | Optional polling of the Estyma cloud |
-| `compare/` | Analysis tools: cloud recorder, cloud vs. register comparison |
-| `tools/gendocs.py` | Generates `docs/registers.md`, `docs/configuration.md` and `.env.example` |
+| `estyma_local/app.py` | Entry point: reads the configuration, builds and starts all parts |
+| `estyma_local/config.py` | **Every environment variable** with default and description |
+| `estyma_local/server.py` | The HTTP server the controller talks to (proxy / hybrid / local) and the exchange log |
+| `estyma_local/protocol.py` | Parsing and building the controller's messages (`ZAPISZ_ODCZYT`, `ZAPIS`, `ODCZYT`) |
+| `estyma_local/controller.py` | Controller state, settings (`WRITABLE`) and the safe write queue |
+| `estyma_local/catalog.py` | **Everything known about the registers**: labels, decoding, ranges, value names, alarm texts |
+| `estyma_local/decode.py` | **Decoding of raw values and the one rule for corrupted reads**, used by the monitor, registers page, settings and MQTT |
+| `estyma_local/monitor.py` | Decoded values and history for the monitor page and MQTT |
+| `estyma_local/registers.py` | Raw register table for `/registers` |
+| `estyma_local/web.py` + `pages/` | Web UI on port 8089; every page and API call is one entry in `WebHandler.GET` / `POST` |
+| `estyma_local/mqtt_publisher.py` | MQTT publisher with Home Assistant discovery |
+| `estyma_local/cloud_monitor.py`, `cloud_recorder.py` | Optional polling of the Estyma cloud |
+| `estyma_local/analysis/` | Log analysis: `summarize_logs`, `compare_cloud_proxy` (run with `python3 -m estyma_local.analysis.<name>`) |
+| `estyma_local/gendocs.py` | Generates `docs/registers.md`, `docs/configuration.md` and `.env.example` |
 | `tests/` | Unit tests (synthetic data only) |
+
+### Adding a web page
+
+Put the HTML in `estyma_local/pages/`, add a method to `WebHandler` that
+serves it (`self._page("name.html")`) and an entry in `WebHandler.GET`; JSON
+endpoints work the same way, with `POST` for anything that changes state.
 
 ### Generated files
 
 `docs/registers.md`, `docs/configuration.md` and `.env.example` are generated
-from `proxy/catalog.py` and `proxy/config.py`; do not edit them by hand.
+from `estyma_local/catalog.py` and `estyma_local/config.py`; do not edit them by hand.
 After changing a register or an environment variable run:
 
 ```sh
-python3 tools/gendocs.py
+python3 -m estyma_local.gendocs
 ```
 
 `tests/test_docs.py` fails when a generated file is out of date, when the code
-reads an environment variable that is not in `proxy/config.py`, or when
+reads an environment variable that is not in `estyma_local/config.py`, or when
 `docker-compose.yml` does not pass on a variable marked `compose` with the
 same default.
 
 ## Tests
 
 ```sh
-python3 -m unittest discover -s tests
+python3 -m unittest discover -s tests     # from the repository root
 ```
 
 The tests use synthetic messages in the recorded layout (no real device

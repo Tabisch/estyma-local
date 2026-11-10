@@ -51,7 +51,7 @@ Open `http://<proxy_host>:8089/`.
 The UI is available in English and German. It follows the browser language;
 the EN / DE switch at the top right overrides it and is remembered in the
 browser. To add a language, copy the `en` block of `I18N` in
-`proxy/monitor.html`, translate it and add a button to `#lang`.
+`estyma_local/pages/monitor.html`, translate it and add a button to `#lang`.
 
 The logs contain whatever the controller sends (device IDs, PINs, ...). Keep
 port 8089 reachable from your LAN only and set `UI_USER` / `UI_PASSWORD`
@@ -60,8 +60,8 @@ port 8089 reachable from your LAN only and set `UI_USER` / `UI_PASSWORD`
 To analyse the logs inside the container instead:
 
 ```sh
-docker exec <proxy-container> python3 /app/summarize_logs.py /logs          # endpoints and parameters
-docker exec <proxy-container> python3 /app/compare/compare_cloud_proxy.py /logs  # match cloud values to registers
+docker exec <proxy-container> python3 -m estyma_local.analysis.summarize_logs /logs       # endpoints and parameters
+docker exec <proxy-container> python3 -m estyma_local.analysis.compare_cloud_proxy /logs  # match cloud values to registers
 ```
 
 Register meanings found so far with this comparison are in

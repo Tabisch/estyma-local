@@ -5,11 +5,11 @@ import json
 import tempfile
 import unittest
 
-from fixtures import cloud_reply, report, request_body  # noqa: F401  (sets sys.path)
+from fixtures import cloud_reply, report, request_body  # noqa: F401
 
-from monitor import Monitor
-from registers import CATALOG, RegisterTable, decode, looks_glitched
-from log_ui import start_log_ui
+from estyma_local.monitor import Monitor
+from estyma_local.registers import CATALOG, RegisterTable, decode, looks_glitched
+from estyma_local.web import start_web
 
 
 def record(ts_iso, regs, reply=""):
@@ -123,7 +123,7 @@ class MonitorFeedTest(unittest.TestCase):
         regs = {(r["reg"], r["idx"]): r for r in mon.registers.snapshot()}
         self.assertIn((8790, 1), regs)
         self.assertIn((8471, 1), regs)            # asked for by the cloud, never reported
-        ui = start_log_ui("127.0.0.1", 0, d, monitor=mon)
+        ui = start_web("127.0.0.1", 0, d, monitor=mon)
         try:
             c = http.client.HTTPConnection("127.0.0.1", ui.server_address[1], timeout=5)
             c.request("GET", "/api/registers")
