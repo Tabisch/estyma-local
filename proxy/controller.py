@@ -39,6 +39,7 @@ from datetime import datetime, timezone
 
 import protocol as P
 import catalog as Cat
+import decode as D
 import registers as R
 
 # --------------------------------------------------------------------------
@@ -49,26 +50,9 @@ BURNER_STATE = (8199, 1)
 BURNER_STATE_ERROR = 10
 
 
-def low16(raw: int) -> int:
-    """Corrupted CAN reads carry garbage in the upper 16 bits only."""
-    return raw & 0xFFFF
-
-
-def flag_value(raw: int) -> int | None:
-    """0x100 | value style registers (256/257) -> value, else None."""
-    v = low16(raw)
-    return v & 0xFF if v >> 8 == 1 else None
-
-
-def low8(raw: int) -> int | None:
-    """8-bit settings report as 0x0nn or 0x1nn; anything else is a glitch."""
-    v = low16(raw)
-    return v & 0xFF if v >> 8 in (0, 1) else None
-
-
-def signed16(raw: int) -> int:
-    v = low16(raw)
-    return v - 0x10000 if v >= 0x8000 else v
+# Bit helpers live in decode.py (the one place that decides what a
+# corrupted read is); kept importable from here.
+from decode import flag_value, low8, low16, signed16  # noqa: E402,F401
 
 
 @dataclass(frozen=True)
@@ -379,25 +363,16 @@ class Controller:
         return lo, hi
 
     def alarm_slot(self) -> int | None:
-        c = self.raw(*P.ALARM_COUNTER)
-        n = flag_value(c) if c is not None else None
-        if n is None:
-            return None
-        return (n - 1) % P.ALARM_SLOTS
+        return D.alarm_slot(self.raw(*P.ALARM_COUNTER))
 
     def alarm_active(self) -> bool:
         bs = self.raw(*BURNER_STATE)
-        if bs is not None and flag_value(bs) == BURNER_STATE_ERROR:
+        if bs is not None and D.value(BURNER_STATE[0], bs) == BURNER_STATE_ERROR:
             return True
         slot = self.alarm_slot()
         if slot is None:
             return False
-        code = self.raw(P.ALARM_CODE_BASE + slot)
-        end = self.raw(P.ALARM_END_BASE + slot)
-        if code is None:
-            return False
-        state = (code >> 16) & 0xFF
-        return state in (3, 7) and not end
+        return D.alarm_is_active(self.raw(P.ALARM_CODE_BASE + slot), self.raw(P.ALARM_END_BASE + slot))
 
     # -- traffic ------------------------------------------------------------
 

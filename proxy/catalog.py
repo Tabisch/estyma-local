@@ -18,6 +18,10 @@ report 0x100 + value), "u16" low 16 bits, "s16" signed low 16 bits,
 "u8/10" and "u16/10" masked then divided, "time" Unix time (controller
 clock), "hex" shown as hex (bit masks), "alarm" alarm slot (state << 16 | code).
 
+plausible / range: a decoded value outside ``plausible`` (or, without it,
+outside the setting ``range``) is treated as a corrupted CAN read, see
+``decode.py``.
+
 conf: "confirmed", "likely" or "guess". Index 1 of a register is its value,
 3 and 4 its min and max (settings only).
 """
@@ -54,6 +58,7 @@ class Reg:
     panel: str = ""             # name on the cloud's (Polish) service panel
     doc: str = ""               # longer function text for the docs (default: label)
     note: str = ""              # "Range / values" text for the docs (default: generated)
+    plausible: tuple | None = None  # live values: decoded values outside are corrupted reads
 
     @property
     def scale(self) -> int:
@@ -67,43 +72,43 @@ _NO_ANSWER = " (no answer from this controller)"
 
 REGS = [
     # -- live values --------------------------------------------------------
-    Reg(8193, "Boiler temperature", "Kesseltemperatur", "d10", "°C", "live"),
+    Reg(8193, "Boiler temperature", "Kesseltemperatur", "d10", "°C", "live", plausible=(-20, 120)),
     Reg(8196, "Boiler target (calculated)", "Kessel-Soll (berechnet)", "x1", "°C", "live",
-        doc="Boiler target, calculated (resulting)"),
+        doc="Boiler target, calculated (resulting)", plausible=(0, 120)),
     Reg(8199, "Burner state", "Brennerstatus", "u8", "", "live",
         values={0: ("off", "aus"), 1: ("ignition", "Zünden"), 2: ("glowing", "Glühen"),
-                5: ("modulation", "Modulation"), 7: ("cleaning", "Reinigung"), 10: ("error", "Fehler")}),
-    Reg(8466, "Buffer top", "Puffer oben", "d10", "°C", "live", doc="Buffer temperature, top"),
-    Reg(8467, "Buffer bottom", "Puffer unten", "d10", "°C", "live", doc="Buffer temperature, bottom"),
-    Reg(8473, "Flue gas temperature", "Abgastemperatur", "u8", "°C", "live"),
+                5: ("modulation", "Modulation"), 7: ("cleaning", "Reinigung"), 10: ("error", "Fehler")}, plausible=(0, 30)),
+    Reg(8466, "Buffer top", "Puffer oben", "d10", "°C", "live", doc="Buffer temperature, top", plausible=(-20, 120)),
+    Reg(8467, "Buffer bottom", "Puffer unten", "d10", "°C", "live", doc="Buffer temperature, bottom", plausible=(-20, 120)),
+    Reg(8473, "Flue gas temperature", "Abgastemperatur", "u8", "°C", "live", plausible=(0, 255)),
     Reg(8480, "Oxygen in flue gas", "Sauerstoff im Abgas", "d100", "%", "live",
-        doc="Oxygen in the flue gas", note="0..20.95 %"),
-    Reg(8484, "Fuel counter", "Brennstoffzähler", "d10", "kg", "live", doc="Fuel counter (total)"),
-    Reg(8543, "Outside temperature", "Außentemperatur", "d10", "°C", "live"),
-    Reg(8823, "Boiler pump", "Kesselpumpe", "u8", "", "live", values=_ONOFF),
-    Reg(8857, "Heating circuit 1 pump", "Pumpe Heizkreis 1", "u8", "", "live", values=_ONOFF),
+        doc="Oxygen in the flue gas", note="0..20.95 %", plausible=(0, 25)),
+    Reg(8484, "Fuel counter", "Brennstoffzähler", "d10", "kg", "live", doc="Fuel counter (total)", plausible=(0, 2**31 - 1)),
+    Reg(8543, "Outside temperature", "Außentemperatur", "d10", "°C", "live", plausible=(-50, 60)),
+    Reg(8823, "Boiler pump", "Kesselpumpe", "u8", "", "live", values=_ONOFF, plausible=(0, 1)),
+    Reg(8857, "Heating circuit 1 pump", "Pumpe Heizkreis 1", "u8", "", "live", values=_ONOFF, plausible=(0, 1)),
     Reg(16385, "Heating circuit 1 temperature", "Heizkreis 1 Temperatur", "d10", "°C", "live",
-        doc="Heating circuit 1 flow temperature"),
-    Reg(16389, "Burner power", "Brennerleistung", "u8", "%", "live", note="0..100 %"),
-    Reg(16391, "Lambda PWM", "Lambda-PWM", "u8", "", "live", note="0..100"),
+        doc="Heating circuit 1 flow temperature", plausible=(-20, 120)),
+    Reg(16389, "Burner power", "Brennerleistung", "u8", "%", "live", note="0..100 %", plausible=(0, 100)),
+    Reg(16391, "Lambda PWM", "Lambda-PWM", "u8", "", "live", note="0..100", plausible=(0, 255)),
 
     # -- user settings (main cloud panel) -----------------------------------
-    Reg(8197, "Controller on/off", "Regler an/aus", "u8", "", "user", values=_ONOFF),
+    Reg(8197, "Controller on/off", "Regler an/aus", "u8", "", "user", values=_ONOFF, plausible=(0, 1)),
     Reg(8194, "Boiler mode", "Kesselmodus", "x1", "", "user",
         values={0: ("time automatic", "Zeitautomatik"), 1: ("time manual", "Zeit manuell"),
-                2: ("automatic", "Automatik"), 3: ("manual", "Manuell")}),
-    Reg(8195, "Boiler target", "Kessel-Soll", "x1", "°C", "user", range=(60, 80)),
+                2: ("automatic", "Automatik"), 3: ("manual", "Manuell")}, plausible=(0, 255)),
+    Reg(8195, "Boiler target", "Kessel-Soll", "x1", "°C", "user", range=(60, 80), plausible=(0, 120)),
     Reg(8468, "Buffer top target", "Puffer oben Soll", "x1", "°C", "user", range=(7, 80),
-        doc="Buffer target, top"),
+        doc="Buffer target, top", plausible=(0, 120)),
     Reg(8469, "Buffer bottom target", "Puffer unten Soll", "x1", "°C", "user", range=(7, 80),
-        doc="Buffer target, bottom"),
+        doc="Buffer target, bottom", plausible=(0, 120)),
     Reg(8242, "Room comfort temperature, circuit 1", "Raum Komfort, Heizkreis 1", "d10", "°C", "user",
-        range=(15.0, 30.0)),
+        range=(15.0, 30.0), plausible=(0, 40)),
     Reg(8264, "Room eco temperature, circuit 1", "Raum Eco, Heizkreis 1", "d10", "°C", "user",
-        range=(10.0, 30.0)),
+        range=(10.0, 30.0), plausible=(0, 40)),
     Reg(8292, "Heating circuit 1 program", "Programm Heizkreis 1", "u8", "", "user", conf="likely",
         values={0: ("off", "aus"), 1: ("economical", "Eco"), 2: ("temporary", "temporär"),
-                3: ("comfortable", "Komfort")}),
+                3: ("comfortable", "Komfort")}, plausible=(0, 255)),
 
     # -- service settings: boiler (panel "Kocioł") --------------------------
     Reg(8712, "Switch-on hysteresis (below target)", "Einschalthysterese", "u16", "°C", "boiler",

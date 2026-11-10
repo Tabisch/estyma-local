@@ -9,6 +9,7 @@
 | `proxy/controller.py` | Controller state, settings (`WRITABLE`) and the safe write queue |
 | `proxy/catalog.py` | **Everything known about the registers**: labels, decoding, ranges, value names, alarm texts |
 | `proxy/config.py` | **Every environment variable** with default and description |
+| `proxy/decode.py` | **Decoding of raw values and the one rule for corrupted reads**, used by the monitor, registers page, settings and MQTT |
 | `proxy/monitor.py` | Decoded values and history for the monitor page and MQTT |
 | `proxy/registers.py` | Raw register table for `/registers` |
 | `proxy/log_ui.py` + `*.html` | Web UI on port 8089 |

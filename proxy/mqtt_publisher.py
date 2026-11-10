@@ -41,15 +41,14 @@ import threading
 import time
 from datetime import datetime, timezone
 
-import controller as C
+import catalog as CAT
+import decode as D
 import monitor as M
 import protocol as P
-import registers as R
 
 REPO_URL = "https://github.com/Tabisch/estyma-local"
 DEFAULT_KWH_PER_KG = 4.8   # typical wood pellets
 
-_LIVE = {k: (reg, idx, how, lo, hi) for k, _, reg, idx, how, _, lo, hi in M.LIVE}
 
 # --------------------------------------------------------------------------
 # Entities
@@ -112,16 +111,19 @@ class StateBuilder:
     def __init__(self, kwh_per_kg: float | None = None) -> None:
         self.kwh_per_kg = kwh_per_kg
         self._fuel: tuple | None = None   # (ts, kg) last accepted
-        self._good: dict = {}             # key -> (ts, last valid value)
+        self._good = D.LastGood(self.HOLD_SECONDS)
+
+    @staticmethod
+    def _value(regs: dict, reg: int):
+        v = regs.get((reg, 1))
+        return None if v is None else D.value(reg, v[1])
 
     def _live(self, regs: dict, key: str):
-        reg, idx, how, lo, hi = _LIVE[key]
-        v = regs.get((reg, idx))
-        return None if v is None else M.decode(v[1], how, lo, hi)
+        return self._value(regs, M.KEY_REG[key])
 
     def _fuel_total(self, regs: dict):
         v = regs.get((8484, 1))
-        kg = M.decode(v[1], "d10", 0, 2**31 - 1) if v else None
+        kg = D.value(8484, v[1]) if v else None
         if kg is None:
             return self._fuel[1] if self._fuel else None
         ts = v[0]
@@ -147,17 +149,16 @@ class StateBuilder:
                "state": None, "start": None, "end": None}
         if slot is None:
             return out
-        raw = ctl.raw(P.ALARM_CODE_BASE + slot)
-        if raw is not None and raw >= 0:
-            code, state = raw & 0xFF, (raw >> 16) & 0xFFFF
-            out.update(code=code, text=M.ALARM_TEXT.get(code),
-                       state=M.ALARM_STATES.get(state, f"state {state}"))
+        entry = D.alarm_code(ctl.raw(P.ALARM_CODE_BASE + slot))
+        if entry is not None:
+            code, state = entry
+            out.update(code=code, text=CAT.ALARM_TEXT.get(code), state=state)
         # Controller clock: local wall time encoded as Unix time, shown as is.
         for key, base in (("start", P.ALARM_START_BASE), ("end", P.ALARM_END_BASE)):
-            t = ctl.raw(base + slot)
+            t = D.alarm_time(ctl.raw(base + slot))
             if t == 0 and key == "end":
                 out[key] = 0
-            elif t and M.MIN_TIME <= t:
+            elif t:
                 out[key] = datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         return out
 
@@ -175,15 +176,14 @@ class StateBuilder:
                "flue", "o2", "power", "lambda_pwm")}
         bs = self._live(regs, "burner_state")
         st["burner_state"] = (None if bs is None else
-                              R.VALUES[8199].get(int(bs), (f"state {int(bs)}",))[0])
+                              CAT.VALUES[8199].get(int(bs), (f"state {int(bs)}",))[0])
         st["burner_state_code"] = None if bs is None else int(bs)
-        st["boiler_target"] = target if target is not None and 0 < target <= 120 else None
+        st["boiler_target"] = target if D.value(8195, target) else None
         st["boiler_on"] = _onoff(on if on in (0, 1) else None)
         pump = self._live(regs, "boiler_pump")
         st["boiler_pump"] = _onoff(None if pump is None else int(pump))
-        c1 = regs.get((8857, 1))
-        c1v = C.low8(c1[1]) if c1 else None
-        st["circuit1_pump"] = _onoff(c1v if c1v in (0, 1) else None)
+        c1 = self._value(regs, 8857)
+        st["circuit1_pump"] = _onoff(None if c1 is None else int(c1))
         fuel = self._fuel_total(regs)
         st["fuel_total"] = fuel
         kwh = self.calorific_value(ctl)
@@ -205,19 +205,15 @@ class StateBuilder:
 
     # A single corrupted CAN read (e.g. 8197 reported as 0x0001 instead of
     # 0x101) decodes to None. Keep the last valid value for HOLD_SECONDS so
-    # the entity does not flicker to "unknown" for one report.
+    # the entity does not flicker to "unknown" for one report (decode.LastGood).
     HOLD_SECONDS = 600
     _NO_HOLD = ("alarm", "alarm_code", "last_report", "mode", "kwh_per_kg")
 
     def _hold(self, st: dict, now) -> None:
         now = now or time.time()
         for k, v in st.items():
-            if k in self._NO_HOLD:
-                continue
-            if v is not None:
-                self._good[k] = (now, v)
-            elif k in self._good and now - self._good[k][0] <= self.HOLD_SECONDS:
-                st[k] = self._good[k][1]
+            if k not in self._NO_HOLD:
+                st[k] = self._good.get(k, v, now)
 
 
 def discovery(device_id: str, base: str, disc_prefix: str) -> list[tuple[str, str]]:

@@ -17,16 +17,18 @@ from __future__ import annotations
 import re
 from datetime import datetime, timedelta, timezone, tzinfo
 
+import catalog as C
+
 # Commit/"apply" flag the cloud sends with every write.
 APPLY_FLAG = (4112, 1)
 # Controller clock (local time as a Unix timestamp), write only.
 CLOCK_REG = (8549, 1)
 
 # Alarm / event ring buffers: slot k uses code 16400+k, start 16420+k,
-# end 16440+k (see docs/register-mapping.md). 16460,1 counts alarms.
-ALARM_COUNTER = (16460, 1)
-ALARM_SLOTS = 20
-ALARM_CODE_BASE, ALARM_START_BASE, ALARM_END_BASE = 16400, 16420, 16440
+# end 16440+k (defined in catalog.py). 16460,1 counts alarms.
+ALARM_SLOTS = C.ALARM_SLOTS
+ALARM_CODE_BASE, ALARM_START_BASE, ALARM_END_BASE = C.ALARM_CODE, C.ALARM_START, C.ALARM_END
+ALARM_COUNTER = (C.ALARM_COUNTER, 1)
 
 # The registers the cloud asks for on every poll, without the rotating alarm
 # slot entries. Used in local mode until a list was learned from the cloud.
