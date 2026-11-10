@@ -23,6 +23,8 @@ installable (`pip install .`, extras `mqtt` and `cloud`).
 | `estyma_local/mqtt_publisher.py` | MQTT publisher with Home Assistant discovery |
 | `estyma_local/cloud_monitor.py`, `cloud_recorder.py` | Optional polling of the Estyma cloud |
 | `estyma_local/analysis/` | Log analysis: `summarize_logs`, `compare_cloud_proxy` (run with `python3 -m estyma_local.analysis.<name>`) |
+| `estyma_local/healthcheck.py` | Docker `HEALTHCHECK`: controller port open and `/api/health` answering |
+| `docker-entrypoint.sh` | Fixes the log volume's owner, then runs the server as the unprivileged user `estyma` |
 | `estyma_local/gendocs.py` | Generates `docs/registers.md`, `docs/configuration.md` and `.env.example` |
 | `tests/` | Unit tests (synthetic data only) |
 
@@ -80,8 +82,11 @@ when they pass. Pull requests only run the tests and never push an image.
 ### Removing old images
 
 Every build adds a version to the GHCR package. *Actions → Clean up images →
-Run workflow* deletes all versions except the image tagged `latest` (its
-platform images stay). It starts as a dry run that only lists what it would
+Run workflow* deletes all versions except the image tagged `latest` and
+release tags `v*` (their platform images stay). To keep a version you can roll
+back to, tag the commit, e.g. `git tag v0.2.0 && git push origin v0.2.0`: the
+workflow builds `ghcr.io/tabisch/estyma-local:v0.2.0` and the cleanup leaves
+it alone. To roll back, set the stack's image to that tag. It starts as a dry run that only lists what it would
 delete; untick *Only list what would be deleted* to really delete.
 
 ### Building on your own GitHub Actions runner

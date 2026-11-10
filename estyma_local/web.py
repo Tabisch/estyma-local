@@ -28,6 +28,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .controller import WriteError
 
+STARTED = time.time()
 PAGES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pages")
 
 PAGE = """<!doctype html>
@@ -202,9 +203,11 @@ class WebHandler(BaseHTTPRequestHandler):
         self.do_GET()
 
     def do_GET(self):
+        url = urllib.parse.urlsplit(self.path)
+        if url.path == "/api/health":   # for Docker's HEALTHCHECK: no login, no details
+            return self._health()
         if self._deny():
             return
-        url = urllib.parse.urlsplit(self.path)
         if url.path.startswith("/files/"):
             return self._file(urllib.parse.unquote(url.path[len("/files/"):]))
         entry = self._route(self.GET, url.path)
@@ -277,6 +280,14 @@ class WebHandler(BaseHTTPRequestHandler):
 
     def _api_cloud(self, _query):
         self._json(200, self._with_auth(self.cloud.status()))
+
+    def _health(self):
+        out = {"ok": True, "uptime_s": round(time.time() - STARTED)}
+        if self.controller is not None:
+            last = self.controller.last_report
+            out["mode"] = self.controller.mode
+            out["last_report_age_s"] = None if last is None else round(time.time() - last)
+        self._json(200, out)
 
     # -- POST handlers ------------------------------------------------------
 
