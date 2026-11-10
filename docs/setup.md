@@ -99,4 +99,15 @@ docker compose up -d
 docker compose logs -f estyma-proxy     # one line per captured exchange
 ```
 
+### Container details
+
+- The server runs as the unprivileged user `estyma` (uid 1000). On start the
+  container gives the log volume to that user, so volumes created by older
+  images keep working. The only extra right it keeps is binding port 80.
+- Docker checks the container's health every minute (`HEALTHCHECK`): the
+  controller port must accept connections and the web UI must answer
+  `/api/health`. Portainer shows the result as *healthy* / *unhealthy*.
+  `/api/health` needs no login and shows only the mode, the uptime and how
+  many seconds ago the controller last reported.
+
 Next: open `http://<proxy_host>:8089/`, see [web-ui.md](web-ui.md).
