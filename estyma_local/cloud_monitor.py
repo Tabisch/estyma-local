@@ -5,8 +5,8 @@ All cloud access goes through the EstymaApi wrapper
 ``getDevices()``, ``getAvailableSettings()`` and
 ``getDeviceData(textToValues=True)`` to poll. The wrapper handles the session
 and re-logins itself. Each poll appends a ``cloud-YYYY-MM-DD.jsonl`` record
-with the wrapper's values (the ``values`` part of compare/cloud_recorder.py's
-format, which compare/compare_cloud_proxy.py reads) to LOG_DIR. The latest
+with the wrapper's values (the ``values`` part of cloud_recorder.py's
+format, which analysis/compare_cloud_proxy.py reads) to LOG_DIR. The latest
 values are kept in memory for the monitor page.
 
 Credentials only ever come from the container environment (ESTYMA_EMAIL plus
@@ -23,18 +23,10 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import sys
 import threading
 import time
 
-_here = os.path.dirname(os.path.abspath(__file__))
-# compare/ sits next to this file in the image (/app/compare) and next to
-# proxy/ in the repository.
-for _p in (os.path.join(_here, "compare"), os.path.join(os.path.dirname(_here), "compare")):
-    if os.path.isdir(_p) and _p not in sys.path:
-        sys.path.insert(0, _p)
-
-import cloud_recorder as CR  # noqa: E402
+from . import cloud_recorder as CR
 
 # Wrapper fields shown on the monitor page (the wrapper's English names, see
 # docs/cloud-translation.md), keyed like the monitor's own fields so the page

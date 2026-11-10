@@ -4,7 +4,7 @@ import unittest
 
 from fixtures import P, cloud_reply, report
 
-from controller import Controller, WriteError
+from estyma_local.controller import Controller, WriteError
 
 
 class Clock:

@@ -7,11 +7,11 @@ ranges, enum value names, alarm texts and the documentation in
 - ``registers.py``: the raw register table on ``/registers``,
 - ``monitor.py``: the decoded values on the monitor page (and MQTT),
 - ``controller.py``: the settings on ``/heating`` and their write limits,
-- ``tools/gendocs.py``: generates ``docs/registers.md`` from it
+- ``gendocs.py``: generates ``docs/registers.md`` from it
   (``tests/test_docs.py`` fails when the doc is out of date).
 
 To add a register, add a ``Reg`` to ``REGS`` and run
-``python3 tools/gendocs.py``.
+``python3 -m estyma_local.gendocs``.
 
 decode: "x1" as is, "d10" / "d100" divided, "u8" low byte (8-bit registers
 report 0x100 + value), "u16" low 16 bits, "s16" signed low 16 bits,

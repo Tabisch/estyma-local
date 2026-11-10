@@ -10,9 +10,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from fixtures import P, cloud_reply, report, request_body
 
-import estyma_proxy as E
-from controller import Controller
-from log_ui import start_log_ui
+from estyma_local import server as E
+from estyma_local.controller import Controller
+from estyma_local.web import start_web
 
 
 class FakeCloud(BaseHTTPRequestHandler):
@@ -58,7 +58,7 @@ class ServerTest(unittest.TestCase):
         ctl.settings_due = kw.pop("read_settings", False)
         log = E.ExchangeLog(self.dir, 0)
         srv = E.make_server("127.0.0.1", 0, f"http://127.0.0.1:{self.cloud_port}", 5, log, ctl, **kw)
-        ui = start_log_ui("127.0.0.1", 0, self.dir, "u", "p", controller=ctl)
+        ui = start_web("127.0.0.1", 0, self.dir, "u", "p", controller=ctl)
         self.servers = [srv, ui]
         self.port, self.ui_port = serve(srv), ui.server_address[1]
         return ctl

@@ -13,7 +13,7 @@ value that differs from it is normally just a change waiting for its second
 report; it is only flagged as a glitch when it looks corrupted: when the
 monitor and MQTT would drop it (``decode.py``), or see ``looks_glitched``.
 
-The web UI (log_ui.py) serves the page (registers.html) and ``/api/registers``.
+The web UI (web.py) serves the page (registers.html) and ``/api/registers``.
 """
 
 from __future__ import annotations
@@ -25,8 +25,8 @@ import time
 
 # What is known about each register (labels, decoding, ranges, value names)
 # lives in catalog.py; these names stay importable from here.
-from catalog import CATALOG, RANGES, UNKNOWN, VALUES  # noqa: F401
-import decode as D
+from .catalog import CATALOG, RANGES, UNKNOWN, VALUES  # noqa: F401
+from . import decode as D
 
 
 def decode(raw: int, how: str):

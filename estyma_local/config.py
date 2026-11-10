@@ -1,16 +1,15 @@
 """Every environment variable the image understands, in one place.
 
-``tools/gendocs.py`` builds the tables in ``docs/configuration.md`` and the
+``gendocs.py`` builds the tables in ``docs/configuration.md`` and the
 ``.env.example`` file from this list, and ``tests/test_docs.py`` checks that
 
 - every variable the code reads is listed here (and nothing else),
-- the defaults in ``estyma_proxy.py`` match the ones here,
 - ``docker-compose.yml`` passes on every variable marked ``compose`` with the
   same default.
 
 To add a variable: read it in the code, add an ``Env`` here, add it to
 ``docker-compose.yml`` if it is marked ``compose``, run
-``python3 tools/gendocs.py``.
+``python3 -m estyma_local.gendocs``.
 """
 
 from __future__ import annotations
@@ -23,7 +22,7 @@ SECTIONS = {
     "local": ("Local server", "Same service, see [operating-modes.md](operating-modes.md)."),
     "cloud": ("Cloud monitoring", "Same service, see [cloud-monitoring.md](cloud-monitoring.md)."),
     "mqtt": ("MQTT / Home Assistant", "Same service, see [home-assistant.md](home-assistant.md)."),
-    "recorder": ("Standalone cloud recorder", "`compare/cloud_recorder.py` reads the same "
+    "recorder": ("Standalone cloud recorder", "`python3 -m estyma_local.cloud_recorder` reads the same "
                  "`ESTYMA_*` variables as cloud monitoring, plus these."),
     "host": ("Compose / `.env` (host side)", "Only used by `docker-compose.yml`, not inside the container."),
 }
@@ -85,8 +84,8 @@ ENV = [
         compose=False, example=False),
     Env("POLL_DELAY", "10", "local", "`DELAY` value in local replies (the controller's pause between polls)",
         compose=False, example=False),
-    Env("STATE_FILE", "/logs/state.json", "local", "Last reported registers and the learned register "
-        "list, kept across restarts (default: `state.json` in `LOG_DIR`)", compose=False, example=False),
+    Env("STATE_FILE", "", "local", "Last reported registers and the learned register "
+        "list, kept across restarts; empty = `state.json` in `LOG_DIR`", compose=False, example=False),
     # -- cloud monitoring ---------------------------------------------------
     Env("ESTYMA_EMAIL", "", "cloud", "Login e-mail of your Estyma cloud account; without it cloud "
         "monitoring is unavailable"),

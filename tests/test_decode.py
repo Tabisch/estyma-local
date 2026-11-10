@@ -6,11 +6,11 @@ import unittest
 
 from fixtures import report
 
-import decode as D
-import monitor as M
-import mqtt_publisher as MP
-from controller import Controller
-from registers import RegisterTable
+from estyma_local import decode as D
+from estyma_local import monitor as M
+from estyma_local import mqtt_publisher as MP
+from estyma_local.controller import Controller
+from estyma_local.registers import RegisterTable
 
 
 class ValueTest(unittest.TestCase):

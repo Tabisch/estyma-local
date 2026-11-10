@@ -11,8 +11,8 @@ import unittest
 
 from fixtures import report
 
-from controller import Controller
-import mqtt_publisher as MP
+from estyma_local.controller import Controller
+from estyma_local import mqtt_publisher as MP
 
 try:
     import paho.mqtt.client as mqtt
@@ -140,8 +140,9 @@ class StateTest(unittest.TestCase):
         self.assertEqual(alarm["text"], "start failure")
 
     def test_alarm_texts_match_monitor_page(self):
-        import catalog as CAT, monitor as M, pathlib, re
-        html = (pathlib.Path(M.__file__).parent / "monitor.html").read_text()
+        import pathlib, re
+        from estyma_local import catalog as CAT, monitor as M
+        html = (pathlib.Path(M.__file__).parent / "pages" / "monitor.html").read_text()
         for code in CAT.ALARM_TEXT:
             self.assertEqual(len(re.findall(r'"alarm\.%d":' % code, html)), 2, code)
 

@@ -21,8 +21,8 @@ selectable settings (``getAvailableSettings()``).
 
 Credentials come from the environment or a JSON file, never from the repo:
 
-    ESTYMA_EMAIL=... ESTYMA_PASSWORD=... python3 compare/cloud_recorder.py
-    python3 compare/cloud_recorder.py --credentials ~/estyma-credentials.json
+    ESTYMA_EMAIL=... ESTYMA_PASSWORD=... python3 -m estyma_local.cloud_recorder
+    python3 -m estyma_local.cloud_recorder --credentials ~/estyma-credentials.json
 
 The credentials file looks like ``{"email": "...", "password": "..."}`` (the
 same format the wrapper's own tests use). If the password starts or ends with
@@ -47,7 +47,7 @@ try:
     from EstymaApiWrapper import EstymaApi
 except ImportError:  # pragma: no cover - only hit when the wrapper is missing
     # The helpers below are also used by the proxy's cloud monitor
-    # (proxy/cloud_monitor.py), which reports the missing wrapper itself.
+    # (cloud_monitor.py), which reports the missing wrapper itself.
     EstymaApi = None
 
 MISSING_WRAPPER = "EstymaApiWrapper is not installed: pip install -r requirements.txt"

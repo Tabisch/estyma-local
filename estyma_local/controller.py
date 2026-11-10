@@ -37,10 +37,10 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-import protocol as P
-import catalog as Cat
-import decode as D
-import registers as R
+from . import protocol as P
+from . import catalog as Cat
+from . import decode as D
+from . import registers as R
 
 # --------------------------------------------------------------------------
 # Register model
@@ -52,7 +52,7 @@ BURNER_STATE_ERROR = 10
 
 # Bit helpers live in decode.py (the one place that decides what a
 # corrupted read is); kept importable from here.
-from decode import flag_value, low8, low16, signed16  # noqa: E402,F401
+from .decode import flag_value, low8, low16, signed16  # noqa: E402,F401
 
 
 @dataclass(frozen=True)

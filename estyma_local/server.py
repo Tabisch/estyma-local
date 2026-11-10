@@ -1,75 +1,21 @@
-#!/usr/bin/env python3
-"""Transparent logging HTTP proxy for Estyma heating controller traffic.
+"""The HTTP server the heating controller talks to.
 
-The heating controller talks plain HTTP to the provider's server. Point the
-controller at this proxy (DNS override or a NAT rule on the router), and it
-forwards every request unchanged to the real server while writing each
-request/response pair to a JSON Lines log for later reverse engineering.
+``ProxyHandler`` answers ``/device/connect`` (and anything else the
+controller sends): it forwards to the provider's server (``MODE=proxy`` /
+``hybrid``), or answers locally (``local``, or ``LOCAL_FALLBACK``), and writes
+every request/response pair to a JSON Lines log (``ExchangeLog``). The
+controller state and local writes live in ``controller.py``.
 
-Only the Python standard library is used, so it runs anywhere Python 3.9+ is
-available (Raspberry Pi, NAS, Docker, ...).
-
-Configuration (environment variables or CLI flags, flags win):
-
-  LISTEN_HOST      address to bind              (default 0.0.0.0)
-  LISTEN_PORT      port to bind                 (default 80)
-  UPSTREAM         where to forward to, e.g. http://203.0.113.10:80
-                   Use the provider's real IP if you override DNS, otherwise
-                   the proxy would resolve the name back to itself.
-  UPSTREAM_TIMEOUT seconds to wait for the provider (default 30)
-  LOG_DIR          directory for the logs        (default ./logs)
-  MAX_BODY_LOG     max bytes of each body kept in the log, 0 = unlimited
-                   (default 0)
-  UI_PORT          port of the log download web UI, 0 = off (default 8089)
-  UI_USER / UI_PASSWORD  enable HTTP basic auth on the log UI
-  MONITOR_HISTORY_HOURS  hours of decoded values kept for the monitor charts
-                   (default 48)
-
-Cloud monitoring (optional, switched on/off in the web UI, see cloud_monitor.py):
-
-  ESTYMA_EMAIL, ESTYMA_PASSWORD (or ESTYMA_PASSWORD_B64 / ESTYMA_PASSWORD_FILE)
-                   cloud account; without them the feature stays off
-  CLOUD_MONITOR    initial state before it is first switched in the UI (default 0)
-  CLOUD_INTERVAL   seconds between cloud polls (default 30)
-  ESTYMA_DOMAIN / ESTYMA_LANGUAGE  as for compare/cloud_recorder.py
-
-Local server (see docs/operating-modes.md):
-
-  MODE             proxy (forward only, default), hybrid (forward, may add
-                   local writes to the cloud's reply) or local (answer the
-                   controller ourselves)
-  WRITES_ENABLED   1 = allow local writes (default 0, read-only)
-  ALLOW_POWER_WRITES  1 = also allow switching the boiler on/off (default 0)
-  ALLOW_UNTESTED_WRITES  1 = also allow the settings page's other settings,
-                   whose writes were not yet seen working on a real
-                   controller (default 0; only 8195 and 8197 are tested)
-  SETTINGS_READ_MINUTES  minutes between reads of all settings in hybrid /
-                   local mode, 0 = only on start and on request (default 60)
-  WRITE_TIMEOUT    seconds until an unconfirmed write fails (default 120)
-  WRITE_MIN_INTERVAL  minimum seconds between requests per register (default 10)
-  LOCAL_FALLBACK   1 = answer locally when the cloud fails (proxy/hybrid)
-  CLOUD_MIRROR     1 = in local mode, still forward each report to the cloud
-                   in the background and ignore its reply
-  CONTROLLER_TZ    time zone of the controller clock (default Europe/Warsaw)
-  CLOCK_SYNC_HOURS hours between clock syncs in local mode, 0 = off (default 6)
-  POLL_DELAY       DELAY value sent in local replies (default 10)
-  STATE_FILE       persisted register state (default LOG_DIR/state.json)
-
-MQTT / Home Assistant (optional, read-only, see mqtt_publisher.py):
-
-  MQTT_HOST        broker address; empty = off. MQTT_PORT, MQTT_USER,
-                   MQTT_PASSWORD, MQTT_TLS, MQTT_PREFIX, MQTT_DEVICE_ID,
-                   HA_DISCOVERY_PREFIX, MQTT_STALE_SECONDS, FUEL_KWH_PER_KG
+Started by ``app.py`` (``python3 -m estyma_local``); every setting is an
+environment variable, see ``config.py`` / docs/configuration.md.
 """
 
 from __future__ import annotations
 
-import argparse
 import base64
 import http.client
 import json
 import os
-import sys
 import threading
 import time
 import urllib.parse
@@ -78,8 +24,8 @@ from datetime import datetime, timezone
 from email.utils import formatdate
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-import protocol as P
-from controller import Controller
+from . import protocol as P
+from .controller import Controller
 
 # Headers that describe a single connection, not the message. They are not
 # forwarded as-is (RFC 9110 section 7.6.1).
@@ -423,117 +369,3 @@ def make_server(listen_host: str, listen_port: int, upstream: str | None, timeou
     ThreadingHTTPServer.allow_reuse_address = True
     ThreadingHTTPServer.daemon_threads = True
     return ThreadingHTTPServer((listen_host, listen_port), handler)
-
-
-def main(argv=None) -> int:
-    env = os.environ.get
-    p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    p.add_argument("--listen-host", default=env("LISTEN_HOST", "0.0.0.0"))
-    p.add_argument("--listen-port", type=int, default=int(env("LISTEN_PORT", "80")))
-    p.add_argument("--upstream", default=env("UPSTREAM"),
-                   help="e.g. http://203.0.113.10:80 (provider's real address)")
-    p.add_argument("--upstream-timeout", type=float, default=float(env("UPSTREAM_TIMEOUT", "30")))
-    p.add_argument("--log-dir", default=env("LOG_DIR", "logs"))
-    p.add_argument("--max-body-log", type=int, default=int(env("MAX_BODY_LOG", "0")))
-    p.add_argument("--ui-port", type=int, default=int(env("UI_PORT", "8089")),
-                   help="port of the log download web UI, 0 = disabled")
-    p.add_argument("--ui-user", default=env("UI_USER"))
-    p.add_argument("--ui-password", default=env("UI_PASSWORD"))
-    p.add_argument("--monitor-history-hours", type=float,
-                   default=float(env("MONITOR_HISTORY_HOURS", "48")))
-    p.add_argument("--mode", default=env("MODE", "proxy"), choices=["proxy", "hybrid", "local"])
-    p.add_argument("--state-file", default=env("STATE_FILE"))
-    p.add_argument("--controller-tz", default=env("CONTROLLER_TZ", "Europe/Warsaw"))
-    p.add_argument("--clock-sync-hours", type=float, default=float(env("CLOCK_SYNC_HOURS", "6")))
-    p.add_argument("--poll-delay", type=int, default=int(env("POLL_DELAY", "10")))
-    p.add_argument("--write-timeout", type=float, default=float(env("WRITE_TIMEOUT", "120")))
-    p.add_argument("--settings-read-minutes", type=float,
-                   default=float(env("SETTINGS_READ_MINUTES", "60")))
-    p.add_argument("--write-min-interval", type=float,
-                   default=float(env("WRITE_MIN_INTERVAL", "10")))
-    args = p.parse_args(argv)
-    writes_enabled = env_flag("WRITES_ENABLED")
-    allow_power = env_flag("ALLOW_POWER_WRITES")
-    allow_untested = env_flag("ALLOW_UNTESTED_WRITES")
-    local_fallback = env_flag("LOCAL_FALLBACK")
-    cloud_mirror = env_flag("CLOUD_MIRROR")
-
-    if not args.upstream and (args.mode != "local" or cloud_mirror or local_fallback):
-        p.error("UPSTREAM is required (env var or --upstream) unless MODE=local")
-
-    log = ExchangeLog(args.log_dir, args.max_body_log)
-    ctl = Controller(args.mode, args.log_dir, writes_enabled=writes_enabled,
-                     allow_power_writes=allow_power, allow_untested_writes=allow_untested,
-                     settings_read_interval=args.settings_read_minutes * 60,
-                     write_timeout=args.write_timeout,
-                     write_min_interval=args.write_min_interval,
-                     clock_sync_interval=args.clock_sync_hours * 3600,
-                     tz=load_tz(args.controller_tz), state_file=args.state_file)
-    server = make_server(args.listen_host, args.listen_port, args.upstream,
-                         args.upstream_timeout, log, ctl, local_fallback=local_fallback,
-                         cloud_mirror=cloud_mirror, poll_delay=args.poll_delay)
-    where = {"proxy": f"forwarding to {args.upstream}",
-             "hybrid": f"forwarding to {args.upstream} (hybrid: local writes added)",
-             "local": "answering locally" + (f", mirroring to {args.upstream}" if cloud_mirror else "")}
-    print(f"estyma-proxy listening on {args.listen_host}:{args.listen_port}, mode {args.mode}, "
-          f"{where[args.mode]}, logging to {os.path.abspath(args.log_dir)}", flush=True)
-    print(f"writes {'ENABLED' if writes_enabled else 'off'}"
-          f"{', on/off allowed' if writes_enabled and allow_power else ''}"
-          f"{', untested settings allowed' if writes_enabled and allow_untested else ''}"
-          f"{', local fallback on' if local_fallback else ''}", flush=True)
-    if args.ui_port:
-        from log_ui import start_log_ui
-        from monitor import Monitor
-        mon = Monitor(args.log_dir, args.monitor_history_hours)
-        log.listeners.append(mon.ingest)
-        mon.start()
-        cloud = None
-        try:
-            from cloud_monitor import CloudMonitor
-            cloud = CloudMonitor(args.log_dir)
-            cloud.start()
-            print(f"cloud monitor: {'configured' if cloud.configured else cloud.problem}, "
-                  f"{'on' if cloud.enabled and cloud.configured else 'off'} "
-                  f"(switch it in the web UI)", flush=True)
-        except Exception as exc:  # never keep the proxy from starting
-            print(f"cloud monitor unavailable: {type(exc).__name__}: {exc}", flush=True)
-        start_log_ui(args.listen_host, args.ui_port, args.log_dir,
-                     args.ui_user, args.ui_password, monitor=mon, controller=ctl, cloud=cloud)
-        auth = "basic auth on" if args.ui_user and args.ui_password else "no auth"
-        print(f"log UI on http://{args.listen_host}:{args.ui_port}/ ({auth})", flush=True)
-    mqtt = None
-    if env("MQTT_HOST"):
-        try:
-            from mqtt_publisher import from_env
-            mqtt = from_env(ctl)
-        except Exception as exc:  # never keep the proxy from starting
-            print(f"mqtt publisher unavailable: {type(exc).__name__}: {exc}", flush=True)
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        if mqtt is not None:
-            mqtt.stop()
-        server.server_close()
-        ctl.save_state(force=True)
-    return 0
-
-
-def env_flag(name: str) -> bool:
-    return (os.environ.get(name) or "").strip().lower() in ("1", "true", "yes", "on")
-
-
-def load_tz(name: str):
-    """Time zone of the controller clock; fixed UTC+1 if tzdata is missing."""
-    try:
-        from zoneinfo import ZoneInfo
-        return ZoneInfo(name)
-    except Exception as exc:
-        from datetime import timedelta
-        print(f"time zone {name!r} not available ({exc}), using UTC+1", flush=True)
-        return timezone(timedelta(hours=1))
-
-
-if __name__ == "__main__":
-    sys.exit(main())

@@ -1,9 +1,11 @@
-"""Tiny web UI: live monitor of the controller's values and log downloads.
+"""The web UI on UI_PORT (default 8089): monitor, registers, heating
+settings, app settings and log downloads, plus the JSON API behind them.
 
-``/`` shows the monitor (monitor.py, monitor.html), ``/logs`` lists the log
-files. Runs inside the proxy process on its own port (UI_PORT, default 8089), never
-on the proxy port. Read-only: it only serves files that sit directly in
-LOG_DIR. Optional HTTP basic auth via UI_USER / UI_PASSWORD.
+Every page and API call is one entry in ``WebHandler.GET`` / ``POST``; the
+HTML pages are in ``pages/``. Runs in the server process on its own port,
+never on the proxy port. Files are only served from directly inside LOG_DIR.
+Optional HTTP basic auth via UI_USER / UI_PASSWORD; writes, switching cloud
+monitoring and deleting logs need it.
 
 Logs contain whatever the controller sends (device IDs, PINs, ...). Keep the
 port on your LAN.
@@ -23,6 +25,10 @@ import urllib.parse
 import zipfile
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+from .controller import WriteError
+
+PAGES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pages")
 
 PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -101,8 +107,8 @@ def human_size(n: int) -> str:
     return f"{n} B"
 
 
-class LogUIHandler(BaseHTTPRequestHandler):
-    server_version = "estyma-log-ui"
+class WebHandler(BaseHTTPRequestHandler):
+    server_version = "estyma-web"
     log_dir: str
     auth: bytes | None  # expected "user:password" or None
     monitor = None      # monitor.Monitor or None
@@ -151,105 +157,160 @@ class LogUIHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
 
     # -- routes -------------------------------------------------------------
+    # path -> (method name, part it needs or None). Paths with a trailing
+    # slash are served too. Every route needs the basic auth if it is set.
+
+    GET = {
+        "/": ("_home", None),
+        "/logs": ("_index", None),
+        "/registers": ("_registers_page", "monitor"),
+        "/heating": ("_heating_page", "controller"),
+        "/settings": ("_app_settings_page", None),   # this app; the heating's are on /heating
+        "/all.zip": ("_zip", None),
+        "/api/monitor": ("_api_monitor", "monitor"),
+        "/api/registers": ("_api_registers", "monitor"),
+        "/api/control": ("_api_control", "controller"),
+        "/api/settings": ("_api_settings", "controller"),
+        "/api/cloud": ("_api_cloud", "cloud"),
+    }
+    # POST bodies are JSON. ``auth``: also needs UI_USER / UI_PASSWORD set
+    # (value: what is refused without it, for the message).
+    POST = {
+        "/api/read-settings": ("_post_read_settings", "controller", None),
+        "/api/delete-logs": ("_post_delete_logs", None, "deleting logs"),
+        "/api/cloud": ("_post_cloud", "cloud", "switching cloud monitoring"),
+        "/api/set": ("_post_set", "controller", "writes"),
+        "/api/cancel": ("_post_cancel", "controller", "writes"),
+    }
+
+    def _route(self, table: dict, path: str):
+        if path != "/" and path.endswith("/"):
+            path = path[:-1]
+        entry = table.get(path)
+        if entry is None or (entry[1] is not None and getattr(self, entry[1]) is None):
+            return None
+        return entry
+
+    def _deny(self) -> bool:
+        if self._authorized():
+            return False
+        self._send(401, b"authentication required\n", "text/plain",
+                   [("WWW-Authenticate", 'Basic realm="estyma logs"')])
+        return True
 
     def do_HEAD(self):
         self.do_GET()
 
     def do_GET(self):
-        if not self._authorized():
-            self._send(401, b"authentication required\n", "text/plain",
-                       [("WWW-Authenticate", 'Basic realm="estyma logs"')])
+        if self._deny():
             return
         url = urllib.parse.urlsplit(self.path)
-        path = url.path
-        if path == "/":
-            return self._monitor_page() if self.monitor else self._index()
-        if path in ("/logs", "/logs/"):
-            return self._index()
-        if path == "/api/monitor" and self.monitor:
-            return self._monitor_api(url.query)
-        if path in ("/registers", "/registers/") and self.monitor:
-            return self._page("registers.html")
-        if path == "/api/registers" and self.monitor:
-            return self._json(200, {"now": time.time(), "loading": self.monitor.loading,
-                                    "registers": self.monitor.registers.snapshot()})
-        if path == "/api/control" and self.controller:
-            snap = self.controller.snapshot()
-            snap["ui_auth"] = self.auth is not None
-            return self._json(200, snap)
-        if path in ("/heating", "/heating/") and self.controller:
-            return self._page("settings.html")
-        if path == "/api/settings" and self.controller:
-            snap = self.controller.settings_snapshot()
-            snap["ui_auth"] = self.auth is not None
-            return self._json(200, snap)
-        if path in ("/settings", "/settings/"):  # app settings (heating settings: /heating)
-            return self._page("app_settings.html")
-        if path == "/api/cloud" and self.cloud:
-            st = self.cloud.status()
-            st["ui_auth"] = self.auth is not None
-            return self._json(200, st)
-        if path == "/all.zip":
-            return self._zip()
-        if path.startswith("/files/"):
-            return self._file(urllib.parse.unquote(path[len("/files/"):]))
-        self._send(404, b"not found\n", "text/plain")
-
-    def _json(self, code: int, obj) -> None:
-        self._send(code, json.dumps(obj, separators=(",", ":")).encode(), "application/json")
+        if url.path.startswith("/files/"):
+            return self._file(urllib.parse.unquote(url.path[len("/files/"):]))
+        entry = self._route(self.GET, url.path)
+        if entry is None:
+            return self._send(404, b"not found\n", "text/plain")
+        getattr(self, entry[0])(url.query)
 
     def do_POST(self):
-        if not self._authorized():
-            self._send(401, b"authentication required\n", "text/plain",
-                       [("WWW-Authenticate", 'Basic realm="estyma logs"')])
+        if self._deny():
             return
-        path = urllib.parse.urlsplit(self.path).path
-        available = {"/api/delete-logs": True, "/api/set": bool(self.controller),
-                     "/api/cancel": bool(self.controller), "/api/cloud": bool(self.cloud),
-                     "/api/read-settings": bool(self.controller)}
-        if not available.get(path):
+        entry = self._route(self.POST, urllib.parse.urlsplit(self.path).path)
+        if entry is None:
             return self._send(404, b"not found\n", "text/plain")
+        name, _, needs_auth = entry
         # A JSON content type cannot be sent cross-site without a CORS
         # preflight, which we never answer: a simple CSRF guard.
         ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
         if ctype != "application/json":
             return self._json(415, {"ok": False, "message": "Content-Type must be application/json"})
-        if path == "/api/read-settings":  # only adds reads, changes nothing
-            res = self.controller.request_settings_read()
-            return self._json(200 if res["ok"] else 409, res)
-        if self.auth is None:
-            what = {"/api/delete-logs": "deleting logs",
-                    "/api/cloud": "switching cloud monitoring"}.get(path, "writes")
+        if needs_auth and self.auth is None:
             return self._json(403, {"ok": False, "message":
-                                    f"set UI_USER and UI_PASSWORD to allow {what} from the web UI"})
+                                    f"set UI_USER and UI_PASSWORD to allow {needs_auth} from the web UI"})
         try:
             length = int(self.headers.get("Content-Length") or 0)
             req = json.loads(self.rfile.read(min(length, 65536)) or b"{}")
-            key = str(req.get("key", ""))
-        except (ValueError, AttributeError):
+            if not isinstance(req, dict):
+                raise ValueError
+        except ValueError:
             return self._json(400, {"ok": False, "message": "invalid JSON"})
-        if path == "/api/delete-logs":
-            return self._delete_logs(req.get("names"))
-        if path == "/api/cloud":
-            if not isinstance(req.get("enabled"), bool):
-                return self._json(400, {"ok": False, "message": "enabled must be true or false"})
-            try:
-                st = self.cloud.set_enabled(req["enabled"])
-            except ValueError as exc:
-                return self._json(409, {"ok": False, "message": str(exc)})
-            st["ui_auth"] = True
-            return self._json(200, {"ok": True, **st})
-        from controller import WriteError
-        if path == "/api/cancel":
-            ok = self.controller.cancel_write(key, source="web")
-            return self._json(200, {"ok": ok, "message": "cancelled" if ok else "nothing pending"})
+        getattr(self, name)(req)
+
+    def _json(self, code: int, obj) -> None:
+        self._send(code, json.dumps(obj, separators=(",", ":")).encode(), "application/json")
+
+    def _with_auth(self, snap: dict) -> dict:
+        snap["ui_auth"] = self.auth is not None
+        return snap
+
+    # -- GET handlers -------------------------------------------------------
+
+    def _home(self, _query):
+        return self._page("monitor.html") if self.monitor else self._index()
+
+    def _registers_page(self, _query):
+        self._page("registers.html")
+
+    def _heating_page(self, _query):
+        self._page("settings.html")
+
+    def _app_settings_page(self, _query):
+        self._page("app_settings.html")
+
+    def _api_monitor(self, query: str):
         try:
-            res = self.controller.request_write(key, req.get("value"), source="web")
+            hours = float(urllib.parse.parse_qs(query).get("hours", ["24"])[0])
+        except ValueError:
+            hours = 24
+        hours = min(max(hours, 0.1), 24 * 30)
+        self._json(200, self.monitor.snapshot(hours))
+
+    def _api_registers(self, _query):
+        self._json(200, {"now": time.time(), "loading": self.monitor.loading,
+                         "registers": self.monitor.registers.snapshot()})
+
+    def _api_control(self, _query):
+        self._json(200, self._with_auth(self.controller.snapshot()))
+
+    def _api_settings(self, _query):
+        self._json(200, self._with_auth(self.controller.settings_snapshot()))
+
+    def _api_cloud(self, _query):
+        self._json(200, self._with_auth(self.cloud.status()))
+
+    # -- POST handlers ------------------------------------------------------
+
+    def _post_read_settings(self, _req):  # only adds reads, changes nothing
+        res = self.controller.request_settings_read()
+        self._json(200 if res["ok"] else 409, res)
+
+    def _post_delete_logs(self, req):
+        self._delete_logs(req.get("names"))
+
+    def _post_cloud(self, req):
+        if not isinstance(req.get("enabled"), bool):
+            return self._json(400, {"ok": False, "message": "enabled must be true or false"})
+        try:
+            st = self.cloud.set_enabled(req["enabled"])
+        except ValueError as exc:
+            return self._json(409, {"ok": False, "message": str(exc)})
+        st["ui_auth"] = True
+        self._json(200, {"ok": True, **st})
+
+    def _post_cancel(self, req):
+        ok = self.controller.cancel_write(str(req.get("key", "")), source="web")
+        self._json(200, {"ok": ok, "message": "cancelled" if ok else "nothing pending"})
+
+    def _post_set(self, req):
+        try:
+            res = self.controller.request_write(str(req.get("key", "")), req.get("value"), source="web")
         except WriteError as exc:
             return self._json(409, {"ok": False, "message": str(exc)})
-        return self._json(200, {"ok": True, **res})
+        self._json(200, {"ok": True, **res})
 
-    def _index(self):
+    # -- pages and files ----------------------------------------------------
+
+    def _index(self, _query=None):
         files = self._files()
         rows = "".join(
             f'<tr><td><a href="/files/{urllib.parse.quote(n)}">{html.escape(n)}</a></td>'
@@ -297,25 +358,13 @@ class LogUIHandler(BaseHTTPRequestHandler):
             except OSError as exc:
                 errors.append(f"{name}: {exc.strerror}")
         if deleted:
-            print(f"log UI: deleted {', '.join(deleted)}", flush=True)
+            print(f"web UI: deleted {', '.join(deleted)}", flush=True)
         self._json(200 if not errors else 409,
                    {"ok": not errors, "deleted": deleted, "message": "; ".join(errors) or "deleted"})
 
-    def _monitor_page(self):
-        self._page("monitor.html")
-
     def _page(self, name: str):
-        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), name), "rb") as fh:
+        with open(os.path.join(PAGES, name), "rb") as fh:
             self._send(200, fh.read(), "text/html; charset=utf-8")
-
-    def _monitor_api(self, query: str):
-        try:
-            hours = float(urllib.parse.parse_qs(query).get("hours", ["24"])[0])
-        except ValueError:
-            hours = 24
-        hours = min(max(hours, 0.1), 24 * 30)
-        body = json.dumps(self.monitor.snapshot(hours), separators=(",", ":")).encode()
-        self._send(200, body, "application/json")
 
     def _file(self, name: str):
         # Only plain file names directly inside LOG_DIR.
@@ -343,7 +392,7 @@ class LogUIHandler(BaseHTTPRequestHandler):
                 self.wfile.write(chunk)
                 remaining -= len(chunk)
 
-    def _zip(self):
+    def _zip(self, _query=None):
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
             for name, _, _ in self._files():
@@ -353,15 +402,15 @@ class LogUIHandler(BaseHTTPRequestHandler):
                    [("Content-Disposition", f'attachment; filename="estyma-logs-{stamp}.zip"')])
 
 
-def start_log_ui(host: str, port: int, log_dir: str,
+def start_web(host: str, port: int, log_dir: str,
                  user: str | None = None, password: str | None = None,
                  monitor=None, controller=None, cloud=None) -> ThreadingHTTPServer:
     """Start the UI in a background thread and return the server."""
     auth = f"{user}:{password}".encode() if user and password else None
-    handler = type("Handler", (LogUIHandler,), {"log_dir": os.path.abspath(log_dir), "auth": auth,
+    handler = type("Handler", (WebHandler,), {"log_dir": os.path.abspath(log_dir), "auth": auth,
                                                 "monitor": monitor, "controller": controller,
                                                 "cloud": cloud})
     server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True
-    threading.Thread(target=server.serve_forever, name="log-ui", daemon=True).start()
+    threading.Thread(target=server.serve_forever, name="web", daemon=True).start()
     return server

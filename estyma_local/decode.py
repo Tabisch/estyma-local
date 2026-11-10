@@ -17,7 +17,7 @@ publisher all use these, so they agree on which reads are glitches.
 
 from __future__ import annotations
 
-import catalog as C
+from . import catalog as C
 
 # Anything older than this (2017-07) in a time register is a glitch.
 MIN_TIME = 1_500_000_000

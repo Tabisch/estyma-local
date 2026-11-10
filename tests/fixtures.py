@@ -1,11 +1,6 @@
 """Synthetic controller/cloud messages in the recorded layout (fake IDs)."""
 
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "proxy"))
-
-import protocol as P  # noqa: E402
+from estyma_local import protocol as P  # noqa: F401  (re-exported for the tests)
 
 BASE = {
     (8548, 1): 256, (8485, 1): 1000040002, (16460, 1): 268, (8484, 1): 541570,

@@ -20,5 +20,5 @@
 - [home-assistant-roadmap.md](home-assistant-roadmap.md): phases towards a full local server and Home Assistant control
 - [development.md](development.md): code layout, generated files, tests, image build, log format
 
-Files marked *generated* are built by `tools/gendocs.py` from `proxy/catalog.py`
-and `proxy/config.py`; edit those, not the Markdown.
+Files marked *generated* are built by `python3 -m estyma_local.gendocs` from `estyma_local/catalog.py`
+and `estyma_local/config.py`; edit those, not the Markdown.
