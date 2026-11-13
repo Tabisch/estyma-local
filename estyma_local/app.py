@@ -143,8 +143,17 @@ def _start_web(cfg: Settings, log: ExchangeLog, ctl: Controller) -> None:
               f"(switch it in the web UI)", flush=True)
     except Exception as exc:  # never keep the proxy from starting
         print(f"cloud monitor unavailable: {type(exc).__name__}: {exc}", flush=True)
+    retention = None
+    try:
+        from .retention import LogRetention
+        retention = LogRetention(cfg.log_dir)
+        retention.start()
+        print(f"log auto delete: {'after ' + str(retention.days) + ' days' if retention.enabled else 'off'} "
+              f"(change it in the web UI)", flush=True)
+    except Exception as exc:  # never keep the proxy from starting
+        print(f"log auto delete unavailable: {type(exc).__name__}: {exc}", flush=True)
     start_web(cfg.listen_host, cfg.ui_port, cfg.log_dir, cfg.ui_user, cfg.ui_password,
-              monitor=mon, controller=ctl, cloud=cloud)
+              monitor=mon, controller=ctl, cloud=cloud, retention=retention)
     auth = "basic auth on" if cfg.ui_user and cfg.ui_password else "no auth"
     print(f"web UI on http://{cfg.listen_host}:{cfg.ui_port}/ ({auth})", flush=True)
 
