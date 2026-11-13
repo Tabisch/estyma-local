@@ -183,7 +183,7 @@ One HA device "Estyma boiler" (model from `8485` device type, firmware from
 | Flue gas oxygen | sensor, % | 8480,1 /100 | |
 | Burner power | sensor, % | 16389,1 low byte | |
 | Lambda PWM | sensor, diagnostic | 16391,1 low byte | |
-| Burner status | sensor, enum (off, ignition, glowing, modulating, cleaning, error, unknown N) | 8199,1 low byte | |
+| Burner status | sensor, enum (off, ignition, glowing, modulating, cleaning, sustain, error, unknown N) | 8199,1 low byte | |
 | Boiler pump / circuit 1 pump | binary_sensor, running | 8823 / 8857 low byte | |
 | Boiler on | switch | 8197,1 low byte (write 0/1) | write confirmed; needs extra care, see safety |
 | Operation mode | select | 8194,1 | values still to map |
