@@ -162,6 +162,33 @@ class ServerTest(unittest.TestCase):
         items = {i["key"]: i for g in snap["groups"] for i in g["items"]}
         self.assertEqual(items["hyst_on"]["value"], 8)
 
+    def test_pellet_batch_snapshots(self):
+        self.start("hybrid")
+        self.poll(report(r8712_1=10))
+        code, page = self.ui("GET", "/batches")
+        self.assertEqual(code, 200)
+        self.assertIn("Estyma pellet batches", page)
+        _, heating = self.ui("GET", "/heating")
+        self.assertIn('href="/batches"', heating)
+        code, res = self.ui("POST", "/api/snapshots/save", {"supplier": "", "date": ""})
+        self.assertEqual(code, 409)
+        code, res = self.ui("POST", "/api/snapshots/save",
+                            {"supplier": "Supplier A", "date": "2026-11-01", "comment": "test"})
+        self.assertEqual(code, 200, res)
+        sid = res["snapshot"]["id"]
+        _, lst = self.ui("GET", "/api/snapshots")
+        self.assertEqual(lst["suppliers"], ["Supplier A"])
+        items = {i["key"]: i for i in lst["snapshots"][0]["settings"]}
+        self.assertEqual(items["hyst_on"]["value"], 10)
+        code, res = self.ui("POST", "/api/snapshots/update", {"id": sid, "comment": "changed"})
+        self.assertEqual((code, res["snapshot"]["comment"]), (200, "changed"))
+        code, _ = self.ui("POST", "/api/snapshots/delete", {"id": sid}, auth=False)
+        self.assertEqual(code, 401)
+        code, _ = self.ui("POST", "/api/snapshots/delete", {"id": sid})
+        self.assertEqual(code, 200)
+        code, _ = self.ui("POST", "/api/snapshots/delete", {"id": sid})
+        self.assertEqual(code, 404)
+
     def test_local_mode_answers_without_cloud(self):
         self.start("local", clock_sync=3600)
         status, text = self.poll(report())

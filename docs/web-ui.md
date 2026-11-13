@@ -37,12 +37,24 @@ Open `http://<proxy_host>:8089/`.
   Changing them works like the boiler target (see [operating-modes.md](operating-modes.md))
   and asks for confirmation first. This is the only page that writes to the
   controller; the monitor page only shows values. JSON at `/api/settings`.
+- **Pellet batches** (`/batches`): a log of the heating settings used with
+  each pellet batch. *Save settings* stores the values shown on
+  `/heating` at that moment (read them there first) with a supplier, a date
+  (default today) and a free comment. Each saved entry shows how many values
+  differ from the entry before it; *Show settings* lists every value next to
+  the entry before and the boiler's current value, with differences
+  highlighted, and can be narrowed to the changed ones. Supplier, date and
+  comment can be edited later; the saved values cannot. Read only: nothing is
+  written to the controller. Deleting an entry needs `UI_USER` /
+  `UI_PASSWORD`. The entries are kept in `settings-snapshots.json` in the log
+  volume, which the log deletion leaves alone. JSON at `/api/snapshots`.
 - **Logs** (`/logs`): every log file in the volume with size and date, a
   download link per file and a "Download all (zip)" button. Each `.jsonl`
   file has a *Delete* button, and *Delete all .jsonl* clears them all (both
   ask first). Deleting only works when `UI_USER` / `UI_PASSWORD` are set;
-  `state.json` (the server's register state) and `registers.json` (the
-  register table) cannot be deleted from here.
+  `state.json` (the server's register state), `registers.json` (the
+  register table) and `settings-snapshots.json` (the pellet batches) cannot
+  be deleted from here.
   Charts already loaded in the monitor keep their data until the next restart.
 - **Settings** (`/settings`): settings of this app itself, kept apart from
   the heating controller's settings on `/heating`. For now it holds the
