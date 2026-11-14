@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estyma pellet batches</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f6f6f4; --surface: #fcfcfb; --border: #e3e2de;
+  --text: #0b0b0b; --text-2: #52514e; --muted: #7d7c77;
+  --accent: #2a78d6; --hl: #e8f1fc; --chg: #fff3d6;
+  --good: #1a7f37; --warn: #b26b00; --bad: #c62828;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #111110; --surface: #1a1a19; --border: #2e2e2c;
+    --text: #f0efec; --text-2: #c3c2b7; --muted: #8f8e88;
+    --accent: #3987e5; --hl: #182638; --chg: #3a2e12;
+    --good: #4cc26a; --warn: #e0a030; --bad: #ef6b6b;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 system-ui, sans-serif; }
+main { max-width: 60rem; margin: 0 auto; padding: 1rem 16px 3rem; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem 1.5rem; }
+h1 { font-size: 1.35rem; margin: .2rem 0; }
+h2 { font-size: 1.05rem; margin: 1.6rem 0 .5rem; display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: baseline; }
+nav { display: flex; flex-wrap: wrap; row-gap: .25rem; }
+nav a { color: var(--accent); text-decoration: none; margin-right: 1rem; white-space: nowrap; }
+nav a.on { color: var(--text); font-weight: 600; }
+.range { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; vertical-align: middle; margin-left: auto; }
+.range button { background: var(--surface); color: var(--text-2); border: 0; padding: .3rem .7rem; font: inherit; font-size: .85rem; cursor: pointer; }
+.range button + button { border-left: 1px solid var(--border); }
+.range button.on { background: var(--accent); color: #fff; }
+.intro { color: var(--text-2); font-size: .9rem; margin: .6rem 0 0; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .8rem .9rem; }
+.card + .card { margin-top: .6rem; }
+.form { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: .6rem 1rem; }
+.form label { display: flex; flex-direction: column; gap: .2rem; font-size: .85rem; color: var(--text-2); min-width: 0; }
+.form label.wide { grid-column: 1 / -1; }
+input, textarea, select { font: inherit; padding: .35rem .5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); width: 100%; min-width: 0; }
+textarea { resize: vertical; min-height: 4.2rem; }
+.actions { display: flex; gap: .5rem 1rem; align-items: center; flex-wrap: wrap; margin-top: .7rem; }
+.btn { font: inherit; font-size: .88rem; padding: .32rem .75rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.danger { color: var(--bad); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.note { font-size: .82rem; color: var(--text-2); }
+.note.err { color: var(--bad); }
+.note.ok { color: var(--good); }
+.note:empty { display: none; }
+.muted { color: var(--muted); font-size: .85rem; }
+.filter { font-size: .85rem; font-weight: 400; display: flex; gap: .4rem; align-items: center; color: var(--text-2); }
+.filter select { width: auto; font-size: .85rem; padding: .2rem .4rem; }
+.snap-head { display: flex; flex-wrap: wrap; gap: .3rem 1rem; align-items: baseline; }
+.snap-head .date { font-weight: 600; font-variant-numeric: tabular-nums; }
+.snap-head .supplier { font-weight: 600; }
+.snap-head .meta { color: var(--muted); font-size: .82rem; }
+.snap-head .btns { margin-left: auto; display: flex; gap: .4rem; flex-wrap: wrap; }
+.comment { white-space: pre-wrap; margin: .4rem 0 0; color: var(--text-2); overflow-wrap: anywhere; }
+.chg { display: inline-block; padding: 0 .45rem; border-radius: 999px; font-size: .75rem; border: 1px solid var(--warn); color: var(--warn); }
+.tablewrap { overflow-x: auto; margin-top: .6rem; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: .3rem .55rem; border-bottom: 1px solid var(--border); font-size: .85rem; vertical-align: top; }
+th { color: var(--text-2); font-weight: 600; }
+td.v { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.diff { background: var(--chg); }
+tr.grp td { font-weight: 600; color: var(--text-2); background: var(--bg); }
+.reg { color: var(--muted); font-size: .78rem; }
+.hidden { display: none; }
+@media (max-width: 640px) {
+  .form { grid-template-columns: minmax(0, 1fr); }
+  .snap-head .btns { margin-left: 0; width: 100%; }
+}
+</style></head><body><main>
+<header>
+  <h1 data-i18n="title">Pellet batches</h1>
+  <nav><a href="/" data-i18n="nav.monitor">Monitor</a><a href="/heating" data-i18n="nav.settings">Heating settings</a><a class="on" href="/batches" data-i18n="nav.batches">Pellet batches</a><a href="/registers" data-i18n="nav.registers">Registers</a><a href="/logs" data-i18n="nav.logs">Logs</a><a href="/settings" data-i18n="nav.app">Settings</a></nav>
+  <span class="range" id="lang" role="group" aria-label="Language"><button data-l="en" lang="en">EN</button><button data-l="de" lang="de">DE</button></span>
+</header>
+<p class="intro" data-i18n="intro">Keep a log of the heating settings you used with each pellet batch. Saving stores the values shown on "Heating settings" right now, with the supplier, a date and your comment. Nothing is written to the boiler.</p>
+
+<h2 data-i18n="h.save">Save current settings</h2>
+<div class="card">
+  <div class="form">
+    <label><span data-i18n="f.supplier">Supplier</span><input id="supplier" list="suppliers" maxlength="100" autocomplete="off"></label>
+    <label><span data-i18n="f.date">Date</span><input id="date" type="date"></label>
+    <label class="wide"><span data-i18n="f.comment">Comment</span><textarea id="comment" maxlength="4000" data-i18n-ph="f.comment.ph"></textarea></label>
+  </div>
+  <datalist id="suppliers"></datalist>
+  <div class="actions">
+    <button class="btn primary" id="save" data-i18n="save">Save settings</button>
+    <span class="note" id="current"></span>
+    <span class="note" id="save-note"></span>
+  </div>
+</div>
+
+<h2><span data-i18n="h.saved">Saved settings</span>
+  <span class="filter" id="filter-box"><span data-i18n="filter">Supplier</span><select id="filter"></select></span></h2>
+<div id="list"><p class="muted" data-i18n="loading">Loading…</p></div>
+<p class="muted" data-i18n="footer">Kept in settings-snapshots.json in the log volume; the automatic log deletion and the Logs page's delete buttons leave it alone. Highlighted values differ from the batch saved before, or from the boiler's current value.</p>
+</main>
+<script>
+"use strict";
+const I18N = {
+  en: {
+    "title": "Pellet batches", "nav.monitor": "Monitor", "nav.settings": "Heating settings", "nav.batches": "Pellet batches", "nav.registers": "Registers", "nav.logs": "Logs", "nav.app": "Settings", "loading": "Loading…",
+    "intro": "Keep a log of the heating settings you used with each pellet batch. Saving stores the values shown on \"Heating settings\" right now, with the supplier, a date and your comment. Nothing is written to the boiler.",
+    "h.save": "Save current settings", "f.supplier": "Supplier", "f.date": "Date", "f.comment": "Comment", "f.comment.ph": "e.g. 6 mm, a bit more ash, lowered feeder time",
+    "save": "Save settings", "saved": "Saved.", "h.saved": "Saved settings", "filter": "Supplier", "all": "All ({n})",
+    "footer": "Kept in settings-snapshots.json in the log volume; the automatic log deletion and the Logs page's delete buttons leave it alone. Highlighted values differ from the batch saved before, or from the boiler's current value.",
+    "cur": "{n} of {m} settings read, {ago}", "cur.never": "Settings not read yet: read them on \"Heating settings\" first", "cur.proxy": "the values the cloud's service panel read last",
+    "none": "Nothing saved yet.", "none.f": "Nothing saved for this supplier.",
+    "details": "Show settings", "hide": "Hide settings", "edit": "Edit", "delete": "Delete", "cancel": "Cancel", "store": "Save",
+    "changes": "{n} changed", "changes1": "1 changed", "first": "first batch", "same": "no change",
+    "savedat": "saved {t}", "editedat": "edited {t}", "readat": "settings read {t}",
+    "col.setting": "Setting", "col.this": "This batch", "col.prev": "Batch before", "col.now": "Now",
+    "onlydiff": "Only changed values", "confirm.del": "Delete the settings saved on {d} ({s}) for good?",
+    "needauth": "Set UI_USER and UI_PASSWORD to delete saved settings.", "unreachable": "Not reachable ({e})",
+    "on": "on", "off": "off",
+    "ago.s": "{n} s ago", "ago.min": "{n} min ago", "ago.h": "{n} h ago", "ago.d": "{n} d ago",
+  },
+  de: {
+    "title": "Pelletchargen", "nav.monitor": "Monitor", "nav.settings": "Heizungseinstellungen", "nav.batches": "Pelletchargen", "nav.registers": "Register", "nav.logs": "Logs", "nav.app": "Einstellungen", "loading": "Lädt…",
+    "intro": "Ein Protokoll der Heizungseinstellungen für jede Pelletcharge. Speichern übernimmt die Werte, die \"Heizungseinstellungen\" gerade zeigt, zusammen mit Lieferant, Datum und Kommentar. Am Kessel wird nichts geändert.",
+    "h.save": "Aktuelle Einstellungen speichern", "f.supplier": "Lieferant", "f.date": "Datum", "f.comment": "Kommentar", "f.comment.ph": "z. B. 6 mm, etwas mehr Asche, Förderzeit verringert",
+    "save": "Einstellungen speichern", "saved": "Gespeichert.", "h.saved": "Gespeicherte Einstellungen", "filter": "Lieferant", "all": "Alle ({n})",
+    "footer": "Gespeichert in settings-snapshots.json im Log-Volume; das automatische Löschen alter Logs und die Löschknöpfe der Logs-Seite lassen die Datei in Ruhe. Hervorgehoben sind Werte, die sich von der vorher gespeicherten Charge oder vom aktuellen Wert des Kessels unterscheiden.",
+    "cur": "{n} von {m} Einstellungen gelesen, {ago}", "cur.never": "Einstellungen noch nicht gelesen: zuerst unter \"Heizungseinstellungen\" lesen", "cur.proxy": "die Werte, die das Servicepanel der Cloud zuletzt gelesen hat",
+    "none": "Noch nichts gespeichert.", "none.f": "Für diesen Lieferanten ist nichts gespeichert.",
+    "details": "Einstellungen zeigen", "hide": "Einstellungen ausblenden", "edit": "Bearbeiten", "delete": "Löschen", "cancel": "Abbrechen", "store": "Speichern",
+    "changes": "{n} geändert", "changes1": "1 geändert", "first": "erste Charge", "same": "keine Änderung",
+    "savedat": "gespeichert {t}", "editedat": "bearbeitet {t}", "readat": "Einstellungen gelesen {t}",
+    "col.setting": "Einstellung", "col.this": "Diese Charge", "col.prev": "Charge davor", "col.now": "Jetzt",
+    "onlydiff": "Nur geänderte Werte", "confirm.del": "Die am {d} gespeicherten Einstellungen ({s}) endgültig löschen?",
+    "needauth": "UI_USER und UI_PASSWORD setzen, um gespeicherte Einstellungen zu löschen.", "unreachable": "Nicht erreichbar ({e})",
+    "on": "an", "off": "aus",
+    "ago.s": "vor {n} s", "ago.min": "vor {n} min", "ago.h": "vor {n} h", "ago.d": "vor {n} T",
+  },
+};
+const SERVER_MSG = {
+  de: [
+    [/^supplier is required$/, "Lieferant fehlt"],
+    [/^(supplier|comment) is too long \(max (\d+) characters\)$/, "$1 ist zu lang (höchstens $2 Zeichen)"],
+    [/^date must be YYYY-MM-DD$/, "Datum muss JJJJ-MM-TT sein"],
+    [/^no settings read yet, read the settings first$/, "Noch keine Einstellungen gelesen, zuerst die Einstellungen lesen"],
+    [/^no such snapshot$/, "Eintrag nicht gefunden"],
+    [/^too many snapshots \(max (\d+)\), delete old ones first$/, "Zu viele Einträge (höchstens $1), zuerst alte löschen"],
+    [/^cannot save: (.+)$/, "Speichern fehlgeschlagen: $1"],
+    [/^set UI_USER and UI_PASSWORD to allow deleting saved settings from the web UI$/, "UI_USER und UI_PASSWORD setzen, um gespeicherte Einstellungen zu löschen"],
+  ],
+};
+
+let lang = "";
+try { lang = localStorage.getItem("estyma-lang") || ""; } catch (e) {}
+if (!I18N[lang]) lang = (navigator.languages || [navigator.language || "en"]).map((l) => String(l).slice(0, 2).toLowerCase()).find((l) => I18N[l]) || "en";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const T = (key, vars) => {
+  let s = I18N[lang][key] ?? I18N.en[key] ?? key;
+  for (const [k, v] of Object.entries(vars || {})) s = s.replace("{" + k + "}", v);
+  return s;
+};
+const srvMsg = (m) => {
+  if (!m) return "";
+  for (const [re, out] of SERVER_MSG[lang] || []) if (re.test(m)) return m.replace(re, out);
+  return m;
+};
+const ago = (s) => s < 90 ? T("ago.s", { n: Math.max(0, Math.round(s)) }) : s < 5400 ? T("ago.min", { n: Math.round(s / 60) })
+  : s < 172800 ? T("ago.h", { n: Math.round(s / 3600) }) : T("ago.d", { n: Math.round(s / 86400) });
+const L = (o, k = "label") => (lang === "de" && o[k + "_de"]) || o[k] || "";
+const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const fmtDate = (iso) => { const [y, m, d] = String(iso).split("-").map(Number); return y ? new Date(y, m - 1, d).toLocaleDateString(lang) : iso; };
+const fmtTime = (t) => t ? new Date(t * 1000).toLocaleString(lang) : "";
+
+// One value as shown on /heating; it.option is the [en, de] name of an enum value.
+function show(it, v, opt) {
+  if (v == null) return "–";
+  if (opt) return opt[lang === "de" ? 1 : 0];
+  if (it.kind === "bool") return T(v ? "on" : "off");
+  const dec = it.step && it.step < 1 ? 1 : Number.isInteger(v) ? 0 : 1;
+  return Number(v).toLocaleString(lang, { minimumFractionDigits: dec, maximumFractionDigits: dec }) + (it.unit ? " " + it.unit : "");
+}
+
+let data = null, current = null, error = null, open = {}, onlyDiff = {}, editing = null, notes = {}, filter = "";
+
+function currentByKey() {
+  const out = {};
+  if (current) for (const g of current.groups) for (const it of g.items) out[it.key] = it;
+  return out;
+}
+
+function renderCurrent() {
+  const el = $("current");
+  if (!current) { el.textContent = ""; return; }
+  const items = current.groups.flatMap((g) => g.items), n = items.filter((i) => i.value != null).length;
+  const s = current.settings;
+  el.className = "note" + (n ? "" : " err");
+  el.textContent = !n ? T("cur.never")
+    : T("cur", { n, m: items.length, ago: current.mode === "proxy" || !s.read ? T("cur.proxy") : ago(current.now - s.read) });
+}
+
+function render() {
+  renderCurrent();
+  const sn = $("save-note"), nt = notes._save;
+  sn.className = "note" + (nt ? (nt.err ? " err" : " ok") : "");
+  sn.textContent = nt ? (nt.err ? srvMsg(nt.text) : T("saved")) : "";
+  if (error && !data) { $("list").innerHTML = `<p class="muted">${esc(T("unreachable", { e: error }))}</p>`; return; }
+  if (!data) return;
+  $("suppliers").innerHTML = data.suppliers.map((s) => `<option value="${esc(s)}">`).join("");
+  if (filter && !data.suppliers.includes(filter)) filter = "";
+  $("filter").innerHTML = `<option value="">${esc(T("all", { n: data.snapshots.length }))}</option>`
+    + data.suppliers.map((s) => `<option value="${esc(s)}"${s === filter ? " selected" : ""}>${esc(s)} (${data.snapshots.filter((x) => x.supplier === s).length})</option>`).join("");
+  $("filter-box").classList.toggle("hidden", data.suppliers.length < 2);
+
+  const all = data.snapshots, now = currentByKey();
+  const shown = all.map((s, i) => [s, all[i + 1] || null]).filter(([s]) => !filter || s.supplier === filter);
+  if (!shown.length) { $("list").innerHTML = `<p class="muted">${esc(T(all.length ? "none.f" : "none"))}</p>`; return; }
+  $("list").innerHTML = shown.map(([s, prev]) => {
+    const pv = prev ? Object.fromEntries(prev.settings.map((it) => [it.key, it])) : {};
+    const differs = (a, b) => a && b && a.value != null && b.value != null && a.value !== b.value;
+    const nchg = prev ? s.settings.filter((it) => differs(it, pv[it.key])).length : 0;
+    const badge = !prev ? `<span class="meta">${esc(T("first"))}</span>`
+      : nchg ? `<span class="chg">${esc(nchg === 1 ? T("changes1") : T("changes", { n: nchg }))}</span>` : `<span class="meta">${esc(T("same"))}</span>`;
+    const meta = [T("savedat", { t: fmtTime(s.created) }), s.updated ? T("editedat", { t: fmtTime(s.updated) }) : ""].filter(Boolean).join(" · ");
+    const nt = notes[s.id];
+    let head;
+    if (editing === s.id) {
+      head = `<div class="form">
+        <label><span>${esc(T("f.supplier"))}</span><input data-e="supplier" list="suppliers" maxlength="100" value="${esc(s.supplier)}"></label>
+        <label><span>${esc(T("f.date"))}</span><input data-e="date" type="date" value="${esc(s.date)}"></label>
+        <label class="wide"><span>${esc(T("f.comment"))}</span><textarea data-e="comment" maxlength="4000">${esc(s.comment)}</textarea></label></div>
+        <div class="actions"><button class="btn primary" data-store="${s.id}">${esc(T("store"))}</button><button class="btn" data-cancel="1">${esc(T("cancel"))}</button>
+        <span class="note${nt && nt.err ? " err" : ""}">${esc(nt ? srvMsg(nt.text) : "")}</span></div>`;
+    } else {
+      head = `<div class="snap-head"><span class="date">${esc(fmtDate(s.date))}</span><span class="supplier">${esc(s.supplier)}</span>${badge}
+        <span class="btns"><button class="btn" data-open="${s.id}">${esc(T(open[s.id] ? "hide" : "details"))}</button>
+        <button class="btn" data-edit="${s.id}">${esc(T("edit"))}</button>
+        <button class="btn danger" data-del="${s.id}"${data.ui_auth ? "" : ` disabled title="${esc(T("needauth"))}"`}>${esc(T("delete"))}</button></span></div>`
+        + (s.comment ? `<p class="comment">${esc(s.comment)}</p>` : "")
+        + `<div class="meta muted">${esc(meta)}</div>`
+        + (nt ? `<div class="note${nt.err ? " err" : ""}">${esc(srvMsg(nt.text))}</div>` : "");
+    }
+    let table = "";
+    if (open[s.id]) {
+      let grp = null;
+      const rows = s.settings.filter((it) => !onlyDiff[s.id] || differs(it, pv[it.key]) || differs(it, now[it.key])).map((it) => {
+        const p = pv[it.key], c = now[it.key];
+        const cOpt = c && c.options ? c.options[String(c.value)] : null;
+        let r = "";
+        if (it.group !== grp) { grp = it.group; r += `<tr class="grp"><td colspan="4">${esc(L(it, "group_label"))}</td></tr>`; }
+        return r + `<tr><td>${esc(L(it))}<div class="reg">${esc(it.register || "")}</div></td>`
+          + `<td class="v">${esc(show(it, it.value, it.option))}</td>`
+          + `<td class="v${differs(it, p) ? " diff" : ""}">${prev ? esc(show(it, p ? p.value : null, p && p.option)) : ""}</td>`
+          + `<td class="v${differs(it, c) ? " diff" : ""}">${esc(show(it, c ? c.value : null, cOpt || (c && it.value === c.value ? it.option : null)))}</td></tr>`;
+      }).join("");
+      table = `<div class="actions"><label class="note"><input type="checkbox" data-diff="${s.id}" style="width:auto"${onlyDiff[s.id] ? " checked" : ""}> ${esc(T("onlydiff"))}</label>`
+        + (s.settings_read ? `<span class="muted">${esc(T("readat", { t: fmtTime(s.settings_read) }))}</span>` : "") + `</div>`
+        + `<div class="tablewrap"><table><thead><tr><th>${esc(T("col.setting"))}</th><th>${esc(T("col.this"))}</th><th>${esc(T("col.prev"))}</th><th>${esc(T("col.now"))}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    }
+    return `<div class="card">${head}${table}</div>`;
+  }).join("");
+}
+
+async function load() {
+  try {
+    const [a, b] = await Promise.all([fetch("/api/snapshots", { cache: "no-store" }), fetch("/api/settings", { cache: "no-store" })]);
+    if (!a.ok) throw new Error("HTTP " + a.status);
+    data = await a.json(); error = null;
+    if (b.ok) current = await b.json();
+  } catch (e) { error = e.message || String(e); }
+  if (editing === null) render(); else renderCurrent();
+}
+
+async function post(url, body, k) {
+  let ok = false;
+  try {
+    const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({ message: "HTTP " + r.status }));
+    ok = r.ok && j.ok !== false;
+    notes[k] = ok ? null : { text: j.message, err: true };
+    if (ok && k === "_save") notes[k] = { text: "saved", err: false };
+  } catch (e) { notes[k] = { text: e.message, err: true }; }
+  setTimeout(() => { delete notes[k]; render(); }, 8000);
+  return ok;
+}
+
+$("save").addEventListener("click", async () => {
+  const b = $("save"); b.disabled = true;
+  const ok = await post("/api/snapshots/save", { supplier: $("supplier").value, date: $("date").value, comment: $("comment").value }, "_save");
+  b.disabled = false;
+  if (ok) { $("comment").value = ""; }
+  await load(); render();
+});
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("button"); if (!b || b.closest("#lang") || b.id === "save") return;
+  if (b.dataset.open) { open[b.dataset.open] = !open[b.dataset.open]; return render(); }
+  if (b.dataset.edit) { editing = b.dataset.edit; return render(); }
+  if (b.dataset.cancel) { editing = null; return render(); }
+  if (b.dataset.store) {
+    const id = b.dataset.store, v = (n) => document.querySelector(`[data-e="${n}"]`).value;
+    if (await post("/api/snapshots/update", { id, supplier: v("supplier"), date: v("date"), comment: v("comment") }, id)) editing = null;
+    await load(); return render();
+  }
+  if (b.dataset.del) {
+    const s = data.snapshots.find((x) => x.id === b.dataset.del); if (!s) return;
+    if (!confirm(T("confirm.del", { d: fmtDate(s.date), s: s.supplier }))) return;
+    await post("/api/snapshots/delete", { id: s.id }, s.id);
+    await load(); render();
+  }
+});
+document.addEventListener("change", (e) => {
+  if (e.target.id === "filter") { filter = e.target.value; return render(); }
+  const k = e.target.dataset && e.target.dataset.diff;
+  if (k) { onlyDiff[k] = e.target.checked; render(); }
+});
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = T(el.dataset.i18n); });
+  document.querySelectorAll("[data-i18n-ph]").forEach((el) => { el.placeholder = T(el.dataset.i18nPh); });
+  for (const b of $("lang").children) b.classList.toggle("on", b.dataset.l === lang);
+  render();
+}
+$("lang").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b || b.dataset.l === lang) return;
+  lang = b.dataset.l;
+  try { localStorage.setItem("estyma-lang", lang); } catch (err) {}
+  applyLang();
+});
+$("date").value = today();
+applyLang();
+load();
+setInterval(load, 30000);
+</script>
+</body></html>

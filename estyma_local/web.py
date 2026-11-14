@@ -1,11 +1,11 @@
 """The web UI on UI_PORT (default 8089): monitor, registers, heating
-settings, app settings and log downloads, plus the JSON API behind them.
+settings, saved settings per pellet batch, app settings and log downloads, plus the JSON API behind them.
 
 Every page and API call is one entry in ``WebHandler.GET`` / ``POST``; the
 HTML pages are in ``pages/``. Runs in the server process on its own port,
 never on the proxy port. Files are only served from directly inside LOG_DIR.
 Optional HTTP basic auth via UI_USER / UI_PASSWORD; writes, switching cloud
-monitoring and deleting logs need it.
+monitoring and deleting logs or saved settings need it.
 
 Logs contain whatever the controller sends (device IDs, PINs, ...). Keep the
 port on your LAN.
@@ -26,6 +26,7 @@ import zipfile
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from .batches import SnapshotError
 from .controller import WriteError
 
 STARTED = time.time()
@@ -49,7 +50,7 @@ PAGE = """<!doctype html>
  .muted {{ color: #666; font-size: .9rem; }}
  @media (prefers-color-scheme: dark) {{ body {{ background: #111; color: #ddd; }} th, td {{ border-color: #333; }} a {{ color: #7aa7ff; }} }}
 </style></head><body>
-<p><a href="/" data-i18n="monitor">Monitor</a> &nbsp; <a href="/heating" data-i18n="settings">Heating settings</a> &nbsp; <a href="/registers" data-i18n="registers">Registers</a> &nbsp; <b data-i18n="logs">Logs</b> &nbsp; <a href="/settings" data-i18n="app">Settings</a></p>
+<p><a href="/" data-i18n="monitor">Monitor</a> &nbsp; <a href="/heating" data-i18n="settings">Heating settings</a> &nbsp; <a href="/batches" data-i18n="batches">Pellet batches</a> &nbsp; <a href="/registers" data-i18n="registers">Registers</a> &nbsp; <b data-i18n="logs">Logs</b> &nbsp; <a href="/settings" data-i18n="app">Settings</a></p>
 <h1 data-i18n="title">Estyma logs</h1>
 <p class="muted"><span data-i18n="files" data-n="{count}">{count} files</span>, {total} <span data-i18n="in">in</span> <code>{logdir}</code></p>
 {zip_link}{delall}
@@ -81,7 +82,7 @@ PAGE = """<!doctype html>
 <script>
 // Same language choice as the monitor page (stored in this browser).
 (function () {{
-  var de = {{ monitor: "Monitor", settings: "Heizungseinstellungen", registers: "Register", logs: "Logs", app: "Einstellungen", title: "Estyma-Logs", files: "{{n}} Dateien", "in": "in",
+  var de = {{ monitor: "Monitor", settings: "Heizungseinstellungen", batches: "Pelletchargen", registers: "Register", logs: "Logs", app: "Einstellungen", title: "Estyma-Logs", files: "{{n}} Dateien", "in": "in",
     file: "Datei", size: "Größe", modified: "Geändert", nologs: "Noch keine Logs.", zip: "Alle herunterladen (zip)",
     del: "Löschen", delall: "Alle .jsonl löschen", needauth: "Zum Löschen UI_USER und UI_PASSWORD setzen." }};
   var lang = "";
@@ -115,6 +116,7 @@ class WebHandler(BaseHTTPRequestHandler):
     monitor = None      # monitor.Monitor or None
     controller = None   # controller.Controller or None
     cloud = None        # cloud_monitor.CloudMonitor or None
+    snapshots = None    # batches.SnapshotStore or None
     retention = None    # retention.LogRetention or None
 
     def log_message(self, fmt, *args):
@@ -167,6 +169,7 @@ class WebHandler(BaseHTTPRequestHandler):
         "/logs": ("_index", None),
         "/registers": ("_registers_page", "monitor"),
         "/heating": ("_heating_page", "controller"),
+        "/batches": ("_batches_page", "snapshots"),
         "/settings": ("_app_settings_page", None),   # this app; the heating's are on /heating
         "/all.zip": ("_zip", None),
         "/api/monitor": ("_api_monitor", "monitor"),
@@ -174,6 +177,7 @@ class WebHandler(BaseHTTPRequestHandler):
         "/api/control": ("_api_control", "controller"),
         "/api/settings": ("_api_settings", "controller"),
         "/api/cloud": ("_api_cloud", "cloud"),
+        "/api/snapshots": ("_api_snapshots", "snapshots"),
         "/api/log-retention": ("_api_retention", "retention"),
     }
     # POST bodies are JSON. ``auth``: also needs UI_USER / UI_PASSWORD set
@@ -185,6 +189,9 @@ class WebHandler(BaseHTTPRequestHandler):
         "/api/log-retention": ("_post_retention", "retention", "deleting logs"),
         "/api/set": ("_post_set", "controller", "writes"),
         "/api/cancel": ("_post_cancel", "controller", "writes"),
+        "/api/snapshots/save": ("_post_snapshot_save", "snapshots", None),
+        "/api/snapshots/update": ("_post_snapshot_update", "snapshots", None),
+        "/api/snapshots/delete": ("_post_snapshot_delete", "snapshots", "deleting saved settings"),
     }
 
     def _route(self, table: dict, path: str):
@@ -260,6 +267,9 @@ class WebHandler(BaseHTTPRequestHandler):
     def _heating_page(self, _query):
         self._page("settings.html")
 
+    def _batches_page(self, _query):
+        self._page("batches.html")
+
     def _app_settings_page(self, _query):
         self._page("app_settings.html")
 
@@ -286,6 +296,10 @@ class WebHandler(BaseHTTPRequestHandler):
 
     def _api_retention(self, _query):
         self._json(200, self._with_auth(self.retention.status()))
+
+    def _api_snapshots(self, _query):
+        self._json(200, {"ui_auth": self.auth is not None, "can_save": self.controller is not None,
+                         "suppliers": self.snapshots.suppliers(), "snapshots": self.snapshots.list()})
 
     def _health(self):
         out = {"ok": True, "uptime_s": round(time.time() - STARTED)}
@@ -334,6 +348,35 @@ class WebHandler(BaseHTTPRequestHandler):
         except WriteError as exc:
             return self._json(409, {"ok": False, "message": str(exc)})
         self._json(200, {"ok": True, **res})
+
+    def _post_snapshot_save(self, req):
+        if self.controller is None:
+            return self._json(409, {"ok": False, "message": "no controller"})
+        try:
+            snap = self.snapshots.add(self.controller.settings_snapshot(), req.get("supplier"),
+                                      req.get("date"), req.get("comment"))
+        except SnapshotError as exc:
+            return self._json(409, {"ok": False, "message": str(exc)})
+        self._json(200, {"ok": True, "message": "saved", "snapshot": snap})
+
+    def _post_snapshot_update(self, req):
+        try:
+            snap = self.snapshots.update(str(req.get("id", "")), req.get("supplier"),
+                                         req.get("date"), req.get("comment"))
+        except KeyError:
+            return self._json(404, {"ok": False, "message": "no such snapshot"})
+        except SnapshotError as exc:
+            return self._json(409, {"ok": False, "message": str(exc)})
+        self._json(200, {"ok": True, "message": "saved", "snapshot": snap})
+
+    def _post_snapshot_delete(self, req):
+        try:
+            self.snapshots.delete(str(req.get("id", "")))
+        except KeyError:
+            return self._json(404, {"ok": False, "message": "no such snapshot"})
+        except SnapshotError as exc:
+            return self._json(409, {"ok": False, "message": str(exc)})
+        self._json(200, {"ok": True, "message": "deleted"})
 
     # -- pages and files ----------------------------------------------------
 
@@ -431,12 +474,18 @@ class WebHandler(BaseHTTPRequestHandler):
 
 def start_web(host: str, port: int, log_dir: str,
                  user: str | None = None, password: str | None = None,
-                 monitor=None, controller=None, cloud=None, retention=None) -> ThreadingHTTPServer:
-    """Start the UI in a background thread and return the server."""
+                 monitor=None, controller=None, cloud=None, retention=None,
+                 snapshots=None) -> ThreadingHTTPServer:
+    """Start the UI in a background thread and return the server. Without
+    ``snapshots`` a store in ``log_dir`` is made when there is a controller."""
     auth = f"{user}:{password}".encode() if user and password else None
+    if snapshots is None and controller is not None:
+        from .batches import SnapshotStore
+        snapshots = SnapshotStore(log_dir)
     handler = type("Handler", (WebHandler,), {"log_dir": os.path.abspath(log_dir), "auth": auth,
                                                 "monitor": monitor, "controller": controller,
-                                                "cloud": cloud, "retention": retention})
+                                                "cloud": cloud, "retention": retention,
+                                                "snapshots": snapshots})
     server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, name="web", daemon=True).start()

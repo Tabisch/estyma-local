@@ -28,6 +28,7 @@ header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem 1.5re
 header .range { margin-left: auto; }
 h1 { font-size: 1.35rem; margin: .2rem 0; }
 h2 { font-size: 1rem; margin: 1.6rem 0 .6rem; color: var(--text-2); font-weight: 600; }
+nav { display: flex; flex-wrap: wrap; row-gap: .25rem; }
 nav a { color: var(--accent); text-decoration: none; margin-right: 1rem; white-space: nowrap; }
 nav a.on { color: var(--text); font-weight: 600; }
 .status { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; color: var(--text-2); font-size: .9rem; margin: .6rem 0 0; }
@@ -79,7 +80,7 @@ code { font-size: .85em; word-break: break-all; }
 </style></head><body><main>
 <header>
   <h1>Estyma monitor</h1>
-  <nav><a class="on" href="/" data-i18n="nav.monitor">Monitor</a><a href="/heating" data-i18n="nav.settings">Heating settings</a><a href="/registers" data-i18n="nav.registers">Registers</a><a href="/logs" data-i18n="nav.logs">Logs</a><a href="/settings" data-i18n="nav.app">Settings</a></nav>
+  <nav><a class="on" href="/" data-i18n="nav.monitor">Monitor</a><a href="/heating" data-i18n="nav.settings">Heating settings</a><a href="/batches" data-i18n="nav.batches">Pellet batches</a><a href="/registers" data-i18n="nav.registers">Registers</a><a href="/logs" data-i18n="nav.logs">Logs</a><a href="/settings" data-i18n="nav.app">Settings</a></nav>
   <span class="range" id="lang" role="group" aria-label="Language"><button data-l="en" lang="en">EN</button><button data-l="de" lang="de">DE</button></span>
 </header>
 <div class="status" id="status" data-i18n="loading">Loading…</div>
@@ -123,7 +124,7 @@ const STALE_S = 120;
 // #lang. Missing keys fall back to English.
 const I18N = {
   en: {
-    "nav.monitor": "Monitor", "nav.settings": "Heating settings", "nav.registers": "Registers", "nav.logs": "Logs", "nav.app": "Settings", "loading": "Loading…",
+    "nav.monitor": "Monitor", "nav.settings": "Heating settings", "nav.batches": "Pellet batches", "nav.registers": "Registers", "nav.logs": "Logs", "nav.app": "Settings", "loading": "Loading…",
     "h.now": "Now", "h.history": "History", "h.settings": "Heating settings reported by the controller", "h.settings.edit": "Change", "h.connection": "Connection",
     "col.setting": "Setting", "col.value": "Value", "col.min": "Min", "col.max": "Max",
     "footer": "Values are decoded from what the controller reports, about every 20 s. Readings outside a plausible range (corrupted CAN reads) are dropped. Refreshes every 10 s.",
@@ -159,7 +160,7 @@ const I18N = {
     "cl.nodata": "No cloud data yet.",
   },
   de: {
-    "nav.monitor": "Monitor", "nav.settings": "Heizungseinstellungen", "nav.registers": "Register", "nav.logs": "Logs", "nav.app": "Einstellungen", "loading": "Lädt…",
+    "nav.monitor": "Monitor", "nav.settings": "Heizungseinstellungen", "nav.batches": "Pelletchargen", "nav.registers": "Register", "nav.logs": "Logs", "nav.app": "Einstellungen", "loading": "Lädt…",
     "h.now": "Aktuell", "h.history": "Verlauf", "h.settings": "Vom Regler gemeldete Heizungseinstellungen", "h.settings.edit": "Ändern", "h.connection": "Verbindung",
     "col.setting": "Einstellung", "col.value": "Wert", "col.min": "Min", "col.max": "Max",
     "footer": "Die Werte stammen aus den Meldungen des Reglers, etwa alle 20 s. Unplausible Werte (fehlerhafte CAN-Lesungen) werden verworfen. Aktualisiert alle 10 s.",

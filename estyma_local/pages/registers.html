@@ -24,6 +24,7 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 syst
 main { max-width: 72rem; margin: 0 auto; padding: 1rem 16px 3rem; }
 header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem 1.5rem; }
 h1 { font-size: 1.35rem; margin: .2rem 0; }
+nav { display: flex; flex-wrap: wrap; row-gap: .25rem; }
 nav a { color: var(--accent); text-decoration: none; margin-right: 1rem; white-space: nowrap; }
 nav a.on { color: var(--text); font-weight: 600; }
 .range { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; vertical-align: middle; margin-left: auto; }
@@ -71,7 +72,7 @@ tr.flash td.val { animation: flash 2s ease-out; }
 </style></head><body><main>
 <header>
   <h1 data-i18n="title">Registers</h1>
-  <nav><a href="/" data-i18n="nav.monitor">Monitor</a><a href="/heating" data-i18n="nav.settings">Heating settings</a><a class="on" href="/registers" data-i18n="nav.registers">Registers</a><a href="/logs" data-i18n="nav.logs">Logs</a><a href="/settings" data-i18n="nav.app">Settings</a></nav>
+  <nav><a href="/" data-i18n="nav.monitor">Monitor</a><a href="/heating" data-i18n="nav.settings">Heating settings</a><a href="/batches" data-i18n="nav.batches">Pellet batches</a><a class="on" href="/registers" data-i18n="nav.registers">Registers</a><a href="/logs" data-i18n="nav.logs">Logs</a><a href="/settings" data-i18n="nav.app">Settings</a></nav>
   <span class="range" id="lang" role="group" aria-label="Language"><button data-l="en" lang="en">EN</button><button data-l="de" lang="de">DE</button></span>
 </header>
 <div class="status" id="status" data-i18n="loading">Loading…</div>
@@ -96,7 +97,7 @@ tr.flash td.val { animation: flash 2s ease-out; }
 "use strict";
 const I18N = {
   en: {
-    "title": "Registers", "nav.monitor": "Monitor", "nav.settings": "Heating settings", "nav.registers": "Registers", "nav.logs": "Logs", "nav.app": "Settings", "loading": "Loading…",
+    "title": "Registers", "nav.monitor": "Monitor", "nav.settings": "Heating settings", "nav.batches": "Pellet batches", "nav.registers": "Registers", "nav.logs": "Logs", "nav.app": "Settings", "loading": "Loading…",
     "search": "Filter: number or name", "onlyunknown": "Only unknown", "showalarms": "Alarm slots", "sort": "Sort",
     "sort.reg": "Register", "sort.first": "Newest discovered", "sort.change": "Most changes",
     "col.reg": "Register", "col.use": "Likely use", "col.value": "Value", "col.raw": "Raw", "col.seen": "Last seen",
@@ -110,7 +111,7 @@ const I18N = {
     "ago.s": "{n} s ago", "ago.min": "{n} min ago", "ago.h": "{n} h ago", "ago.d": "{n} d ago",
   },
   de: {
-    "title": "Register", "nav.monitor": "Monitor", "nav.settings": "Heizungseinstellungen", "nav.registers": "Register", "nav.logs": "Logs", "nav.app": "Einstellungen", "loading": "Lädt…",
+    "title": "Register", "nav.monitor": "Monitor", "nav.settings": "Heizungseinstellungen", "nav.batches": "Pelletchargen", "nav.registers": "Register", "nav.logs": "Logs", "nav.app": "Einstellungen", "loading": "Lädt…",
     "search": "Filter: Nummer oder Name", "onlyunknown": "Nur unbekannte", "showalarms": "Alarm-Plätze", "sort": "Sortierung",
     "sort.reg": "Register", "sort.first": "Zuletzt entdeckt", "sort.change": "Meiste Änderungen",
     "col.reg": "Register", "col.use": "Vermutliche Bedeutung", "col.value": "Wert", "col.raw": "Rohwert", "col.seen": "Zuletzt gesehen",

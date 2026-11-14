@@ -25,6 +25,7 @@ main { max-width: 60rem; margin: 0 auto; padding: 1rem 16px 3rem; }
 header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem 1.5rem; }
 h1 { font-size: 1.35rem; margin: .2rem 0; }
 h2 { font-size: 1.05rem; margin: 1.6rem 0 .5rem; }
+nav { display: flex; flex-wrap: wrap; row-gap: .25rem; }
 nav a { color: var(--accent); text-decoration: none; margin-right: 1rem; white-space: nowrap; }
 nav a.on { color: var(--text); font-weight: 600; }
 .range { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; vertical-align: middle; margin-left: auto; }
@@ -67,11 +68,12 @@ th { color: var(--text-2); font-weight: 600; }
 </style></head><body><main>
 <header>
   <h1 data-i18n="title">Heating settings</h1>
-  <nav><a href="/" data-i18n="nav.monitor">Monitor</a><a class="on" href="/heating" data-i18n="nav.settings">Heating settings</a><a href="/registers" data-i18n="nav.registers">Registers</a><a href="/logs" data-i18n="nav.logs">Logs</a><a href="/settings" data-i18n="nav.app">Settings</a></nav>
+  <nav><a href="/" data-i18n="nav.monitor">Monitor</a><a class="on" href="/heating" data-i18n="nav.settings">Heating settings</a><a href="/batches" data-i18n="nav.batches">Pellet batches</a><a href="/registers" data-i18n="nav.registers">Registers</a><a href="/logs" data-i18n="nav.logs">Logs</a><a href="/settings" data-i18n="nav.app">Settings</a></nav>
   <span class="range" id="lang" role="group" aria-label="Language"><button data-l="en" lang="en">EN</button><button data-l="de" lang="de">DE</button></span>
 </header>
 <div class="status" id="status" data-i18n="loading">Loading…</div>
 <div id="notices"></div>
+<p class="muted"><a href="/batches" data-i18n="savelink">Save these settings for a pellet batch</a></p>
 <div id="groups"></div>
 <h2 data-i18n="writes">Recent writes</h2>
 <table><thead><tr><th data-i18n="col.time">Time</th><th data-i18n="col.write">Write</th><th data-i18n="col.event">Event</th><th data-i18n="col.detail">Detail</th></tr></thead>
@@ -82,7 +84,8 @@ th { color: var(--text-2); font-weight: 600; }
 "use strict";
 const I18N = {
   en: {
-    "title": "Heating settings", "nav.monitor": "Monitor", "nav.settings": "Heating settings", "nav.registers": "Registers", "nav.logs": "Logs", "nav.app": "Settings", "loading": "Loading…",
+    "title": "Heating settings", "nav.monitor": "Monitor", "nav.settings": "Heating settings", "nav.batches": "Pellet batches", "nav.registers": "Registers", "nav.logs": "Logs", "nav.app": "Settings", "loading": "Loading…",
+    "savelink": "Save these settings for a pellet batch",
     "writes": "Recent writes", "col.time": "Time", "col.write": "Write", "col.event": "Event", "col.detail": "Detail",
     "footer": "Values are the controller's own reports. The settings are not part of the normal report, so in hybrid and local mode the server adds them to the read list on start, every SETTINGS_READ_MINUTES and when you press \"Read settings now\", the same way the cloud's service panel does. A write is sent on every poll until the controller reports the new value. Ranges are the ones the cloud panels offer, narrowed by the minimum and maximum the controller reports.",
     "st.mode": "Mode {m}", "st.writes": "Writes {s}", "st.on": "on", "st.off": "off", "st.untested": "untested settings {s}",
@@ -104,7 +107,8 @@ const I18N = {
     "ago.s": "{n} s ago", "ago.min": "{n} min ago", "ago.h": "{n} h ago", "ago.d": "{n} d ago",
   },
   de: {
-    "title": "Heizungseinstellungen", "nav.monitor": "Monitor", "nav.settings": "Heizungseinstellungen", "nav.registers": "Register", "nav.logs": "Logs", "nav.app": "Einstellungen", "loading": "Lädt…",
+    "title": "Heizungseinstellungen", "nav.monitor": "Monitor", "nav.settings": "Heizungseinstellungen", "nav.batches": "Pelletchargen", "nav.registers": "Register", "nav.logs": "Logs", "nav.app": "Einstellungen", "loading": "Lädt…",
+    "savelink": "Diese Einstellungen für eine Pelletcharge speichern",
     "writes": "Letzte Schreibvorgänge", "col.time": "Zeit", "col.write": "Schreiben", "col.event": "Ereignis", "col.detail": "Details",
     "footer": "Die Werte sind die eigenen Meldungen des Reglers. Die Einstellungen sind nicht Teil der normalen Meldung, deshalb setzt der Server sie im Hybrid- und Lokal-Modus beim Start, alle SETTINGS_READ_MINUTES und bei \"Einstellungen jetzt lesen\" auf die Leseliste, so wie es das Servicepanel der Cloud macht. Ein Schreibvorgang wird bei jeder Abfrage gesendet, bis der Regler den neuen Wert meldet. Die Bereiche sind die der Cloud-Panels, eingeengt durch Minimum und Maximum, die der Regler meldet.",
     "st.mode": "Modus {m}", "st.writes": "Schreiben {s}", "st.on": "an", "st.off": "aus", "st.untested": "ungetestete Einstellungen {s}",
