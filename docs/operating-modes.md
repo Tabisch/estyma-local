@@ -72,6 +72,27 @@ then talks to the cloud directly). With `LOCAL_FALLBACK=1`, `proxy` and
 `hybrid` answer locally whenever the cloud does not, so a flaky cloud no
 longer leaves the controller without an answer.
 
+## Cloud timeout fallback
+
+The controller waits only about 14 s for the cloud's reply. When none has
+come by then it closes the connection and reports again only about 95 s
+after its request, instead of about 20 s. The cloud often takes longer than
+14 s, so in `proxy` and `hybrid` the server answers the controller itself
+when the cloud has not replied after `CLOUD_FALLBACK_SECONDS` (default `12`,
+changeable on the [settings page](web-ui.md)). The local reply is the same
+one `local` mode sends: the usual `ODCZYT` read list and
+`SERVER_INFO=REGISTER,1;DELAY,10`, plus any local write that is due in
+`hybrid`. It also answers locally when the cloud replies with a 5xx error
+(`500`, `503 Service Temporarily Unavailable`) or cannot be reached.
+
+The cloud request is not cut off, so the cloud still receives every report.
+Its late reply is logged as a record of its own with `late_for` set to the id
+of the exchange that was answered locally; a write the cloud sent in that late
+reply does not reach the controller, but the cloud repeats its writes until
+the controller reports the new value. Exchanges answered this way carry
+`"fallback": true` and `fallback_reason` (`slow`, `cloud_error` or
+`unreachable`) in the log. `0` turns the function off.
+
 ## API
 
 The write state is also available as JSON: `GET /api/control`, and

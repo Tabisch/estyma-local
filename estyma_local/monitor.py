@@ -151,7 +151,7 @@ class Monitor:
 
     def _ingest(self, rec: dict, live_rec: bool) -> None:
         req = rec.get("request") or {}
-        if req.get("path") != "/device/connect" or rec.get("mirror"):
+        if req.get("path") != "/device/connect" or rec.get("mirror") or rec.get("late_for"):
             return
         ts = parse_time(rec["time"])
         body = req.get("body") or {}

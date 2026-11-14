@@ -2,7 +2,8 @@
 
 ``ProxyHandler`` answers ``/device/connect`` (and anything else the
 controller sends): it forwards to the provider's server (``MODE=proxy`` /
-``hybrid``), or answers locally (``local``, or ``LOCAL_FALLBACK``), and writes
+``hybrid``), or answers locally (``local``, ``LOCAL_FALLBACK``, or when the
+cloud is too slow or fails, see ``cloud_fallback.py``), and writes
 every request/response pair to a JSON Lines log (``ExchangeLog``). The
 controller state and local writes live in ``controller.py``.
 
@@ -115,6 +116,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
     log: ExchangeLog
     ctl: Controller | None = None
     local_fallback: bool = False
+    fallback = None  # cloud_fallback.CloudFallback or None
     cloud_mirror: bool = False
     poll_delay: int = 10
 
@@ -201,12 +203,33 @@ class ProxyHandler(BaseHTTPRequestHandler):
         elif self.upstream is None:
             result = (404, "Not Found", [("Content-Type", "text/plain")], b"not found\n", "HTTP/1.1")
         else:
+            fb = self.fallback if is_connect else None
+            wait = fb.seconds if fb is not None else 0
             try:
-                result = self.forward(target, fwd_headers, req_body)
+                if wait > 0:
+                    result = self.forward_or_give_up(target, fwd_headers, req_body,
+                                                     exchange_id, t_start, t_start + wait)
+                else:
+                    result = self.forward(target, fwd_headers, req_body)
             except Exception as exc:  # upstream unreachable, timeout, bad response
                 record["error"] = f"{type(exc).__name__}: {exc}"
-                if is_connect and self.local_fallback:
+                if is_connect and (self.local_fallback or wait > 0):
                     record["fallback"] = True
+                    if wait > 0:
+                        record["fallback_reason"] = "unreachable"
+                        fb.answered_locally("unreachable", record["error"])
+                    result = self.local_response(record)
+            else:
+                if wait > 0 and result is None:  # the cloud is still busy
+                    record["fallback"] = True
+                    record["fallback_reason"] = "slow"
+                    fb.answered_locally("slow", f"no cloud reply within {wait} s")
+                    result = self.local_response(record)
+                elif wait > 0 and result[0] >= 500:
+                    record["fallback"] = True
+                    record["fallback_reason"] = "cloud_error"
+                    record["cloud_status"] = result[0]
+                    fb.answered_locally("cloud_error", f"cloud answered {result[0]} {result[1]}")
                     result = self.local_response(record)
             if result is not None and is_connect and not record.get("fallback"):
                 result = self.after_cloud_reply(result, record)
@@ -326,6 +349,53 @@ class ProxyHandler(BaseHTTPRequestHandler):
         rec["duration_ms"] = round((time.time() - t0) * 1000, 1)
         self.log.write(rec)
 
+    def forward_or_give_up(self, target: str, headers, body: bytes, exchange_id: str,
+                           t_start: float, deadline: float):
+        """``forward`` with a deadline: the cloud's reply, or None when it has
+        not come by ``deadline``. The cloud request then keeps running in the
+        background and its late reply is logged as a record of its own."""
+        box: dict = {}
+        lock = threading.Lock()
+        done = threading.Event()
+
+        def run():
+            try:
+                res, exc = self.forward(target, headers, body), None
+            except Exception as e:  # noqa: BLE001 - reported below
+                res, exc = None, e
+            with lock:
+                box["result"], box["exc"] = res, exc
+                late = box.get("late", False)
+            done.set()
+            if late:
+                self.log_late(exchange_id, t_start, res, exc)
+
+        threading.Thread(target=run, name=f"cloud-{exchange_id}", daemon=True).start()
+        done.wait(max(0.0, deadline - time.time()))
+        with lock:
+            if "result" not in box:
+                box["late"] = True
+                return None
+        if box["exc"] is not None:
+            raise box["exc"]
+        return box["result"]
+
+    def log_late(self, exchange_id: str, t_start: float, result, exc) -> None:
+        """The cloud's reply to a report we already answered locally."""
+        rec: dict = {"id": uuid.uuid4().hex[:12], "time": iso(t_start), "late_for": exchange_id,
+                     "request": {"method": self.command, "path": "/device/connect"}}
+        if exc is not None:
+            rec["error"] = f"{type(exc).__name__}: {exc}"
+        else:
+            status, reason, headers, resp_body, _ = result
+            ctype = next((v for k, v in headers if k.lower() == "content-type"), None)
+            rec["response"] = {"time": iso(time.time()), "status": status, "reason": reason,
+                               "body": self.log.body_record(resp_body, ctype)}
+        rec["duration_ms"] = round((time.time() - t_start) * 1000, 1)
+        if self.fallback is not None:
+            self.fallback.late_reply()
+        self.log.write(rec)
+
     def forward(self, target: str, headers, body: bytes):
         up = self.upstream
         port = up.port or (443 if up.scheme == "https" else 80)
@@ -351,7 +421,8 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
 def make_server(listen_host: str, listen_port: int, upstream: str | None, timeout: float,
                 log: ExchangeLog, ctl: Controller | None = None, local_fallback: bool = False,
-                cloud_mirror: bool = False, poll_delay: int = 10) -> ThreadingHTTPServer:
+                cloud_mirror: bool = False, poll_delay: int = 10,
+                fallback=None) -> ThreadingHTTPServer:
     up = None
     if upstream:
         up = urllib.parse.urlsplit(upstream if "://" in upstream else f"http://{upstream}")
@@ -363,6 +434,7 @@ def make_server(listen_host: str, listen_port: int, upstream: str | None, timeou
         "log": log,
         "ctl": ctl,
         "local_fallback": local_fallback,
+        "fallback": fallback,
         "cloud_mirror": cloud_mirror,
         "poll_delay": poll_delay,
     })

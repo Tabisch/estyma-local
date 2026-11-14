@@ -79,6 +79,11 @@ ENV = [
         compose=False, example=False),
     Env("LOCAL_FALLBACK", "0", "local", "`1` = in `proxy`/`hybrid`, answer locally when the cloud "
         "fails instead of `502`"),
+    Env("CLOUD_FALLBACK_SECONDS", "12", "local", "In `proxy`/`hybrid`, answer the controller "
+        "locally when the cloud has not replied after this many seconds, or replied with a 5xx error "
+        "or could not be reached; `0` = off. The controller gives up after about 14 s, so keep it "
+        "below that. Only the initial state: once it is changed on the settings page, the page's "
+        "choice is kept in `cloud-fallback.json`"),
     Env("CLOUD_MIRROR", "0", "local", "`1` = in `local`, still forward each report to the cloud and "
         "ignore its reply"),
     Env("CONTROLLER_TZ", "Europe/Warsaw", "local", "Time zone of the controller clock, for the clock "

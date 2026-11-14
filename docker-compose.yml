@@ -29,6 +29,7 @@ services:
       ALLOW_UNTESTED_WRITES: "${ALLOW_UNTESTED_WRITES:-0}"  # 1 = also allow the other settings (untested)
       SETTINGS_READ_MINUTES: "${SETTINGS_READ_MINUTES:-60}" # hybrid/local: re-read settings every n minutes
       LOCAL_FALLBACK: "${LOCAL_FALLBACK:-0}"       # 1 = answer locally when the cloud fails
+      CLOUD_FALLBACK_SECONDS: "${CLOUD_FALLBACK_SECONDS:-12}" # answer locally if the cloud is slower (0 = off); initial state until changed in the UI
       CLOUD_MIRROR: "${CLOUD_MIRROR:-0}"           # local mode: still send reports to the cloud
       CONTROLLER_TZ: "${CONTROLLER_TZ:-Europe/Warsaw}"
       # Optional cloud monitoring, switched on/off in the web UI. The cloud

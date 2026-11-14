@@ -40,6 +40,7 @@ Same service, see [operating-modes.md](operating-modes.md).
 | `WRITE_TIMEOUT` | `120` |  | Seconds until a write without read-back is marked failed |
 | `WRITE_MIN_INTERVAL` | `10` |  | Minimum seconds between two requests for the same register |
 | `LOCAL_FALLBACK` | `0` | yes | `1` = in `proxy`/`hybrid`, answer locally when the cloud fails instead of `502` |
+| `CLOUD_FALLBACK_SECONDS` | `12` | yes | In `proxy`/`hybrid`, answer the controller locally when the cloud has not replied after this many seconds, or replied with a 5xx error or could not be reached; `0` = off. The controller gives up after about 14 s, so keep it below that. Only the initial state: once it is changed on the settings page, the page's choice is kept in `cloud-fallback.json` |
 | `CLOUD_MIRROR` | `0` | yes | `1` = in `local`, still forward each report to the cloud and ignore its reply |
 | `CONTROLLER_TZ` | `Europe/Warsaw` | yes | Time zone of the controller clock, for the clock sync in `local` mode |
 | `CLOCK_SYNC_HOURS` | `6` |  | Hours between clock syncs in `local` mode, `0` = off |
