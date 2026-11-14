@@ -11,7 +11,7 @@ in between and can
   replies, or answer the controller without the cloud at all
   (**operating modes** `proxy`, `hybrid`, `local`),
 - publish everything to **Home Assistant** over MQTT,
-- poll the Estyma cloud for comparison (**cloud monitoring**, optional).
+- poll the Estyma cloud for comparison (**cloud monitoring**, optional, mostly just for dev and debugging).
 
 Setup is in [docs/setup.md](docs/setup.md), everything else in [docs/](docs/README.md).
 
