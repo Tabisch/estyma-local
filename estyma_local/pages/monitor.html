@@ -379,7 +379,7 @@ function niceTicks(lo, hi, n) {
 
 function drawChart(el, cfg) {
   const svg = el.querySelector("svg"), tip = el.querySelector(".tip");
-  const W = svg.clientWidth || 500, H = 190, L = 36, R = 8, Tp = 8, B = 22;
+  const W = svg.clientWidth || 500, H = 190, PL = 36, R = 8, Tp = 8, B = 22; // PL, not L: L() is the label lookup
   const h = data.history, t = h.t;
   const tMax = data.now, tMin = tMax - hours * 3600;
   let lo = Infinity, hi = -Infinity;
@@ -396,16 +396,16 @@ function drawChart(el, cfg) {
   if (cfg.max != null) hi = Math.max(hi, cfg.max);
   const pad = (hi - lo) * 0.08 || 1; lo -= cfg.min != null && lo >= cfg.min ? 0 : pad; hi += cfg.max != null && hi >= cfg.max ? 0 : pad;
   const ticks = niceTicks(lo, hi, 4); lo = Math.min(lo, ticks[0]); hi = Math.max(hi, ticks[ticks.length - 1]);
-  const x = (v) => L + (v - tMin) / (tMax - tMin) * (W - L - R);
+  const x = (v) => PL + (v - tMin) / (tMax - tMin) * (W - PL - R);
   const y = (v) => Tp + (hi - v) / (hi - lo) * (H - Tp - B);
   const gap = Math.max(180, hours * 3600 / 200); // break the line over gaps in the data
-  let s = ticks.map((v) => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`).join("");
-  const pxPerS = (W - L - R) / (tMax - tMin);
+  let s = ticks.map((v) => `<line x1="${PL}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/><text x="${PL - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`).join("");
+  const pxPerS = (W - PL - R) / (tMax - tMin);
   const tstep = [600, 900, 1800, 3600, 7200, 3 * 3600, 4 * 3600, 6 * 3600, 8 * 3600, 12 * 3600, 86400]
     .find((st) => st * pxPerS >= 80) || 86400;
   const off = new Date().getTimezoneOffset() * 60;
   for (let v = Math.ceil((tMin - off) / tstep) * tstep + off; v <= tMax; v += tstep)
-    if (x(v) > L + 15 && x(v) < W - R - 15) s += `<text x="${x(v)}" y="${H - 6}" text-anchor="middle">${clock(v)}</text>`;
+    if (x(v) > PL + 15 && x(v) < W - R - 15) s += `<text x="${x(v)}" y="${H - 6}" text-anchor="middle">${clock(v)}</text>`;
   for (const [k, col] of series) {
     let dp = "", prev = null;
     h[k].forEach((v, i) => {
@@ -417,13 +417,13 @@ function drawChart(el, cfg) {
   }
   s += `<g class="hover" style="display:none"><line y1="${Tp}" y2="${H - B}" stroke="var(--muted)" stroke-dasharray="3 3"/>` +
     series.map(([, col]) => `<circle r="4" fill="var(${col})" stroke="var(--surface)" stroke-width="2"/>`).join("") + `</g>`;
-  s += `<rect x="${L}" y="0" width="${W - L - R}" height="${H}" fill="transparent"/>`;
+  s += `<rect x="${PL}" y="0" width="${W - PL - R}" height="${H}" fill="transparent"/>`;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   svg.innerHTML = s;
   const g = svg.querySelector(".hover"), line = g.querySelector("line"), dots = g.querySelectorAll("circle");
   const move = (ev) => {
     const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) * W / r.width;
-    const tv = tMin + (px - L) / (W - L - R) * (tMax - tMin);
+    const tv = tMin + (px - PL) / (W - PL - R) * (tMax - tMin);
     let best = -1, bd = Infinity;
     for (let i = 0; i < t.length; i++) { const dd = Math.abs(t[i] - tv); if (dd < bd) { bd = dd; best = i; } }
     if (best < 0 || bd > gap) { leave(); return; }
