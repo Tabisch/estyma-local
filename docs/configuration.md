@@ -23,6 +23,7 @@ The `estyma-proxy` service, default command of the image.
 | `UI_PORT` | `8089` | yes | Web UI port. Inside the container `0` turns the UI off; in `docker-compose.yml` it is the host port (inside it stays 8089) |
 | `UI_USER` | (empty) | yes | Basic auth user for the web UI. Also needed for writes, switching cloud monitoring and deleting logs |
 | `UI_PASSWORD` | (empty) | yes | Basic auth password; auth is on only when user and password are both set |
+| `LOG_RETENTION_DAYS` | `0` | yes | Delete `.jsonl` logs older than this many days, `0` = keep them all. Only the initial state: once it is changed on the settings page, the page's choice is kept in `log-retention.json` |
 | `MONITOR_HISTORY_HOURS` | `48` |  | Hours of decoded values the monitor keeps in memory for its charts (reloaded from the logs on start) |
 
 ## Local server

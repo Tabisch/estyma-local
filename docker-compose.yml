@@ -20,6 +20,7 @@ services:
       # Optional basic auth for the log UI (set both in .env)
       UI_USER: "${UI_USER:-}"
       UI_PASSWORD: "${UI_PASSWORD:-}"
+      LOG_RETENTION_DAYS: "${LOG_RETENTION_DAYS:-0}" # delete logs older than n days, 0 = keep; initial state until changed in the UI
       # Local server, see docs/operating-modes.md. Defaults keep today's
       # behaviour: forward only, no writes.
       MODE: "${MODE:-proxy}"                       # proxy | hybrid | local
