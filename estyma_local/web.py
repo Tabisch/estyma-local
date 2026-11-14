@@ -118,6 +118,7 @@ class WebHandler(BaseHTTPRequestHandler):
     cloud = None        # cloud_monitor.CloudMonitor or None
     snapshots = None    # batches.SnapshotStore or None
     retention = None    # retention.LogRetention or None
+    fallback = None     # cloud_fallback.CloudFallback or None
 
     def log_message(self, fmt, *args):
         pass
@@ -179,6 +180,7 @@ class WebHandler(BaseHTTPRequestHandler):
         "/api/cloud": ("_api_cloud", "cloud"),
         "/api/snapshots": ("_api_snapshots", "snapshots"),
         "/api/log-retention": ("_api_retention", "retention"),
+        "/api/cloud-fallback": ("_api_fallback", "fallback"),
     }
     # POST bodies are JSON. ``auth``: also needs UI_USER / UI_PASSWORD set
     # (value: what is refused without it, for the message).
@@ -187,6 +189,7 @@ class WebHandler(BaseHTTPRequestHandler):
         "/api/delete-logs": ("_post_delete_logs", None, "deleting logs"),
         "/api/cloud": ("_post_cloud", "cloud", "switching cloud monitoring"),
         "/api/log-retention": ("_post_retention", "retention", "deleting logs"),
+        "/api/cloud-fallback": ("_post_fallback", "fallback", "changing the cloud timeout"),
         "/api/set": ("_post_set", "controller", "writes"),
         "/api/cancel": ("_post_cancel", "controller", "writes"),
         "/api/snapshots/save": ("_post_snapshot_save", "snapshots", None),
@@ -297,6 +300,9 @@ class WebHandler(BaseHTTPRequestHandler):
     def _api_retention(self, _query):
         self._json(200, self._with_auth(self.retention.status()))
 
+    def _api_fallback(self, _query):
+        self._json(200, self._with_auth(self.fallback.status()))
+
     def _api_snapshots(self, _query):
         self._json(200, {"ui_auth": self.auth is not None, "can_save": self.controller is not None,
                          "suppliers": self.snapshots.suppliers(), "snapshots": self.snapshots.list()})
@@ -333,6 +339,14 @@ class WebHandler(BaseHTTPRequestHandler):
             return self._json(400, {"ok": False, "message": "enabled must be true or false"})
         try:
             st = self.retention.configure(req["enabled"], req.get("days"))
+        except ValueError as exc:
+            return self._json(400, {"ok": False, "message": str(exc)})
+        st["ui_auth"] = True
+        self._json(200, {"ok": True, **st})
+
+    def _post_fallback(self, req):
+        try:
+            st = self.fallback.configure(req.get("seconds"))
         except ValueError as exc:
             return self._json(400, {"ok": False, "message": str(exc)})
         st["ui_auth"] = True
@@ -475,7 +489,7 @@ class WebHandler(BaseHTTPRequestHandler):
 def start_web(host: str, port: int, log_dir: str,
                  user: str | None = None, password: str | None = None,
                  monitor=None, controller=None, cloud=None, retention=None,
-                 snapshots=None) -> ThreadingHTTPServer:
+                 snapshots=None, fallback=None) -> ThreadingHTTPServer:
     """Start the UI in a background thread and return the server. Without
     ``snapshots`` a store in ``log_dir`` is made when there is a controller."""
     auth = f"{user}:{password}".encode() if user and password else None
@@ -485,6 +499,7 @@ def start_web(host: str, port: int, log_dir: str,
     handler = type("Handler", (WebHandler,), {"log_dir": os.path.abspath(log_dir), "auth": auth,
                                                 "monitor": monitor, "controller": controller,
                                                 "cloud": cloud, "retention": retention,
+                                                "fallback": fallback,
                                                 "snapshots": snapshots})
     server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True

@@ -66,6 +66,13 @@ Open `http://<proxy_host>:8089/`.
   never touched. The choice is kept in `log-retention.json` in the log volume;
   until it is first changed, `LOG_RETENTION_DAYS` decides (default `0` = keep
   all logs). Changing it needs `UI_USER` / `UI_PASSWORD`, like deleting logs.
+  *Answer when the cloud is slow* sets how many seconds (1 to 60) the proxy
+  waits for the cloud before it answers the controller itself, see
+  [operating-modes.md](operating-modes.md#cloud-timeout-fallback); switching
+  it off waits for the cloud as before. The choice is kept in
+  `cloud-fallback.json`; until it is first changed, `CLOUD_FALLBACK_SECONDS`
+  decides (default `12`, `0` = off). Changing it needs `UI_USER` /
+  `UI_PASSWORD`.
 
 The UI is available in English and German. It follows the browser language;
 the EN / DE switch at the top right overrides it and is remembered in the

@@ -126,7 +126,7 @@ def _describe(cfg: Settings) -> None:
           f"{', local fallback on' if cfg.local_fallback else ''}", flush=True)
 
 
-def _start_web(cfg: Settings, log: ExchangeLog, ctl: Controller) -> None:
+def _start_web(cfg: Settings, log: ExchangeLog, ctl: Controller, fallback=None) -> None:
     """Monitor, optional cloud monitoring and the web UI on UI_PORT."""
     from .monitor import Monitor
     from .web import start_web
@@ -153,7 +153,8 @@ def _start_web(cfg: Settings, log: ExchangeLog, ctl: Controller) -> None:
     except Exception as exc:  # never keep the proxy from starting
         print(f"log auto delete unavailable: {type(exc).__name__}: {exc}", flush=True)
     start_web(cfg.listen_host, cfg.ui_port, cfg.log_dir, cfg.ui_user, cfg.ui_password,
-              monitor=mon, controller=ctl, cloud=cloud, retention=retention)
+              monitor=mon, controller=ctl, cloud=cloud, retention=retention,
+              fallback=fallback)
     auth = "basic auth on" if cfg.ui_user and cfg.ui_password else "no auth"
     print(f"web UI on http://{cfg.listen_host}:{cfg.ui_port}/ ({auth})", flush=True)
 
@@ -176,12 +177,25 @@ def run(cfg: Settings) -> int:
                      write_timeout=cfg.write_timeout, write_min_interval=cfg.write_min_interval,
                      clock_sync_interval=cfg.clock_sync_hours * 3600,
                      tz=load_tz(cfg.controller_tz), state_file=cfg.state_file)
+    fallback = None
+    if cfg.upstream:
+        try:
+            from .cloud_fallback import CloudFallback
+            fallback = CloudFallback(cfg.log_dir)
+        except Exception as exc:  # never keep the proxy from starting
+            print(f"cloud timeout fallback unavailable: {type(exc).__name__}: {exc}", flush=True)
     server = make_server(cfg.listen_host, cfg.listen_port, cfg.upstream, cfg.upstream_timeout,
                          log, ctl, local_fallback=cfg.local_fallback,
-                         cloud_mirror=cfg.cloud_mirror, poll_delay=cfg.poll_delay)
+                         cloud_mirror=cfg.cloud_mirror, poll_delay=cfg.poll_delay,
+                         fallback=fallback)
     _describe(cfg)
+    if fallback is not None:
+        print(f"cloud timeout fallback: "
+              f"{'after ' + str(fallback.seconds) + ' s' if fallback.seconds else 'off'}"
+              f"{' (only used in proxy/hybrid)' if cfg.mode == 'local' else ''} "
+              f"(change it in the web UI)", flush=True)
     if cfg.ui_port:
-        _start_web(cfg, log, ctl)
+        _start_web(cfg, log, ctl, fallback)
     mqtt = _start_mqtt(ctl) if cfg.mqtt_host else None
     try:
         server.serve_forever()

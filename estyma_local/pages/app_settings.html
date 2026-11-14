@@ -70,6 +70,20 @@ code { font-size: .85em; }
 </div>
 <p class="muted" data-i18n="cl.about">Polls the Estyma cloud with the account from the container environment (ESTYMA_EMAIL / ESTYMA_PASSWORD) and writes cloud-*.jsonl next to the other logs. The credentials never pass through this page. The latest cloud values are shown on the monitor page while this is on.</p>
 
+<h2 data-i18n="h.fb">Cloud connection</h2>
+<div class="card">
+  <div class="row">
+    <div class="what"><b data-i18n="fb.name">Answer when the cloud is slow</b><span class="sub" data-i18n="fb.sub">If the cloud has not replied in time, or replies with an error, the controller gets a normal local reply instead.</span></div>
+    <div class="controls">
+      <label class="days"><span data-i18n="fb.after">After</span> <input id="fb-secs" type="number" min="1" max="60" step="1" inputmode="numeric" disabled> <span data-i18n="fb.s">s</span></label>
+      <button class="btn" id="fb-save" type="button" disabled></button>
+    </div>
+  </div>
+  <div class="status" id="fb-status" data-i18n="loading">Loading…</div>
+  <div class="note" id="fb-note"></div>
+</div>
+<p class="muted" data-i18n="fb.about">Used in proxy and hybrid mode. The controller waits about 14 s for a reply; when it gets none it skips about 80 s before it reports again. The local reply asks for the usual registers, so the controller does not notice. The cloud still receives the report; its late reply is only logged.</p>
+
 <h2 data-i18n="h.logs">Logs</h2>
 <div class="card">
   <div class="row">
@@ -98,6 +112,15 @@ const I18N = {
     "cl.lastpoll": "last poll {ago}", "cl.every": "every {n} s", "cl.retry": "retry in {n} s",
     "cl.needauth": "Set UI_USER / UI_PASSWORD to switch this from the page",
     "cl.unavailable": "Not available: the cloud monitor did not start (see the container log).",
+    "h.fb": "Cloud connection", "fb.name": "Answer when the cloud is slow", "fb.sub": "If the cloud has not replied in time, or replies with an error, the controller gets a normal local reply instead.",
+    "fb.after": "After", "fb.s": "s", "fb.on": "Switch on", "fb.off": "Switch off", "fb.save": "Save",
+    "fb.s.on": "On", "fb.s.off": "Off, the controller waits for the cloud", "fb.wait": "answers locally after {n} s",
+    "fb.count": "answered locally {n} times since start ({slow} slow, {err} cloud errors, {down} unreachable)", "fb.last": "last {ago}",
+    "fb.bad": "Enter a whole number of seconds from 1 to 60.", "fb.toolong": "The controller gives up after about 14 s, so a longer wait never helps.",
+    "fb.confirmoff": "Stop answering the controller when the cloud is slow?",
+    "fb.needauth": "Set UI_USER / UI_PASSWORD to change this from the page",
+    "fb.unavailable": "Not available: no cloud (UPSTREAM) is set, or the setting did not start (see the container log).",
+    "fb.about": "Used in proxy and hybrid mode. The controller waits about 14 s for a reply; when it gets none it skips about 80 s before it reports again. The local reply asks for the usual registers, so the controller does not notice. The cloud still receives the report; its late reply is only logged.",
     "h.logs": "Logs", "lr.name": "Delete old logs automatically", "lr.sub": "Removes .jsonl log files that were last written more than the given number of days ago.",
     "lr.keep": "Keep", "lr.days": "days", "lr.on": "Switch on", "lr.off": "Switch off", "lr.save": "Save",
     "lr.s.on": "On", "lr.s.off": "Off, all logs are kept", "lr.after": "deletes logs older than {n} days",
@@ -119,6 +142,15 @@ const I18N = {
     "cl.lastpoll": "letzte Abfrage {ago}", "cl.every": "alle {n} s", "cl.retry": "neuer Versuch in {n} s",
     "cl.needauth": "UI_USER / UI_PASSWORD setzen, um dies von der Seite zu schalten",
     "cl.unavailable": "Nicht verfügbar: Die Cloud-Überwachung ist nicht gestartet (siehe Container-Log).",
+    "h.fb": "Cloud-Verbindung", "fb.name": "Antworten, wenn die Cloud zu langsam ist", "fb.sub": "Hat die Cloud nicht rechtzeitig geantwortet oder meldet sie einen Fehler, bekommt der Regler stattdessen eine normale lokale Antwort.",
+    "fb.after": "Nach", "fb.s": "s", "fb.on": "Einschalten", "fb.off": "Ausschalten", "fb.save": "Speichern",
+    "fb.s.on": "An", "fb.s.off": "Aus, der Regler wartet auf die Cloud", "fb.wait": "antwortet nach {n} s lokal",
+    "fb.count": "seit dem Start {n}-mal lokal geantwortet ({slow} langsam, {err} Cloud-Fehler, {down} nicht erreichbar)", "fb.last": "zuletzt {ago}",
+    "fb.bad": "Eine ganze Zahl von 1 bis 60 Sekunden eingeben.", "fb.toolong": "Der Regler gibt nach etwa 14 s auf, längeres Warten hilft also nie.",
+    "fb.confirmoff": "Nicht mehr antworten, wenn die Cloud zu langsam ist?",
+    "fb.needauth": "UI_USER / UI_PASSWORD setzen, um dies von der Seite zu ändern",
+    "fb.unavailable": "Nicht verfügbar: keine Cloud (UPSTREAM) gesetzt, oder die Einstellung ist nicht gestartet (siehe Container-Log).",
+    "fb.about": "Gilt im Modus proxy und hybrid. Der Regler wartet etwa 14 s auf eine Antwort; bekommt er keine, meldet er sich erst etwa 80 s später wieder. Die lokale Antwort fragt die üblichen Register ab, der Regler merkt also nichts. Die Cloud bekommt den Bericht trotzdem; ihre späte Antwort wird nur geloggt.",
     "h.logs": "Logs", "lr.name": "Alte Logs automatisch löschen", "lr.sub": "Entfernt .jsonl-Logdateien, die zuletzt vor mehr als der angegebenen Zahl von Tagen geschrieben wurden.",
     "lr.keep": "Behalten:", "lr.days": "Tage", "lr.on": "Einschalten", "lr.off": "Ausschalten", "lr.save": "Speichern",
     "lr.s.on": "An", "lr.s.off": "Aus, alle Logs bleiben", "lr.after": "löscht Logs älter als {n} Tage",
@@ -145,6 +177,9 @@ const SERVER_MSG = {
     [/^cloud monitoring is not configured$/, "Cloud-Überwachung ist nicht eingerichtet"],
     [/^set UI_USER and UI_PASSWORD to allow deleting logs from the web UI$/, "UI_USER und UI_PASSWORD setzen, um Logs aus der Web-Oberfläche zu löschen"],
     [/^days must be a whole number$/, "Tage müssen eine ganze Zahl sein"],
+    [/^seconds must be a whole number$/, "Sekunden müssen eine ganze Zahl sein"],
+    [/^seconds must be 0 \(off\) or between (\d+) and (\d+)$/, "Sekunden müssen 0 (aus) oder zwischen $1 und $2 sein"],
+    [/^set UI_USER and UI_PASSWORD to allow changing the cloud timeout from the web UI$/, "UI_USER und UI_PASSWORD setzen, um die Cloud-Wartezeit aus der Web-Oberfläche zu ändern"],
     [/^days must be between (\d+) and (\d+)$/, "Tage müssen zwischen $1 und $2 liegen"],
   ],
 };
@@ -278,11 +313,70 @@ $("lr-save").addEventListener("click", async () => {
   renderRet();
 });
 
+// -- cloud timeout fallback -------------------------------------------------
+let fb = null, fbErr = null, fbNote = null, fbDirty = false;
+async function loadFb() {
+  try {
+    const r = await fetch("/api/cloud-fallback", { cache: "no-store" });
+    if (r.status === 404) { fb = "missing"; fbErr = null; }
+    else if (!r.ok) throw new Error("HTTP " + r.status);
+    else { fb = await r.json(); fbErr = null; }
+  } catch (e) { fbErr = e.message; }
+  renderFb();
+}
+function fbSecs() {
+  const v = $("fb-secs").value.trim();
+  return /^\d+$/.test(v) && +v >= 1 && +v <= 60 ? +v : null;
+}
+function renderFb() {
+  const b = $("fb-save"), inp = $("fb-secs"), st = $("fb-status"), note = $("fb-note");
+  if (fbErr && !fb) { st.textContent = T("unreachable", { e: fbErr }); b.textContent = T("fb.on"); return; }
+  if (!fb) return;
+  if (fb === "missing") {
+    st.textContent = T("fb.unavailable"); b.textContent = T("fb.on"); b.disabled = inp.disabled = true;
+    return;
+  }
+  const c = fb;
+  if (!fbDirty) inp.value = c.enabled ? c.seconds : c.default_seconds;
+  const changed = fbSecs() !== c.seconds;
+  const parts = [`<span><span class="dot" style="background:${c.enabled ? "var(--good)" : "var(--muted)"}"></span><b>${esc(T(c.enabled ? "fb.s.on" : "fb.s.off"))}</b>${c.enabled ? " · " + esc(T("fb.wait", { n: c.seconds })) : ""}</span>`];
+  if (c.total) parts.push(`<span>${esc(T("fb.count", { n: c.total, slow: c.counts.slow || 0, err: c.counts.cloud_error || 0, down: c.counts.unreachable || 0 }))}</span>`);
+  if (c.last) parts.push(`<span>${esc(T("fb.last", { ago: ago(c.now - c.last.time) }))}</span>`);
+  if (fbErr) parts.push(`<span style="color:var(--bad)">${esc(T("unreachable", { e: fbErr }))}</span>`);
+  st.innerHTML = parts.join("");
+  const mode = c.enabled ? (changed ? "save" : "off") : "on";
+  b.dataset.mode = mode;
+  b.textContent = T("fb." + mode);
+  b.classList.toggle("primary", mode !== "off");
+  b.disabled = inp.disabled = !c.ui_auth;
+  if (c.ui_auth && mode !== "off" && fbSecs() === null) b.disabled = true;
+  note.className = "note" + (fbNote && fbNote.err ? " err" : "");
+  note.textContent = fbNote ? srvMsg(fbNote.text)
+    : !c.ui_auth ? T("fb.needauth") : fbSecs() === null ? T("fb.bad")
+    : fbSecs() >= c.device_gives_up ? T("fb.toolong") : "";
+}
+$("fb-secs").addEventListener("input", () => { fbDirty = true; renderFb(); });
+$("fb-save").addEventListener("click", async () => {
+  if (!fb || fb === "missing") return;
+  const mode = $("fb-save").dataset.mode, secs = fbSecs();
+  if (mode !== "off" && secs === null) return;
+  if (mode === "off" && !confirm(T("fb.confirmoff"))) return;
+  try {
+    const r = await fetch("/api/cloud-fallback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ seconds: mode === "off" ? 0 : secs }) });
+    const j = await r.json().catch(() => ({ message: "HTTP " + r.status }));
+    fbNote = !r.ok || j.ok === false ? { text: j.message, err: true } : null;
+    if (!fbNote) { fb = j; fbDirty = false; }
+  } catch (e) { fbNote = { text: e.message, err: true }; }
+  if (fbNote) setTimeout(() => { fbNote = null; renderFb(); }, 8000);
+  renderFb();
+});
+
 function applyLang() {
   document.documentElement.lang = lang;
   document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = T(el.dataset.i18n); });
   for (const b of $("lang").children) b.classList.toggle("on", b.dataset.l === lang);
   renderCloud();
+  renderFb();
   renderRet();
 }
 $("lang").addEventListener("click", (e) => {
@@ -293,7 +387,8 @@ $("lang").addEventListener("click", (e) => {
 });
 applyLang();
 loadCloud();
+loadFb();
 loadRet();
-setInterval(() => { loadCloud(); loadRet(); }, 10000);
+setInterval(() => { loadCloud(); loadFb(); loadRet(); }, 10000);
 </script>
 </body></html>
