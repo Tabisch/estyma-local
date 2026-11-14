@@ -47,6 +47,9 @@ nav a.on { color: var(--text); font-weight: 600; }
 .note.err { color: var(--bad); }
 .note:empty { display: none; }
 .muted { color: var(--muted); font-size: .85rem; }
+.days { display: inline-flex; align-items: center; gap: .4rem; font-size: .9rem; color: var(--text-2); }
+.days input { width: 5.5rem; font: inherit; padding: .28rem .45rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
+.controls { display: inline-flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 code { font-size: .85em; }
 </style></head><body><main>
 <header>
@@ -66,6 +69,20 @@ code { font-size: .85em; }
   <div class="note" id="cloud-note"></div>
 </div>
 <p class="muted" data-i18n="cl.about">Polls the Estyma cloud with the account from the container environment (ESTYMA_EMAIL / ESTYMA_PASSWORD) and writes cloud-*.jsonl next to the other logs. The credentials never pass through this page. The latest cloud values are shown on the monitor page while this is on.</p>
+
+<h2 data-i18n="h.logs">Logs</h2>
+<div class="card">
+  <div class="row">
+    <div class="what"><b data-i18n="lr.name">Delete old logs automatically</b><span class="sub" data-i18n="lr.sub">Removes .jsonl log files that were last written more than the given number of days ago.</span></div>
+    <div class="controls">
+      <label class="days"><span data-i18n="lr.keep">Keep</span> <input id="lr-days" type="number" min="1" max="3650" step="1" inputmode="numeric" disabled> <span data-i18n="lr.days">days</span></label>
+      <button class="btn" id="lr-save" type="button" disabled></button>
+    </div>
+  </div>
+  <div class="status" id="lr-status" data-i18n="loading">Loading…</div>
+  <div class="note" id="lr-note"></div>
+</div>
+<p class="muted" data-i18n="lr.about">Checked right after a change and then every hour. Applies to exchanges-*, cloud-* and writes-*.jsonl; state.json and registers.json are never deleted. The monitor reloads its charts from the logs on restart, so keep at least 2 days.</p>
 </main>
 <script>
 "use strict";
@@ -81,6 +98,14 @@ const I18N = {
     "cl.lastpoll": "last poll {ago}", "cl.every": "every {n} s", "cl.retry": "retry in {n} s",
     "cl.needauth": "Set UI_USER / UI_PASSWORD to switch this from the page",
     "cl.unavailable": "Not available: the cloud monitor did not start (see the container log).",
+    "h.logs": "Logs", "lr.name": "Delete old logs automatically", "lr.sub": "Removes .jsonl log files that were last written more than the given number of days ago.",
+    "lr.keep": "Keep", "lr.days": "days", "lr.on": "Switch on", "lr.off": "Switch off", "lr.save": "Save",
+    "lr.s.on": "On", "lr.s.off": "Off, all logs are kept", "lr.after": "deletes logs older than {n} days",
+    "lr.last": "last check {ago}", "lr.deleted": "{n} files deleted so far", "lr.badday": "Enter a whole number of days from 1 to 3650.",
+    "lr.confirm": "Delete all .jsonl logs older than {n} days now and from now on?", "lr.confirmoff": "Stop deleting old logs?",
+    "lr.needauth": "Set UI_USER / UI_PASSWORD to change this from the page",
+    "lr.unavailable": "Not available: auto delete did not start (see the container log).",
+    "lr.about": "Checked right after a change and then every hour. Applies to exchanges-*, cloud-* and writes-*.jsonl; state.json and registers.json are never deleted. The monitor reloads its charts from the logs on restart, so keep at least 2 days.",
     "ago.s": "{n} s ago", "ago.min": "{n} min ago", "ago.h": "{n} h ago", "ago.d": "{n} d ago",
   },
   de: {
@@ -94,6 +119,14 @@ const I18N = {
     "cl.lastpoll": "letzte Abfrage {ago}", "cl.every": "alle {n} s", "cl.retry": "neuer Versuch in {n} s",
     "cl.needauth": "UI_USER / UI_PASSWORD setzen, um dies von der Seite zu schalten",
     "cl.unavailable": "Nicht verfügbar: Die Cloud-Überwachung ist nicht gestartet (siehe Container-Log).",
+    "h.logs": "Logs", "lr.name": "Alte Logs automatisch löschen", "lr.sub": "Entfernt .jsonl-Logdateien, die zuletzt vor mehr als der angegebenen Zahl von Tagen geschrieben wurden.",
+    "lr.keep": "Behalten:", "lr.days": "Tage", "lr.on": "Einschalten", "lr.off": "Ausschalten", "lr.save": "Speichern",
+    "lr.s.on": "An", "lr.s.off": "Aus, alle Logs bleiben", "lr.after": "löscht Logs älter als {n} Tage",
+    "lr.last": "letzte Prüfung {ago}", "lr.deleted": "bisher {n} Dateien gelöscht", "lr.badday": "Eine ganze Zahl von 1 bis 3650 Tagen eingeben.",
+    "lr.confirm": "Alle .jsonl-Logs älter als {n} Tage jetzt und künftig löschen?", "lr.confirmoff": "Alte Logs nicht mehr löschen?",
+    "lr.needauth": "UI_USER / UI_PASSWORD setzen, um dies von der Seite zu ändern",
+    "lr.unavailable": "Nicht verfügbar: Das automatische Löschen ist nicht gestartet (siehe Container-Log).",
+    "lr.about": "Wird direkt nach einer Änderung und dann stündlich geprüft. Gilt für exchanges-*, cloud-* und writes-*.jsonl; state.json und registers.json werden nie gelöscht. Der Monitor lädt seine Diagramme beim Neustart aus den Logs, daher mindestens 2 Tage behalten.",
     "ago.s": "vor {n} s", "ago.min": "vor {n} min", "ago.h": "vor {n} h", "ago.d": "vor {n} T",
   },
 };
@@ -110,6 +143,9 @@ const SERVER_MSG = {
     [/^login failed: (.+)$/, "Anmeldung fehlgeschlagen: $1"],
     [/^no device data$/, "keine Gerätedaten"],
     [/^cloud monitoring is not configured$/, "Cloud-Überwachung ist nicht eingerichtet"],
+    [/^set UI_USER and UI_PASSWORD to allow deleting logs from the web UI$/, "UI_USER und UI_PASSWORD setzen, um Logs aus der Web-Oberfläche zu löschen"],
+    [/^days must be a whole number$/, "Tage müssen eine ganze Zahl sein"],
+    [/^days must be between (\d+) and (\d+)$/, "Tage müssen zwischen $1 und $2 liegen"],
   ],
 };
 
@@ -182,11 +218,72 @@ $("cloud-toggle").addEventListener("click", async () => {
   loadCloud();
 });
 
+// -- log auto delete ---------------------------------------------------------
+let ret = null, retErr = null, retNote = null, retDirty = false;
+async function loadRet() {
+  try {
+    const r = await fetch("/api/log-retention", { cache: "no-store" });
+    if (r.status === 404) { ret = "missing"; retErr = null; }
+    else if (!r.ok) throw new Error("HTTP " + r.status);
+    else { ret = await r.json(); retErr = null; }
+  } catch (e) { retErr = e.message; }
+  renderRet();
+}
+function retDays() {
+  const v = $("lr-days").value.trim();
+  return /^\d+$/.test(v) && +v >= 1 && +v <= 3650 ? +v : null;
+}
+function renderRet() {
+  const b = $("lr-save"), inp = $("lr-days"), st = $("lr-status"), note = $("lr-note");
+  if (retErr && !ret) { st.textContent = T("unreachable", { e: retErr }); b.textContent = T("lr.on"); return; }
+  if (!ret) return;
+  if (ret === "missing") {
+    st.textContent = T("lr.unavailable"); b.textContent = T("lr.on"); b.disabled = inp.disabled = true;
+    return;
+  }
+  const c = ret;
+  if (!retDirty) inp.value = c.days;
+  const changed = retDays() !== c.days;  // also when the field is invalid: Save, disabled
+  const parts = [`<span><span class="dot" style="background:${c.enabled ? "var(--good)" : "var(--muted)"}"></span><b>${esc(T(c.enabled ? "lr.s.on" : "lr.s.off"))}</b>${c.enabled ? " · " + esc(T("lr.after", { n: c.days })) : ""}</span>`];
+  if (c.enabled && c.last_sweep) parts.push(`<span>${esc(T("lr.last", { ago: ago(c.now - c.last_sweep) }))}</span>`);
+  if (c.deleted_total) parts.push(`<span>${esc(T("lr.deleted", { n: c.deleted_total }))}</span>`);
+  if (c.error) parts.push(`<span style="color:var(--bad)">${esc(c.error)}</span>`);
+  if (retErr) parts.push(`<span style="color:var(--bad)">${esc(T("unreachable", { e: retErr }))}</span>`);
+  st.innerHTML = parts.join("");
+  // On: "Save" while the days were edited, else "Switch off". Off: "Switch on".
+  const mode = c.enabled ? (changed ? "save" : "off") : "on";
+  b.dataset.mode = mode;
+  b.textContent = T("lr." + mode);
+  b.classList.toggle("primary", mode !== "off");
+  b.disabled = inp.disabled = !c.ui_auth;
+  if (c.ui_auth && mode !== "off" && retDays() === null) b.disabled = true;
+  note.className = "note" + (retNote && retNote.err ? " err" : "");
+  note.textContent = retNote ? srvMsg(retNote.text)
+    : !c.ui_auth ? T("lr.needauth") : retDays() === null ? T("lr.badday") : "";
+}
+$("lr-days").addEventListener("input", () => { retDirty = true; renderRet(); });
+$("lr-save").addEventListener("click", async () => {
+  if (!ret || ret === "missing") return;
+  const mode = $("lr-save").dataset.mode, days = retDays();
+  const enabled = mode !== "off";
+  if (enabled && days === null) return;
+  if (!confirm(enabled ? T("lr.confirm", { n: days }) : T("lr.confirmoff"))) return;
+  try {
+    const r = await fetch("/api/log-retention", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled, days: days ?? ret.days }) });
+    const j = await r.json().catch(() => ({ message: "HTTP " + r.status }));
+    retNote = !r.ok || j.ok === false ? { text: j.message, err: true } : null;
+    if (!retNote) { ret = j; retDirty = false; }
+  } catch (e) { retNote = { text: e.message, err: true }; }
+  if (retNote) setTimeout(() => { retNote = null; renderRet(); }, 8000);
+  renderRet();
+});
+
 function applyLang() {
   document.documentElement.lang = lang;
   document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = T(el.dataset.i18n); });
   for (const b of $("lang").children) b.classList.toggle("on", b.dataset.l === lang);
   renderCloud();
+  renderRet();
 }
 $("lang").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b || b.dataset.l === lang) return;
@@ -196,6 +293,7 @@ $("lang").addEventListener("click", (e) => {
 });
 applyLang();
 loadCloud();
-setInterval(loadCloud, 10000);
+loadRet();
+setInterval(() => { loadCloud(); loadRet(); }, 10000);
 </script>
 </body></html>

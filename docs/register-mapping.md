@@ -33,7 +33,8 @@ Low-byte matches are `0x100 + value` style registers.
 
 Burner status values seen (`8199,1` low byte, cloud text in German UI):
 0 off (ausgeschaltet), 1 ignition (anzünden), 2 glowing (glühend),
-5 modulation, 7 cleaning (Reinigung), 10 error (Fehler).
+5 modulation, 7 cleaning (Reinigung), 8 sustain (Aufrechterhaltung,
+fire kept alive; named by Tabisch 2026-11-13), 10 error (Fehler).
 
 ## Alarms
 

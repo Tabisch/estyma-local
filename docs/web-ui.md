@@ -57,8 +57,15 @@ Open `http://<proxy_host>:8089/`.
   be deleted from here.
   Charts already loaded in the monitor keep their data until the next restart.
 - **Settings** (`/settings`): settings of this app itself, kept apart from
-  the heating controller's settings on `/heating`. For now it holds the
-  *Cloud monitoring* switch (see [cloud-monitoring.md](cloud-monitoring.md)).
+  the heating controller's settings on `/heating`. It holds the
+  *Cloud monitoring* switch (see [cloud-monitoring.md](cloud-monitoring.md))
+  and *Delete old logs automatically*: once switched on, every `.jsonl` log
+  (`exchanges-*`, `cloud-*`, `writes-*`) last written more than the given
+  number of days ago (1 to 3650) is deleted, right after the change and then
+  every hour. `state.json`, `registers.json` and the other state files are
+  never touched. The choice is kept in `log-retention.json` in the log volume;
+  until it is first changed, `LOG_RETENTION_DAYS` decides (default `0` = keep
+  all logs). Changing it needs `UI_USER` / `UI_PASSWORD`, like deleting logs.
 
 The UI is available in English and German. It follows the browser language;
 the EN / DE switch at the top right overrides it and is remembered in the

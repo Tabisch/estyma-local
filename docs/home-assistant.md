@@ -21,7 +21,7 @@ Entities:
 |---|---|
 | Boiler, buffer top/bottom, heating circuit 1 flow, outside, flue gas temperatures | 8193, 8466, 8467, 16385, 8543, 8473 |
 | Boiler target, boiler target (calculated) | 8195, 8196 |
-| Oxygen in flue gas, burner power, burner state (off, ignition, glowing, modulation, cleaning, error) | 8480, 16389, 8199 |
+| Oxygen in flue gas, burner power, burner state (off, ignition, glowing, modulation, cleaning, sustain, error) | 8480, 16389, 8199 |
 | Boiler on, boiler pump, heating circuit 1 pump (on/off) | 8197, 8823, 8857 |
 | Fuel consumed (kg), fuel energy (kWh) | 8484 |
 | Alarm (problem on/off, newest alarm slot as attributes), alarm code, alarm text (e.g. "start failure"; `none` when no alarm) | 16400..16460 |

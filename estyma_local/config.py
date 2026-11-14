@@ -59,6 +59,9 @@ ENV = [
         "cloud monitoring and deleting logs"),
     Env("UI_PASSWORD", "", "proxy", "Basic auth password; auth is on only when user and password are "
         "both set", secret=True),
+    Env("LOG_RETENTION_DAYS", "0", "proxy", "Delete `.jsonl` logs older than this many days, "
+        "`0` = keep them all. Only the initial state: once it is changed on the settings page, "
+        "the page's choice is kept in `log-retention.json`"),
     Env("MONITOR_HISTORY_HOURS", "48", "proxy", "Hours of decoded values the monitor keeps in memory "
         "for its charts (reloaded from the logs on start)", compose=False, example=False),
     # -- local server -------------------------------------------------------

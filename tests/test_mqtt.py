@@ -39,6 +39,12 @@ class StateTest(unittest.TestCase):
         self.clock = Clock()
         self.ctl = make_ctl(self.tmp, self.clock)
 
+    def test_burner_state_sustain(self):
+        self.ctl.observe_report(report(r8199_1=256 + 8))
+        st, _ = MP.StateBuilder().build(self.ctl)
+        self.assertEqual(st["burner_state"], "sustain")
+        self.assertEqual(st["burner_state_code"], 8)
+
     def test_decoded_values(self):
         self.ctl.observe_report(report(r8480_1=950, r16389_1=63, r8823_1=257, r8857_1=256,
                                        r8473_1=256 + 120, r8543_1=65))
