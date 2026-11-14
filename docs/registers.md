@@ -29,7 +29,7 @@ page use the same definitions (`estyma_local/catalog.py`).
 |---|---|---|---|
 | 8193 | Boiler temperature | ÷10 | °C |
 | 8196 | Boiler target, calculated (resulting) | x1 | °C |
-| 8199 | Burner state | 8-bit | 0 off, 1 ignition, 2 glowing, 5 modulation, 7 cleaning, 10 error |
+| 8199 | Burner state | 8-bit | 0 off, 1 ignition, 2 glowing, 5 modulation, 7 cleaning, 8 sustain, 10 error |
 | 8466 | Buffer temperature, top | ÷10 | °C |
 | 8467 | Buffer temperature, bottom | ÷10 | °C |
 | 8473 | Flue gas temperature | 8-bit | °C |
