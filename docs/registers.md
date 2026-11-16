@@ -29,7 +29,7 @@ page use the same definitions (`estyma_local/catalog.py`).
 |---|---|---|---|
 | 8193 | Boiler temperature | ÷10 | °C |
 | 8196 | Boiler target, calculated (resulting) | x1 | °C |
-| 8199 | Burner state | 8-bit | 0 off, 1 ignition, 2 glowing, 5 modulation, 7 cleaning, 8 sustain, 10 error |
+| 8199 | Burner state | 8-bit | 0 off, 1 ignition, 2 glowing, 5 modulation, 6 burn-out, 7 cleaning, 8 sustain, 10 error |
 | 8466 | Buffer temperature, top | ÷10 | °C |
 | 8467 | Buffer temperature, bottom | ÷10 | °C |
 | 8473 | Flue gas temperature | 8-bit | °C |
@@ -53,8 +53,8 @@ page use the same definitions (`estyma_local/catalog.py`).
 | 8469 | Buffer target, bottom | x1 | 7..80 °C |
 | 8242 | Room comfort temperature, circuit 1 | ÷10 | raw 150..300 = 15.0..30.0 °C |
 | 8264 | Room eco temperature, circuit 1 | ÷10 | raw 100..300 = 10.0..30.0 °C |
-| 8292 | Heating circuit 1 program *(likely)* | 8-bit | 0 off, 1 economical, 2 temporary, 3 comfortable |
-| 8486..8510 step 4 | Circuit 1 weekly timers, Monday..Sunday *(likely; weekday order not proven)* | bit mask | one bit per hour (guess) |
+| 8292 | Heating circuit 1 program | 8-bit | 0 off, 1 economical, 2 temporary, 3 comfortable |
+| 8486..8510 step 4 | Circuit 1 weekly timers, Monday..Sunday | bit mask | bit i set = comfort in hour i (i = 0..23), else eco |
 
 ## Service settings: boiler
 

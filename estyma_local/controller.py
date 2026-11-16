@@ -141,8 +141,9 @@ GROUPS = {
     "circuit2": ("Heating circuit 2 (CO2)", "Heizkreis 2 (CO2)"),
 }
 
-# Ranges are the ones the cloud panels offer (docs/registers.md). Only 8195
-# and 8197 were seen being written (by the cloud, 2026-11-08); every other
+# Ranges are the ones the cloud panels offer (docs/registers.md). Only 8195,
+# 8197 (2026-11-08) and 8292 (2026-11-16) were seen being written by the
+# cloud and taking effect; every other
 # write is untested and needs ALLOW_UNTESTED_WRITES=1 as well.
 _B = "burner"
 _SETTINGS = [
@@ -154,7 +155,7 @@ _SETTINGS = [
     _setting("buffer_bottom_target", 8469, "user"),
     _setting("room_comfort_1", 8242, "user"),
     _setting("room_eco_1", 8264, "user"),
-    _setting("circuit1_program", 8292, "user", kind="enum", limits=False),
+    _setting("circuit1_program", 8292, "user", kind="enum", limits=False, tested=True),
     # Boiler (service panel "Kocioł")
     _setting("hyst_on", 8712, "boiler"),
     _setting("hyst_off", 8849, "boiler"),
