@@ -107,7 +107,7 @@ REGS = [
         range=(15.0, 30.0), plausible=(0, 40)),
     Reg(8264, "Room eco temperature, circuit 1", "Raum Eco, Heizkreis 1", "d10", "°C", "user",
         range=(10.0, 30.0), plausible=(0, 40)),
-    Reg(8292, "Heating circuit 1 program", "Programm Heizkreis 1", "u8", "", "user", conf="likely",
+    Reg(8292, "Heating circuit 1 program", "Programm Heizkreis 1", "u8", "", "user",
         values={0: ("off", "aus"), 1: ("economical", "Eco"), 2: ("temporary", "temporär"),
                 3: ("comfortable", "Komfort")}, plausible=(0, 255)),
 
@@ -249,14 +249,14 @@ _DAYS = [("Monday", "Montag"), ("Tuesday", "Dienstag"), ("Wednesday", "Mittwoch"
          ("Thursday", "Donnerstag"), ("Friday", "Freitag"), ("Saturday", "Samstag"),
          ("Sunday", "Sonntag")]
 REGS += [Reg(r, f"Circuit 1 weekly timer, {en}", f"Wochenprogramm Heizkreis 1, {de}", "hex",
-             section="user", conf="likely") for r, (en, de) in zip(WEEKLY_TIMERS, _DAYS)]
+             section="user") for r, (en, de) in zip(WEEKLY_TIMERS, _DAYS)]
 
 # Registers that the docs show as one row for a whole group, instead of one
 # row each: section -> [(register text, function, encoding, range / values)].
 _ALARM_CODES = ", ".join(f"{c} = {t}" for c, t in sorted(ALARM_TEXT.items()))
 GROUP_ROWS = {
-    "user": [("8486..8510 step 4", "Circuit 1 weekly timers, Monday..Sunday "
-              "*(likely; weekday order not proven)*", "bit mask", "one bit per hour (guess)")],
+    "user": [("8486..8510 step 4", "Circuit 1 weekly timers, Monday..Sunday",
+              "bit mask", "bit i set = comfort in hour i (i = 0..23), else eco")],
     "alarms": [
         ("16400+k (k = 0..19)", "Alarm slot k: state in bits 16+, alarm code in the low byte", "x1",
          f"state 3 active, 7 being reset, 0 cleared; code {_ALARM_CODES}"),

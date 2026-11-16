@@ -187,7 +187,7 @@ One HA device "Estyma boiler" (model from `8485` device type, firmware from
 | Boiler pump / circuit 1 pump | binary_sensor, running | 8823 / 8857 low byte | |
 | Boiler on | switch | 8197,1 low byte (write 0/1) | write confirmed; needs extra care, see safety |
 | Operation mode | select | 8194,1 | values still to map |
-| Heating program circuit 1 | select | 8292,1 (probable) | |
+| Heating program circuit 1 | select | 8292,1 | |
 | Room comfort / eco target | number, °C, step 0.1 | 8242 / 8264 /10 | |
 | Fuel total | sensor, kg, `state_class: total_increasing` | 8484,1 /10 | works with HA statistics; daily use comes for free via utility_meter |
 | Fuel energy | sensor, kWh, total_increasing (optional) | fuel kg x calorific value | calorific value as config (4.8 kWh/kg default from burner settings); gives the HA Energy dashboard |

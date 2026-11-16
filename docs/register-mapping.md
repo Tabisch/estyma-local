@@ -95,8 +95,8 @@ are listed in [registers.md](registers.md).
 | 8264,1 / ,3 / ,4 | /10 | `tpok_eko_obw1_sub1/3/4` room eco temp / min / max | 18 / 10 / 30 |
 | 8194,1 | x1 | `kociol_tryb_sub1` / operation_mode_boiler_sub1 | 2 |
 | 8485,1 | x1 | `typ_urzadzenia_sub1` / device_type_sub1 | 1000040002 |
-| 8486..8510 step 4 | x1 | `co1_timer_pn..n_sub1` weekly timers circuit 1 | 4194240 each; order not proven, probably Mon=8486, Tue=8490, Wed=8494, Thu=8498, Fri=8502, Sat=8506, Sun=8510 |
-| 8292,1 (probably) | low byte | `co_prog_obw1_sub1` heating circuit program | 3 |
+| 8486..8510 step 4 | bit mask | `co1_timer_pn..n_sub1` weekly timers circuit 1, bit i = comfort in hour i | 4194240 = comfort 06-22 each day; Mon=8486, Tue=8490, Wed=8494, Thu=8498, Fri=8502, Sat=8506, Sun=8510 (confirmed by test writes from the cloud timer panel, 2026-11-16) |
+| 8292,1 | low byte | `co_prog_obw1_sub1` heating circuit program: 0 off, 1 economical, 3 comfortable (confirmed by cloud writes 2026-11-16) | 3 |
 
 ## Still ambiguous
 
@@ -111,12 +111,11 @@ are listed in [registers.md](registers.md).
 - Fields with value 0 (circuits 2..4 temps, return temp, lambda temp,
   solar, fuel fill level, energy meter, DHW): not present / not fitted on
   this installation; they match any zero register.
-- Timer weekday order and `co_prog_obw1_sub1` (see above).
 
 ## Changes in the web UI that would settle the rest
 
 Run proxy and recorder, make one change at a time, wait ~2 min, change back:
 1. Boiler target 60 -> 61 (separates 8195,1 from 8195,3; confirms writes reach the controller). Not done yet as of the second run.
-2. Monday timer of heating circuit 1 (one hour) -> confirms weekday order.
-3. Heating circuit program (`co_prog_obw1`) to another value -> confirms 8292.
+2. Done 2026-11-16: timer weekday order confirmed.
+3. Done 2026-11-16: 8292 confirmed.
 4. Optional: circuit 1 pump / controller on-off flags, only if acceptable to switch heating briefly.
