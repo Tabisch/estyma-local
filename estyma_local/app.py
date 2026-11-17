@@ -126,11 +126,24 @@ def _describe(cfg: Settings) -> None:
           f"{', local fallback on' if cfg.local_fallback else ''}", flush=True)
 
 
-def _start_web(cfg: Settings, log: ExchangeLog, ctl: Controller, fallback=None) -> None:
+def _start_history(cfg: Settings, log: ExchangeLog):
+    """The compact register history (history.sqlite3), fed by every exchange."""
+    try:
+        from .history import HistoryStore
+        store = HistoryStore(cfg.log_dir)
+        log.listeners.append(store.ingest)
+        return store
+    except Exception as exc:  # never keep the proxy from starting
+        print(f"history store unavailable: {type(exc).__name__}: {exc}", flush=True)
+        return None
+
+
+def _start_web(cfg: Settings, log: ExchangeLog, ctl: Controller, fallback=None,
+               store=None) -> None:
     """Monitor, optional cloud monitoring and the web UI on UI_PORT."""
     from .monitor import Monitor
     from .web import start_web
-    mon = Monitor(cfg.log_dir, cfg.monitor_history_hours)
+    mon = Monitor(cfg.log_dir, cfg.monitor_history_hours, store=store)
     log.listeners.append(mon.ingest)
     mon.start()
     cloud = None
@@ -154,7 +167,7 @@ def _start_web(cfg: Settings, log: ExchangeLog, ctl: Controller, fallback=None) 
         print(f"log auto delete unavailable: {type(exc).__name__}: {exc}", flush=True)
     start_web(cfg.listen_host, cfg.ui_port, cfg.log_dir, cfg.ui_user, cfg.ui_password,
               monitor=mon, controller=ctl, cloud=cloud, retention=retention,
-              fallback=fallback)
+              fallback=fallback, raw_logs=log.raw)
     auth = "basic auth on" if cfg.ui_user and cfg.ui_password else "no auth"
     print(f"web UI on http://{cfg.listen_host}:{cfg.ui_port}/ ({auth})", flush=True)
 
@@ -169,7 +182,10 @@ def _start_mqtt(ctl: Controller):
 
 
 def run(cfg: Settings) -> int:
-    log = ExchangeLog(cfg.log_dir, cfg.max_body_log)
+    from .raw_logs import RawLogSetting
+    raw = RawLogSetting(cfg.log_dir)
+    log = ExchangeLog(cfg.log_dir, cfg.max_body_log, raw=raw)
+    store = _start_history(cfg, log)
     ctl = Controller(cfg.mode, cfg.log_dir, writes_enabled=cfg.writes_enabled,
                      allow_power_writes=cfg.allow_power_writes,
                      allow_untested_writes=cfg.allow_untested_writes,
@@ -194,8 +210,10 @@ def run(cfg: Settings) -> int:
               f"{'after ' + str(fallback.seconds) + ' s' if fallback.seconds else 'off'}"
               f"{' (only used in proxy/hybrid)' if cfg.mode == 'local' else ''} "
               f"(change it in the web UI)", flush=True)
+    print(f"raw traffic logs: {'on' if raw.enabled else 'off'} (change it in the web UI); "
+          f"history in {store.path if store else 'memory only'}", flush=True)
     if cfg.ui_port:
-        _start_web(cfg, log, ctl, fallback)
+        _start_web(cfg, log, ctl, fallback, store)
     mqtt = _start_mqtt(ctl) if cfg.mqtt_host else None
     try:
         server.serve_forever()

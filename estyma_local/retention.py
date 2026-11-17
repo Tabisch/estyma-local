@@ -1,10 +1,11 @@
 """Delete old log files automatically, switched on the app settings page.
 
-Every ``.jsonl`` file directly inside LOG_DIR (``exchanges-*``, ``cloud-*``,
-``writes-*``) counts as a log. Once the setting is on, a file whose last
+Every ``.jsonl`` or packed ``.jsonl.gz`` file directly inside LOG_DIR
+(``exchanges-*``, ``cloud-*``, ``writes-*``) counts as a log. Once the setting is on, a file whose last
 change is more than ``days`` days ago is deleted; the logs roll over daily,
 so today's files are never touched. Other files (``state.json``,
-``registers.json``, ``cloud-monitor.json``, this module's own state file)
+``registers.json``, ``history.sqlite3``, ``cloud-monitor.json``, this
+module's own state file)
 are never deleted. A sweep runs right after the setting changes and then
 every hour.
 
@@ -105,7 +106,7 @@ class LogRetention:
         except FileNotFoundError:
             names = []
         for name in names:
-            if not name.endswith(".jsonl") or name.startswith("."):
+            if not name.endswith((".jsonl", ".jsonl.gz")) or name.startswith("."):
                 continue
             path = os.path.join(self.log_dir, name)
             try:

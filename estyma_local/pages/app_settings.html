@@ -87,6 +87,16 @@ code { font-size: .85em; }
 <h2 data-i18n="h.logs">Logs</h2>
 <div class="card">
   <div class="row">
+    <div class="what"><b data-i18n="rl.name">Keep raw traffic logs (debugging)</b><span class="sub" data-i18n="rl.sub">Writes every exchange between the controller and the cloud to exchanges-*.jsonl, gzipped every hour. Only needed to debug or to decode new registers.</span></div>
+    <button class="btn" id="rl-toggle" type="button" disabled></button>
+  </div>
+  <div class="status" id="rl-status" data-i18n="loading">Loading…</div>
+  <div class="note" id="rl-note"></div>
+</div>
+<p class="muted" data-i18n="rl.about">The history of all register values is kept in history.sqlite3 either way (only the values that changed, about 0.5 MB a day); the monitor refills its charts from it after a restart. Raw logs take about 0.6 MB a day.</p>
+
+<div class="card">
+  <div class="row">
     <div class="what"><b data-i18n="lr.name">Delete old logs automatically</b><span class="sub" data-i18n="lr.sub">Removes .jsonl log files that were last written more than the given number of days ago.</span></div>
     <div class="controls">
       <label class="days"><span data-i18n="lr.keep">Keep</span> <input id="lr-days" type="number" min="1" max="3650" step="1" inputmode="numeric" disabled> <span data-i18n="lr.days">days</span></label>
@@ -96,7 +106,7 @@ code { font-size: .85em; }
   <div class="status" id="lr-status" data-i18n="loading">Loading…</div>
   <div class="note" id="lr-note"></div>
 </div>
-<p class="muted" data-i18n="lr.about">Checked right after a change and then every hour. Applies to exchanges-*, cloud-* and writes-*.jsonl; state.json and registers.json are never deleted. The monitor reloads its charts from the logs on restart, so keep at least 2 days.</p>
+<p class="muted" data-i18n="lr.about">Checked right after a change and then every hour. Applies to exchanges-*, cloud-* and writes-*.jsonl (and .jsonl.gz); state.json, registers.json and history.sqlite3 are never deleted.</p>
 </main>
 <script>
 "use strict";
@@ -128,7 +138,14 @@ const I18N = {
     "lr.confirm": "Delete all .jsonl logs older than {n} days now and from now on?", "lr.confirmoff": "Stop deleting old logs?",
     "lr.needauth": "Set UI_USER / UI_PASSWORD to change this from the page",
     "lr.unavailable": "Not available: auto delete did not start (see the container log).",
-    "lr.about": "Checked right after a change and then every hour. Applies to exchanges-*, cloud-* and writes-*.jsonl; state.json and registers.json are never deleted. The monitor reloads its charts from the logs on restart, so keep at least 2 days.",
+    "lr.about": "Checked right after a change and then every hour. Applies to exchanges-*, cloud-* and writes-*.jsonl (and .jsonl.gz); state.json, registers.json and history.sqlite3 are never deleted.",
+    "rl.name": "Keep raw traffic logs (debugging)", "rl.sub": "Writes every exchange between the controller and the cloud to exchanges-*.jsonl, gzipped every hour. Only needed to debug or to decode new registers.",
+    "rl.about": "The history of all register values is kept in history.sqlite3 either way (only the values that changed, about 0.5 MB a day); the monitor refills its charts from it after a restart. Raw logs take about 0.6 MB a day.",
+    "rl.on": "Switch on", "rl.off": "Switch off", "rl.s.on": "On", "rl.s.off": "Off, only the history is kept",
+    "rl.files": "{n} raw log files, {size}", "rl.hist": "history: {size} since {since}", "rl.histerr": "history problem: {e}",
+    "rl.confirmoff": "Stop writing raw traffic logs? Files already written are kept.",
+    "rl.needauth": "Set UI_USER / UI_PASSWORD to switch this from the page",
+    "rl.unavailable": "Not available (see the container log).",
     "ago.s": "{n} s ago", "ago.min": "{n} min ago", "ago.h": "{n} h ago", "ago.d": "{n} d ago",
   },
   de: {
@@ -158,7 +175,14 @@ const I18N = {
     "lr.confirm": "Alle .jsonl-Logs älter als {n} Tage jetzt und künftig löschen?", "lr.confirmoff": "Alte Logs nicht mehr löschen?",
     "lr.needauth": "UI_USER / UI_PASSWORD setzen, um dies von der Seite zu ändern",
     "lr.unavailable": "Nicht verfügbar: Das automatische Löschen ist nicht gestartet (siehe Container-Log).",
-    "lr.about": "Wird direkt nach einer Änderung und dann stündlich geprüft. Gilt für exchanges-*, cloud-* und writes-*.jsonl; state.json und registers.json werden nie gelöscht. Der Monitor lädt seine Diagramme beim Neustart aus den Logs, daher mindestens 2 Tage behalten.",
+    "lr.about": "Wird direkt nach einer Änderung und dann stündlich geprüft. Gilt für exchanges-*, cloud-* und writes-*.jsonl (und .jsonl.gz); state.json, registers.json und history.sqlite3 werden nie gelöscht.",
+    "rl.name": "Rohe Verkehrs-Logs behalten (Fehlersuche)", "rl.sub": "Schreibt jeden Austausch zwischen Regler und Cloud in exchanges-*.jsonl, stündlich gzip-komprimiert. Nur zur Fehlersuche oder zum Entschlüsseln neuer Register nötig.",
+    "rl.about": "Der Verlauf aller Registerwerte wird in jedem Fall in history.sqlite3 gespeichert (nur geänderte Werte, etwa 0,5 MB am Tag); der Monitor füllt seine Diagramme nach einem Neustart daraus. Rohe Logs brauchen etwa 0,6 MB am Tag.",
+    "rl.on": "Einschalten", "rl.off": "Ausschalten", "rl.s.on": "An", "rl.s.off": "Aus, nur der Verlauf wird gespeichert",
+    "rl.files": "{n} rohe Logdateien, {size}", "rl.hist": "Verlauf: {size} seit {since}", "rl.histerr": "Problem mit dem Verlauf: {e}",
+    "rl.confirmoff": "Keine rohen Verkehrs-Logs mehr schreiben? Bereits geschriebene Dateien bleiben.",
+    "rl.needauth": "UI_USER / UI_PASSWORD setzen, um dies von der Seite zu schalten",
+    "rl.unavailable": "Nicht verfügbar (siehe Container-Log).",
     "ago.s": "vor {n} s", "ago.min": "vor {n} min", "ago.h": "vor {n} h", "ago.d": "vor {n} T",
   },
 };
@@ -181,6 +205,7 @@ const SERVER_MSG = {
     [/^seconds must be 0 \(off\) or between (\d+) and (\d+)$/, "Sekunden müssen 0 (aus) oder zwischen $1 und $2 sein"],
     [/^set UI_USER and UI_PASSWORD to allow changing the cloud timeout from the web UI$/, "UI_USER und UI_PASSWORD setzen, um die Cloud-Wartezeit aus der Web-Oberfläche zu ändern"],
     [/^days must be between (\d+) and (\d+)$/, "Tage müssen zwischen $1 und $2 liegen"],
+    [/^set UI_USER and UI_PASSWORD to allow switching raw logs from the web UI$/, "UI_USER und UI_PASSWORD setzen, um die rohen Logs aus der Web-Oberfläche zu schalten"],
   ],
 };
 
@@ -251,6 +276,51 @@ $("cloud-toggle").addEventListener("click", async () => {
   } catch (e) { cloudNote = { text: e.message, err: true }; }
   if (cloudNote) setTimeout(() => { cloudNote = null; renderCloud(); }, 8000);
   loadCloud();
+});
+
+// -- raw traffic logs --------------------------------------------------------
+let rl = null, rlErr = null, rlNote = null;
+const size = (b) => b == null ? "?" : b < 1024 ? b + " B" : b < 1048576 ? (b / 1024).toFixed(0) + " KB"
+  : b < 1073741824 ? (b / 1048576).toFixed(1) + " MB" : (b / 1073741824).toFixed(2) + " GB";
+async function loadRl() {
+  try {
+    const r = await fetch("/api/raw-logs", { cache: "no-store" });
+    if (r.status === 404) { rl = "missing"; rlErr = null; }
+    else if (!r.ok) throw new Error("HTTP " + r.status);
+    else { rl = await r.json(); rlErr = null; }
+  } catch (e) { rlErr = e.message; }
+  renderRl();
+}
+function renderRl() {
+  const b = $("rl-toggle"), st = $("rl-status"), note = $("rl-note");
+  if (rlErr && !rl) { st.textContent = T("unreachable", { e: rlErr }); b.textContent = T("rl.on"); return; }
+  if (!rl) return;
+  if (rl === "missing") { st.textContent = T("rl.unavailable"); b.textContent = T("rl.on"); b.disabled = true; return; }
+  const c = rl;
+  const parts = [`<span><span class="dot" style="background:${c.enabled ? "var(--good)" : "var(--muted)"}"></span><b>${esc(T(c.enabled ? "rl.s.on" : "rl.s.off"))}</b></span>`];
+  if (c.files) parts.push(`<span>${esc(T("rl.files", { n: c.files, size: size(c.size) }))}</span>`);
+  const h = c.history;
+  if (h && h.first) parts.push(`<span>${esc(T("rl.hist", { size: size(h.size), since: new Date(h.first * 1000).toLocaleDateString(lang) }))}</span>`);
+  if (h && h.error) parts.push(`<span style="color:var(--bad)">${esc(T("rl.histerr", { e: h.error }))}</span>`);
+  if (rlErr) parts.push(`<span style="color:var(--bad)">${esc(T("unreachable", { e: rlErr }))}</span>`);
+  st.innerHTML = parts.join("");
+  b.textContent = c.enabled ? T("rl.off") : T("rl.on");
+  b.classList.toggle("primary", !c.enabled);
+  b.disabled = !c.ui_auth;
+  note.className = "note" + (rlNote && rlNote.err ? " err" : "");
+  note.textContent = rlNote ? srvMsg(rlNote.text) : !c.ui_auth ? T("rl.needauth") : "";
+}
+$("rl-toggle").addEventListener("click", async () => {
+  if (!rl || rl === "missing") return;
+  const on = !rl.enabled;
+  if (!on && !confirm(T("rl.confirmoff"))) return;
+  try {
+    const r = await fetch("/api/raw-logs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: on }) });
+    const j = await r.json().catch(() => ({ message: "HTTP " + r.status }));
+    rlNote = !r.ok || j.ok === false ? { text: j.message, err: true } : null;
+  } catch (e) { rlNote = { text: e.message, err: true }; }
+  if (rlNote) setTimeout(() => { rlNote = null; renderRl(); }, 8000);
+  loadRl();
 });
 
 // -- log auto delete ---------------------------------------------------------
@@ -377,6 +447,7 @@ function applyLang() {
   for (const b of $("lang").children) b.classList.toggle("on", b.dataset.l === lang);
   renderCloud();
   renderFb();
+  renderRl();
   renderRet();
 }
 $("lang").addEventListener("click", (e) => {
@@ -388,7 +459,8 @@ $("lang").addEventListener("click", (e) => {
 applyLang();
 loadCloud();
 loadFb();
+loadRl();
 loadRet();
-setInterval(() => { loadCloud(); loadFb(); loadRet(); }, 10000);
+setInterval(() => { loadCloud(); loadFb(); loadRl(); loadRet(); }, 10000);
 </script>
 </body></html>

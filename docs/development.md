@@ -113,9 +113,27 @@ The build is amd64 only, so use an x86-64 machine as the runner. To build
 for ARM again, add the platforms in `docker.yml` and put back the
 `docker/setup-qemu-action` step (see the comment there).
 
+## Register history
+
+Every controller report is stored in `history.sqlite3` in the log volume
+(`estyma_local/history.py`): table `vals(t, reg, idx, val)` with the raw
+value of each register at Unix time `t`, written only when it changed, plus
+all values once an hour. That is about 0.3 to 0.5 MB a day. The monitor
+refills its charts from it on start.
+
+```sh
+sqlite3 history.sqlite3 "SELECT datetime(t, 'unixepoch'), val FROM vals WHERE reg = 8193 AND idx = 1 ORDER BY t DESC LIMIT 10"
+```
+
 ## Log format
 
-One JSON object per line in `exchanges-YYYY-MM-DD.jsonl` in the `estyma-logs` volume (UTC dates):
+Raw traffic logs are off by default; switch them on with *Keep raw traffic
+logs* on `/settings` (or `RAW_LOGS=1`). Then the current hour is in
+`exchanges-YYYY-MM-DD.jsonl` and every finished hour is gzipped onto
+`exchanges-YYYY-MM-DD.jsonl.gz` (one gzip member per hour; `zcat` reads it
+as one file). About 0.6 MB a day. The analysis scripts read both.
+
+One JSON object per line, in the `estyma-logs` volume (UTC dates):
 
 ```json
 {
@@ -138,7 +156,8 @@ One JSON object per line in `exchanges-YYYY-MM-DD.jsonl` in the `estyma-logs` vo
 ```
 
 Bodies are stored as `text` when they are valid UTF-8, otherwise as `base64`.
-Form-encoded and JSON bodies are also decoded into `form` / `json`. Failed
+JSON bodies are also decoded into `json`; form-encoded bodies (the
+controller's reports) are kept as `text` only. Failed
 exchanges have an `error` field instead of `response`. Exchanges also carry
 `mode`, and `local: true` (answered locally), `injected` (local writes added
 to the cloud's reply) or `mirror: true` (background copy to the cloud in

@@ -7,22 +7,21 @@ Usage: python3 -m estyma_local.analysis.summarize_logs [LOG_DIR_OR_FILES...]   (
 from __future__ import annotations
 
 import glob
-import json
 import os
 import sys
 from collections import Counter, defaultdict
+
+from ..protocol import loose_form
+from ..raw_logs import read_records
 
 
 def iter_records(paths):
     files = []
     for p in paths:
-        files += sorted(glob.glob(os.path.join(p, "*.jsonl"))) if os.path.isdir(p) else [p]
+        files += sorted(glob.glob(os.path.join(p, "*.jsonl")) + glob.glob(os.path.join(p, "*.jsonl.gz"))) \
+            if os.path.isdir(p) else [p]
     for f in files:
-        with open(f, encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
-                if line:
-                    yield json.loads(line)
+        yield from read_records(f)
 
 
 def main(argv):
@@ -45,7 +44,9 @@ def main(argv):
                 hosts[value] += 1
         for k, _ in req.get("query", []):
             query_keys[key][k] += 1
-        for k, _ in req["body"].get("form", []):
+        body = req.get("body") or {}
+        form = loose_form(body["text"]).items() if "=" in body.get("text", "") else []
+        for k, _ in form:
             form_keys[key][k] += 1
         statuses[key][rec.get("response", {}).get("status", "error")] += 1
 
