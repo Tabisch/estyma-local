@@ -66,7 +66,7 @@ to watch:
 
 ## 2. Deploy
 
-The image is `ghcr.io/tabisch/estyma-local:latest` (amd64 only for now). It
+The image is `ghcr.io/tabisch/estyma-local:latest`, the newest release (amd64 only for now; `:main` is the newest build from `main`). It
 contains the proxy, the web UI and the optional cloud monitoring. `docker-compose.yml` defines:
 
 - `estyma-proxy`: the proxy (host port 8088) and the web UI with the live monitor and log downloads (host port 8089)

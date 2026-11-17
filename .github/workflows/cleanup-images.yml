@@ -2,7 +2,7 @@ name: Clean up images
 
 # Manual: Actions -> Clean up images -> Run workflow.
 # Deletes every version of ghcr.io/<owner>/estyma-local except the image
-# tagged "latest" and release tags "v*" (multi-arch aware: their platform
+# tagged "latest" or "main" and release tags "v*" (multi-arch aware: their platform
 # images are kept).
 on:
   workflow_dispatch:
@@ -23,7 +23,7 @@ jobs:
         with:
           package: estyma-local
           delete-tags: "*"
-          exclude-tags: "latest,v*"   # release tags stay, so you can roll back
+          exclude-tags: "latest,main,v*"   # release tags stay, so you can roll back
           delete-untagged: true
           delete-partial-images: true
           validate: true

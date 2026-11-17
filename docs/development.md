@@ -63,8 +63,13 @@ real broker when `mosquitto` is installed (otherwise that part is skipped).
 ## Image build
 
 `.github/workflows/docker.yml` builds the image for amd64 (other architectures are switched off for now) and
-pushes it to `ghcr.io/tabisch/estyma-local` (tags `latest` and the commit SHA,
-plus the tag name for `v*` tags). It builds when:
+pushes it to `ghcr.io/tabisch/estyma-local`. Every build gets the commit SHA as a tag, plus:
+
+- `v*` tag pushes: the tag name (e.g. `v1.0.0`), and `latest` if it is a
+  stable release (no `-` in the name, so `v1.1.0-beta1` leaves `latest` alone),
+- builds from `main`: `main`.
+
+It builds when:
 
 - a push to `main` contains a commit whose message includes `[build]`, e.g.
   `git commit -m "Add register decoding [build]"`; other pushes are skipped,
@@ -82,7 +87,7 @@ when they pass. Pull requests only run the tests and never push an image.
 ### Removing old images
 
 Every build adds a version to the GHCR package. *Actions → Clean up images →
-Run workflow* deletes all versions except the image tagged `latest` and
+Run workflow* deletes all versions except the images tagged `latest` or `main` and
 release tags `v*` (their platform images stay). To keep a version you can roll
 back to, tag the commit, e.g. `git tag v0.2.0 && git push origin v0.2.0`: the
 workflow builds `ghcr.io/tabisch/estyma-local:v0.2.0` and the cleanup leaves
