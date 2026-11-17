@@ -12,7 +12,6 @@ The web UI (web.py) serves the page and ``/api/monitor``.
 from __future__ import annotations
 
 import bisect
-import json
 import os
 import sqlite3
 import threading
@@ -23,7 +22,6 @@ from datetime import datetime
 from . import catalog as C
 from . import decode as D
 from .protocol import loose_form, parse_read_list, parse_report
-from .raw_logs import exchange_files, read_lines
 from .registers import RegisterTable
 
 # --------------------------------------------------------------------------
@@ -157,7 +155,7 @@ class Monitor:
             return
         ts = parse_time(rec["time"])
         body = req.get("body") or {}
-        form = loose_form(body["text"]) if "text" in body else dict(body.get("form") or [])
+        form = loose_form(body.get("text") or "")
         resp = rec.get("response")
         status = resp.get("status") if resp else None
         resp_text = ((resp or {}).get("body") or {}).get("text", "")
@@ -232,16 +230,13 @@ class Monitor:
 
     def load_history(self) -> None:
         """Refill the charts after a restart (blocking; run in a thread).
-        With a history store: replay it. Without one: read the newest raw
-        logs directly."""
+        Replays the history store; without one there is nothing to load."""
         self.loading = True
         try:
             cutoff = time.time() - self.history_s
             if self.store is not None:
                 self._load_from_store(cutoff)
-            else:
-                self._load_from_logs(cutoff)
-        except (OSError, sqlite3.Error) as exc:
+        except sqlite3.Error as exc:
             print(f"monitor history reload: {type(exc).__name__}: {exc}", flush=True)
         finally:
             self.loading = False
@@ -250,23 +245,6 @@ class Monitor:
     def _load_from_store(self, cutoff: float) -> None:
         for t, regs in self.store.replay(cutoff, until=self.store.started):
             self._apply(t, regs)
-
-    def _load_from_logs(self, cutoff: float) -> None:
-        days = int(self.history_s // 86400) + 2
-        for path in exchange_files(self.log_dir)[-2 * days:]:
-            for line in read_lines(path):
-                if '"/device/connect"' not in line:
-                    continue
-                try:
-                    rec = json.loads(line)
-                except ValueError:
-                    continue
-                try:
-                    if parse_time(rec["time"]) < cutoff:
-                        continue
-                except (KeyError, TypeError, ValueError):
-                    continue
-                self.ingest(rec, live=False)
 
     def start(self) -> None:
         self.loading = True

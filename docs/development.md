@@ -119,8 +119,7 @@ Every controller report is stored in `history.sqlite3` in the log volume
 (`estyma_local/history.py`): table `vals(t, reg, idx, val)` with the raw
 value of each register at Unix time `t`, written only when it changed, plus
 all values once an hour. That is about 0.3 to 0.5 MB a day. The monitor
-refills its charts from it on start. It starts empty with the update; old
-raw logs are not imported.
+refills its charts from it on start.
 
 ```sh
 sqlite3 history.sqlite3 "SELECT datetime(t, 'unixepoch'), val FROM vals WHERE reg = 8193 AND idx = 1 ORDER BY t DESC LIMIT 10"
@@ -132,8 +131,7 @@ Raw traffic logs are off by default; switch them on with *Keep raw traffic
 logs* on `/settings` (or `RAW_LOGS=1`). Then the current hour is in
 `exchanges-YYYY-MM-DD.jsonl` and every finished hour is gzipped onto
 `exchanges-YYYY-MM-DD.jsonl.gz` (one gzip member per hour; `zcat` reads it
-as one file). About 0.6 MB a day. Plain `.jsonl` files from older versions
-are left as they are. The analysis scripts read both.
+as one file). About 0.6 MB a day. The analysis scripts read both.
 
 One JSON object per line, in the `estyma-logs` volume (UTC dates):
 
@@ -159,8 +157,7 @@ One JSON object per line, in the `estyma-logs` volume (UTC dates):
 
 Bodies are stored as `text` when they are valid UTF-8, otherwise as `base64`.
 JSON bodies are also decoded into `json`; form-encoded bodies (the
-controller's reports) are kept as `text` only (older logs also had a `form`
-copy, dropped when packing). Failed
+controller's reports) are kept as `text` only. Failed
 exchanges have an `error` field instead of `response`. Exchanges also carry
 `mode`, and `local: true` (answered locally), `injected` (local writes added
 to the cloud's reply) or `mirror: true` (background copy to the cloud in

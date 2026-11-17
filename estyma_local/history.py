@@ -14,10 +14,7 @@ value is written again, so a key that is no longer reported can be told
 apart from one that does not change: during replay a key counts as gone when
 nothing was written for it for ``STALE_S``. Values are stored raw, before the
 glitch rule in decode.py, so replaying gives the readers exactly what the
-controller sent.
-The history starts empty with the first report after the update; old raw
-logs are not imported.
-"""
+controller sent."""
 
 from __future__ import annotations
 
@@ -48,7 +45,7 @@ def report_of(rec: dict) -> tuple[float, dict] | None:
     if req.get("path") != "/device/connect" or rec.get("mirror") or rec.get("late_for"):
         return None
     body = req.get("body") or {}
-    form = loose_form(body["text"]) if "text" in body else dict(body.get("form") or [])
+    form = loose_form(body.get("text") or "")
     regs = parse_report(form.get("ZAPISZ_ODCZYT", "") or "")
     if not regs:
         return None

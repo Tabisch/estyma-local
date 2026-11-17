@@ -45,8 +45,7 @@ def main(argv):
         for k, _ in req.get("query", []):
             query_keys[key][k] += 1
         body = req.get("body") or {}
-        form = body.get("form") or (loose_form(body["text"]).items() if "text" in body
-                                    and "=" in body["text"] else [])
+        form = loose_form(body["text"]).items() if "=" in body.get("text", "") else []
         for k, _ in form:
             form_keys[key][k] += 1
         statuses[key][rec.get("response", {}).get("status", "error")] += 1

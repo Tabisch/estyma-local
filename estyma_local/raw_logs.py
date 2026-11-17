@@ -9,10 +9,8 @@ raw logs are off by default and switched on the app settings page.
 While they are on, the plain ``.jsonl`` file holds the current hour only.
 At every hour change (and at start) it is gzipped and appended to that day's
 ``exchanges-YYYY-MM-DD.jsonl.gz`` as one more gzip member, which any gzip
-tool reads as one file. Plain files from older versions are left as they
-are. Each record keeps the controller's report once (as
-``text``; the parsed ``form`` copy older versions added is dropped), so a
-day takes about 0.6 MB instead of 150 MB.
+tool reads as one file. Each record keeps the controller's report once (as
+``text``), so a day takes about 0.6 MB instead of 150 MB.
 
 The choice is saved in LOG_DIR/raw-logs.json so it survives restarts.
 Before the first change, RAW_LOGS (default 0 = off) decides.
@@ -87,24 +85,9 @@ class RawLogSetting:
 # Files
 # --------------------------------------------------------------------------
 
-def slim_line(line: str) -> str:
-    """Drop the parsed ``form`` copy of a request body that also has ``text``."""
-    if '"form"' not in line:
-        return line
-    try:
-        rec = json.loads(line)
-    except ValueError:
-        return line
-    body = (rec.get("request") or {}).get("body") or {}
-    if "text" in body and "form" in body:
-        del body["form"]
-        return json.dumps(rec, ensure_ascii=False)
-    return line
-
-
 def pack(plain: str, truncate: bool = False) -> str | None:
     """Gzip ``exchanges-D.jsonl`` onto ``exchanges-D.jsonl.gz`` (one more
-    member), slimming each line. The plain file is removed, or emptied with
+    member). The plain file is removed, or emptied with
     ``truncate`` (the file still being written, called with its lock held).
     Returns the .gz path, or None if there was nothing to pack."""
     try:
@@ -120,9 +103,8 @@ def pack(plain: str, truncate: bool = False) -> str | None:
         with gzip.GzipFile(fileobj=raw, mode="wb", compresslevel=6,
                            filename=os.path.basename(plain)) as dst:
             for line in src:
-                line = line.rstrip("\n")
-                if line:
-                    dst.write((slim_line(line) + "\n").encode("utf-8"))
+                if line.strip():
+                    dst.write(line.encode("utf-8"))
         raw.flush()
         os.fsync(raw.fileno())
     if truncate:

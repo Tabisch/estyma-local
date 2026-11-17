@@ -64,8 +64,7 @@ class ExchangeLog:
             raw.listeners.append(lambda on: None if on else self.pack_current())
 
     def pack_current(self) -> None:
-        """Gzip the hour being written (when the raw logs are switched off).
-        Other plain .jsonl files (e.g. from older versions) are left alone."""
+        """Gzip the hour being written (when the raw logs are switched off)."""
         from .raw_logs import pack
         with self._lock:
             if self._hour is None:

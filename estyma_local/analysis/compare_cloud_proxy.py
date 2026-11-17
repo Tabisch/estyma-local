@@ -70,11 +70,7 @@ def proxy_sample(rec: dict):
     if not str(req.get("path", "")).endswith("/device/connect"):
         return None
     body = req.get("body") or {}
-    field = None
-    if "text" in body:
-        field = loose_form(body["text"]).get("ZAPISZ_ODCZYT")
-    if field is None:
-        field = dict(body.get("form") or []).get("ZAPISZ_ODCZYT")
+    field = loose_form(body.get("text") or "").get("ZAPISZ_ODCZYT")
     if not field:
         return None
     regs = parse_report(field)

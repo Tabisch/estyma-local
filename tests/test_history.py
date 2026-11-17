@@ -78,10 +78,9 @@ class RawFilesTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()
 
-    def test_pack_appends_members_and_slims(self):
+    def test_pack_appends_members(self):
         plain = os.path.join(self.dir, "exchanges-2027-01-15.jsonl")
         rec = record(T0, report())
-        rec["request"]["body"]["form"] = [["a", "b"]]
         for i in range(2):
             with open(plain, "w") as fh:
                 fh.write(json.dumps(dict(rec, id=i)) + "\n")
@@ -89,7 +88,6 @@ class RawFilesTest(unittest.TestCase):
         self.assertFalse(os.path.exists(plain))
         got = list(R.read_records(plain + ".gz"))
         self.assertEqual([r["id"] for r in got], [0, 1])
-        self.assertNotIn("form", got[0]["request"]["body"])
         self.assertEqual(got[0]["request"]["body"]["text"], rec["request"]["body"]["text"])
         with gzip.open(plain + ".gz", "rt") as fh:  # plain gzip tools read it too
             self.assertEqual(len(fh.readlines()), 2)
