@@ -58,8 +58,12 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
+          # latest = newest stable release tag (v1.2.3, not v1.2.3-beta1).
+          # main = newest build from main ([build] commits or manual runs).
+          flavor: latest=false
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
+            type=raw,value=main,enable={{is_default_branch}}
             type=ref,event=tag
             type=sha
 
@@ -70,6 +74,9 @@ jobs:
           # put back a docker/setup-qemu-action@v3 step before buildx.
           platforms: linux/amd64
           push: true
+          # No provenance attestation: otherwise every push adds an untagged
+          # index + attestation next to the image on the GHCR package page.
+          provenance: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
