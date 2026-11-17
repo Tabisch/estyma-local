@@ -268,20 +268,9 @@ class Monitor:
                     continue
                 self.ingest(rec, live=False)
 
-    def start(self, before=None) -> None:
-        """Refill in the background; ``before`` runs first in the same thread
-        (packing the raw logs)."""
+    def start(self) -> None:
         self.loading = True
-
-        def run():
-            if before is not None:
-                try:
-                    before()
-                except Exception as exc:
-                    print(f"monitor start: {type(exc).__name__}: {exc}", flush=True)
-            self.load_history()
-
-        threading.Thread(target=run, name="monitor-load", daemon=True).start()
+        threading.Thread(target=self.load_history, name="monitor-load", daemon=True).start()
 
     # -- reading ------------------------------------------------------------
 

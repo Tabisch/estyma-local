@@ -144,6 +144,8 @@ class ExchangeLogTest(unittest.TestCase):
         recs = [r for p in R.exchange_files(self.dir) for r in R.read_records(p)]
         self.assertEqual(len(recs), 2)
         self.assertEqual(os.path.getsize(os.path.join(self.dir, today)), 0)
+        self.raw.configure(True)
+        self.log.pack_current()  # nothing written since: no-op
 
     def test_form_bodies_logged_once(self):
         rec = self.log.body_record(b"a=1&b=2", "application/x-www-form-urlencoded")

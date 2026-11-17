@@ -145,7 +145,7 @@ def _start_web(cfg: Settings, log: ExchangeLog, ctl: Controller, fallback=None,
     from .web import start_web
     mon = Monitor(cfg.log_dir, cfg.monitor_history_hours, store=store)
     log.listeners.append(mon.ingest)
-    mon.start(before=log.pack_all)
+    mon.start()
     cloud = None
     try:
         from .cloud_monitor import CloudMonitor
@@ -214,9 +214,6 @@ def run(cfg: Settings) -> int:
           f"history in {store.path if store else 'memory only'}", flush=True)
     if cfg.ui_port:
         _start_web(cfg, log, ctl, fallback, store)
-    else:
-        import threading
-        threading.Thread(target=log.pack_all, name="pack-logs", daemon=True).start()
     mqtt = _start_mqtt(ctl) if cfg.mqtt_host else None
     try:
         server.serve_forever()

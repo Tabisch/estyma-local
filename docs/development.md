@@ -133,7 +133,7 @@ logs* on `/settings` (or `RAW_LOGS=1`). Then the current hour is in
 `exchanges-YYYY-MM-DD.jsonl` and every finished hour is gzipped onto
 `exchanges-YYYY-MM-DD.jsonl.gz` (one gzip member per hour; `zcat` reads it
 as one file). About 0.6 MB a day. Plain `.jsonl` files from older versions
-are packed the same way on start. The analysis scripts read both.
+are left as they are. The analysis scripts read both.
 
 One JSON object per line, in the `estyma-logs` volume (UTC dates):
 

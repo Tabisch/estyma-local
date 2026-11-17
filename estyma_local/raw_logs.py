@@ -9,7 +9,8 @@ raw logs are off by default and switched on the app settings page.
 While they are on, the plain ``.jsonl`` file holds the current hour only.
 At every hour change (and at start) it is gzipped and appended to that day's
 ``exchanges-YYYY-MM-DD.jsonl.gz`` as one more gzip member, which any gzip
-tool reads as one file. Each record keeps the controller's report once (as
+tool reads as one file. Plain files from older versions are left as they
+are. Each record keeps the controller's report once (as
 ``text``; the parsed ``form`` copy older versions added is dropped), so a
 day takes about 0.6 MB instead of 150 MB.
 

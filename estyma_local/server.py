@@ -14,7 +14,6 @@ environment variable, see ``config.py`` / docs/configuration.md.
 from __future__ import annotations
 
 import base64
-import glob
 import http.client
 import json
 import os
@@ -62,23 +61,21 @@ class ExchangeLog:
         self.listeners = []  # callables getting every record, e.g. the monitor
         os.makedirs(log_dir, exist_ok=True)
         if raw is not None:
-            raw.listeners.append(lambda _on: self.pack_all())
+            raw.listeners.append(lambda on: None if on else self.pack_current())
 
-    def pack_all(self) -> None:
-        """Gzip every plain exchanges-*.jsonl (old days and the current
-        hour); run at start and when the raw logs are switched off."""
+    def pack_current(self) -> None:
+        """Gzip the hour being written (when the raw logs are switched off).
+        Other plain .jsonl files (e.g. from older versions) are left alone."""
         from .raw_logs import pack
-        today = self._path(datetime.now(timezone.utc))
-        for path in sorted(glob.glob(os.path.join(self.log_dir, "exchanges-*.jsonl"))):
+        with self._lock:
+            if self._hour is None:
+                return
             try:
-                if path == today:
-                    with self._lock:
-                        pack(path, truncate=True)
-                        self._hour = None
-                else:
-                    pack(path)
+                pack(self._path(datetime.strptime(self._hour[:10], "%Y-%m-%d")),
+                     truncate=True)
             except OSError as exc:
-                print(f"packing {os.path.basename(path)} failed: {exc}", flush=True)
+                print(f"packing the raw log failed: {exc}", flush=True)
+            self._hour = None
 
     def _path(self, ts: datetime) -> str:
         return os.path.join(self.log_dir, f"exchanges-{ts:%Y-%m-%d}.jsonl")
