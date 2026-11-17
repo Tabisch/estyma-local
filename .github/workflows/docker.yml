@@ -17,9 +17,9 @@ jobs:
     # built when the tests pass.
     runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"   # same as the Dockerfile
           cache: pip
@@ -44,18 +44,18 @@ jobs:
     # "self-hosted" = your own runner (see docs/development.md).
     runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
           # latest = newest stable release tag (v1.2.3, not v1.2.3-beta1).
@@ -67,11 +67,11 @@ jobs:
             type=ref,event=tag
             type=sha
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           # Only amd64 for now. For more, add e.g. linux/arm64,linux/arm/v7 and
-          # put back a docker/setup-qemu-action@v3 step before buildx.
+          # put back a docker/setup-qemu-action@v4 step before buildx.
           platforms: linux/amd64
           push: true
           # No provenance attestation: otherwise every push adds an untagged
