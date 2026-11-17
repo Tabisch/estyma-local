@@ -22,7 +22,9 @@ Setup is in [docs/setup.md](docs/setup.md), everything else in [docs/](docs/READ
 heating controller --- provider_ip:80 ---> proxy_host:8088 (estyma-proxy) ---> provider server
                                                   |
                                                   +--> volume estyma-logs
-                                                          exchanges-YYYY-MM-DD.jsonl
+                                                          history.sqlite3 (register history)
+                                                          exchanges-YYYY-MM-DD.jsonl.gz
+                                                          (raw logs, only when switched on)
                                                   |
                                    browser ---> proxy_host:8089 (monitor + log download UI)
 ```

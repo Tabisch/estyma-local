@@ -64,7 +64,7 @@ PAGE = """<!doctype html>
     var de = document.documentElement.lang === "de";
     var q = names.length === 1
       ? (de ? names[0] + " endgültig löschen?" : "Delete " + names[0] + " for good?")
-      : (de ? "Alle " + names.length + " .jsonl-Dateien endgültig löschen?" : "Delete all " + names.length + " .jsonl files for good?");
+      : (de ? "Alle " + names.length + " Logdateien endgültig löschen?" : "Delete all " + names.length + " log files for good?");
     if (!confirm(q)) return;
     fetch("/api/delete-logs", {{ method: "POST", headers: {{ "Content-Type": "application/json" }}, body: JSON.stringify({{ names: names }}) }})
       .then(function (r) {{ return r.json(); }})
@@ -84,7 +84,7 @@ PAGE = """<!doctype html>
 (function () {{
   var de = {{ monitor: "Monitor", settings: "Heizungseinstellungen", batches: "Pelletchargen", registers: "Register", logs: "Logs", app: "Einstellungen", title: "Estyma-Logs", files: "{{n}} Dateien", "in": "in",
     file: "Datei", size: "Größe", modified: "Geändert", nologs: "Noch keine Logs.", zip: "Alle herunterladen (zip)",
-    del: "Löschen", delall: "Alle .jsonl löschen", needauth: "Zum Löschen UI_USER und UI_PASSWORD setzen." }};
+    del: "Löschen", delall: "Alle Logs löschen", needauth: "Zum Löschen UI_USER und UI_PASSWORD setzen." }};
   var lang = "";
   try {{ lang = localStorage.getItem("estyma-lang") || ""; }} catch (e) {{}}
   if (!lang) lang = String((navigator.languages || [navigator.language || "en"])[0]).slice(0, 2).toLowerCase();
@@ -119,6 +119,7 @@ class WebHandler(BaseHTTPRequestHandler):
     snapshots = None    # batches.SnapshotStore or None
     retention = None    # retention.LogRetention or None
     fallback = None     # cloud_fallback.CloudFallback or None
+    raw_logs = None     # raw_logs.RawLogSetting or None
 
     def log_message(self, fmt, *args):
         pass
@@ -181,6 +182,7 @@ class WebHandler(BaseHTTPRequestHandler):
         "/api/snapshots": ("_api_snapshots", "snapshots"),
         "/api/log-retention": ("_api_retention", "retention"),
         "/api/cloud-fallback": ("_api_fallback", "fallback"),
+        "/api/raw-logs": ("_api_raw_logs", "raw_logs"),
     }
     # POST bodies are JSON. ``auth``: also needs UI_USER / UI_PASSWORD set
     # (value: what is refused without it, for the message).
@@ -190,6 +192,7 @@ class WebHandler(BaseHTTPRequestHandler):
         "/api/cloud": ("_post_cloud", "cloud", "switching cloud monitoring"),
         "/api/log-retention": ("_post_retention", "retention", "deleting logs"),
         "/api/cloud-fallback": ("_post_fallback", "fallback", "changing the cloud timeout"),
+        "/api/raw-logs": ("_post_raw_logs", "raw_logs", "switching raw logs"),
         "/api/set": ("_post_set", "controller", "writes"),
         "/api/cancel": ("_post_cancel", "controller", "writes"),
         "/api/snapshots/save": ("_post_snapshot_save", "snapshots", None),
@@ -303,6 +306,12 @@ class WebHandler(BaseHTTPRequestHandler):
     def _api_fallback(self, _query):
         self._json(200, self._with_auth(self.fallback.status()))
 
+    def _api_raw_logs(self, _query):
+        st = self.raw_logs.status()
+        if self.monitor is not None and self.monitor.store is not None:
+            st["history"] = self.monitor.store.status()
+        self._json(200, self._with_auth(st))
+
     def _api_snapshots(self, _query):
         self._json(200, {"ui_auth": self.auth is not None, "can_save": self.controller is not None,
                          "suppliers": self.snapshots.suppliers(), "snapshots": self.snapshots.list()})
@@ -339,6 +348,14 @@ class WebHandler(BaseHTTPRequestHandler):
             return self._json(400, {"ok": False, "message": "enabled must be true or false"})
         try:
             st = self.retention.configure(req["enabled"], req.get("days"))
+        except ValueError as exc:
+            return self._json(400, {"ok": False, "message": str(exc)})
+        st["ui_auth"] = True
+        self._json(200, {"ok": True, **st})
+
+    def _post_raw_logs(self, req):
+        try:
+            st = self.raw_logs.configure(req.get("enabled"))
         except ValueError as exc:
             return self._json(400, {"ok": False, "message": str(exc)})
         st["ui_auth"] = True
@@ -403,9 +420,9 @@ class WebHandler(BaseHTTPRequestHandler):
             f'<td>{self._del_button(n)}</td></tr>'
             for n, s, m in files
         ) or '<tr><td colspan="4" class="muted" data-i18n="nologs">No logs yet.</td></tr>'
-        deletable = any(n.endswith(".jsonl") for n, _, _ in files)
+        deletable = any(is_log(n) for n, _, _ in files)
         body = PAGE.format(
-            delall=('<button class="delall" data-i18n="delall"%s>Delete all .jsonl</button>'
+            delall=('<button class="delall" data-i18n="delall"%s>Delete all logs</button>'
                     % ("" if self.auth else " disabled")) if deletable else "",
             delnote=('' if self.auth or not deletable else
                      '<span data-i18n="needauth">Set UI_USER and UI_PASSWORD to delete files.</span>'),
@@ -418,7 +435,7 @@ class WebHandler(BaseHTTPRequestHandler):
         self._send(200, body, "text/html; charset=utf-8")
 
     def _del_button(self, name: str) -> str:
-        if not name.endswith(".jsonl"):
+        if not is_log(name):
             return ""  # e.g. state.json is the server's state, not a log
         dis = "" if self.auth else " disabled"
         return (f'<button class="del" data-del="{html.escape(name, quote=True)}" '
@@ -431,8 +448,8 @@ class WebHandler(BaseHTTPRequestHandler):
         deleted, errors = [], []
         for name in names:
             name = str(name)
-            # Only .jsonl files directly inside LOG_DIR, never state.json etc.
-            if (not name.endswith(".jsonl") or "/" in name or "\\" in name
+            # Only .jsonl(.gz) files directly inside LOG_DIR, never state.json etc.
+            if (not is_log(name) or "/" in name or "\\" in name
                     or name.startswith(".") or name not in existing):
                 errors.append(f"{name}: not a log file")
                 continue
@@ -486,10 +503,15 @@ class WebHandler(BaseHTTPRequestHandler):
                    [("Content-Disposition", f'attachment; filename="estyma-logs-{stamp}.zip"')])
 
 
+def is_log(name: str) -> bool:
+    """A log file the page may delete: .jsonl, or a packed .jsonl.gz."""
+    return name.endswith((".jsonl", ".jsonl.gz"))
+
+
 def start_web(host: str, port: int, log_dir: str,
                  user: str | None = None, password: str | None = None,
                  monitor=None, controller=None, cloud=None, retention=None,
-                 snapshots=None, fallback=None) -> ThreadingHTTPServer:
+                 snapshots=None, fallback=None, raw_logs=None) -> ThreadingHTTPServer:
     """Start the UI in a background thread and return the server. Without
     ``snapshots`` a store in ``log_dir`` is made when there is a controller."""
     auth = f"{user}:{password}".encode() if user and password else None
@@ -499,7 +521,7 @@ def start_web(host: str, port: int, log_dir: str,
     handler = type("Handler", (WebHandler,), {"log_dir": os.path.abspath(log_dir), "auth": auth,
                                                 "monitor": monitor, "controller": controller,
                                                 "cloud": cloud, "retention": retention,
-                                                "fallback": fallback,
+                                                "fallback": fallback, "raw_logs": raw_logs,
                                                 "snapshots": snapshots})
     server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True

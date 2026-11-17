@@ -14,6 +14,7 @@ environment variable, see ``config.py`` / docs/configuration.md.
 from __future__ import annotations
 
 import base64
+import glob
 import http.client
 import json
 import os
@@ -50,12 +51,34 @@ HOP_BY_HOP = {
 class ExchangeLog:
     """Appends one JSON object per request/response pair to a daily file."""
 
-    def __init__(self, log_dir: str, max_body: int) -> None:
+    def __init__(self, log_dir: str, max_body: int, raw=None) -> None:
         self.log_dir = log_dir
         self.max_body = max_body
+        # raw_logs.RawLogSetting: write the raw .jsonl only while it is on.
+        # None: always write (tests, tools).
+        self.raw = raw
         self._lock = threading.Lock()
+        self._hour = None    # "YYYY-MM-DD HH" the plain file holds
         self.listeners = []  # callables getting every record, e.g. the monitor
         os.makedirs(log_dir, exist_ok=True)
+        if raw is not None:
+            raw.listeners.append(lambda _on: self.pack_all())
+
+    def pack_all(self) -> None:
+        """Gzip every plain exchanges-*.jsonl (old days and the current
+        hour); run at start and when the raw logs are switched off."""
+        from .raw_logs import pack
+        today = self._path(datetime.now(timezone.utc))
+        for path in sorted(glob.glob(os.path.join(self.log_dir, "exchanges-*.jsonl"))):
+            try:
+                if path == today:
+                    with self._lock:
+                        pack(path, truncate=True)
+                        self._hour = None
+                else:
+                    pack(path)
+            except OSError as exc:
+                print(f"packing {os.path.basename(path)} failed: {exc}", flush=True)
 
     def _path(self, ts: datetime) -> str:
         return os.path.join(self.log_dir, f"exchanges-{ts:%Y-%m-%d}.jsonl")
@@ -76,9 +99,9 @@ class ExchangeLog:
         # Decode common structured formats so the log is easy to grep.
         ctype = (content_type or "").split(";")[0].strip().lower()
         if text is not None:
-            if ctype == "application/x-www-form-urlencoded":
-                rec["form"] = urllib.parse.parse_qsl(text, keep_blank_values=True)
-            elif ctype.endswith("json") or text.lstrip().startswith(("{", "[")):
+            # Form bodies (the controller's reports) stay as text only:
+            # protocol.loose_form parses them where needed.
+            if ctype != "application/x-www-form-urlencoded" and (ctype.endswith("json") or text.lstrip().startswith(("{", "["))):
                 try:
                     rec["json"] = json.loads(text)
                 except ValueError:
@@ -86,16 +109,32 @@ class ExchangeLog:
         return rec
 
     def write(self, record: dict) -> None:
-        line = json.dumps(record, ensure_ascii=False)
-        ts = datetime.now(timezone.utc)
-        with self._lock:
-            with open(self._path(ts), "a", encoding="utf-8") as fh:
-                fh.write(line + "\n")
+        if self.raw is None or self.raw.enabled:
+            self._append(json.dumps(record, ensure_ascii=False))
         for listener in self.listeners:
             try:
                 listener(record)
             except Exception as exc:
                 print(f"listener error: {type(exc).__name__}: {exc}", flush=True)
+
+
+    def _append(self, line: str) -> None:
+        ts = datetime.now(timezone.utc)
+        path = self._path(ts)
+        hour = f"{ts:%Y-%m-%d %H}"
+        with self._lock:
+            if self.raw is not None and hour != self._hour:
+                # New hour: the plain file only ever holds the current one.
+                if self._hour is not None:
+                    try:
+                        from .raw_logs import pack
+                        pack(self._path(datetime.strptime(self._hour[:10], "%Y-%m-%d")),
+                             truncate=self._hour[:10] == hour[:10])
+                    except OSError as exc:
+                        print(f"packing the raw log failed: {exc}", flush=True)
+                self._hour = hour
+            with open(path, "a", encoding="utf-8") as fh:
+                fh.write(line + "\n")
 
 
 def iso(ts: float) -> str:

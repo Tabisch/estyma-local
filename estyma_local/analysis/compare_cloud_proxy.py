@@ -12,7 +12,7 @@ Usage:
     python3 -m estyma_local.analysis.compare_cloud_proxy [LOG_DIR_OR_FILES...]     (default: logs)
     python3 -m estyma_local.analysis.compare_cloud_proxy logs --csv aligned.csv --json mapping.json
 
-Files named ``exchanges-*.jsonl`` are read as proxy logs and ``cloud-*.jsonl``
+Files named ``exchanges-*.jsonl`` (or ``.jsonl.gz``) are read as proxy logs and ``cloud-*.jsonl``
 as cloud logs; other names are detected from their content.
 
 Standard library only.
@@ -31,6 +31,7 @@ from collections import defaultdict
 from datetime import datetime
 
 from ..protocol import loose_form, parse_report
+from ..raw_logs import read_records
 
 # name, function(register value) -> expected cloud value, tolerance
 TRANSFORMS = [
@@ -55,20 +56,13 @@ def parse_time(s: str) -> float:
 def list_files(paths):
     for p in paths:
         if os.path.isdir(p):
-            yield from sorted(glob.glob(os.path.join(p, "*.jsonl")))
+            yield from sorted(glob.glob(os.path.join(p, "*.jsonl")) + glob.glob(os.path.join(p, "*.jsonl.gz")))
         else:
             yield p
 
 
 def iter_lines(path):
-    with open(path, encoding="utf-8") as fh:
-        for line in fh:
-            line = line.strip()
-            if line:
-                try:
-                    yield json.loads(line)
-                except ValueError:
-                    continue
+    yield from read_records(path)  # .jsonl or packed .jsonl.gz
 
 
 def proxy_sample(rec: dict):

@@ -59,11 +59,15 @@ ENV = [
         "cloud monitoring and deleting logs"),
     Env("UI_PASSWORD", "", "proxy", "Basic auth password; auth is on only when user and password are "
         "both set", secret=True),
-    Env("LOG_RETENTION_DAYS", "0", "proxy", "Delete `.jsonl` logs older than this many days, "
+    Env("LOG_RETENTION_DAYS", "0", "proxy", "Delete `.jsonl` / `.jsonl.gz` logs older than this many days, "
         "`0` = keep them all. Only the initial state: once it is changed on the settings page, "
         "the page's choice is kept in `log-retention.json`"),
+    Env("RAW_LOGS", "0", "proxy", "`1` = write the raw traffic logs `exchanges-*.jsonl` (for "
+        "debugging, ~0.6 MB a day gzipped). The register history in `history.sqlite3` is kept "
+        "either way. Only the initial state: once it is switched on the settings page, the "
+        "page's choice is kept in `raw-logs.json`"),
     Env("MONITOR_HISTORY_HOURS", "48", "proxy", "Hours of decoded values the monitor keeps in memory "
-        "for its charts (reloaded from the logs on start)", compose=False, example=False),
+        "for its charts (reloaded from `history.sqlite3` on start)", compose=False, example=False),
     # -- local server -------------------------------------------------------
     Env("MODE", "proxy", "local", "`proxy`, `hybrid` or `local`"),
     Env("WRITES_ENABLED", "0", "local", "`1` = allow local writes (boiler target)"),

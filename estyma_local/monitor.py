@@ -3,18 +3,18 @@
 Every exchange the proxy logs is also handed to ``Monitor.ingest``. The
 ``ZAPISZ_ODCZYT`` field of the request ("reg,idx,value;...") is decoded into
 named values (temperatures, burner power, O2, ...) and kept in memory for
-``MONITOR_HISTORY_HOURS``. On start the history is refilled from the newest
-``exchanges-*.jsonl`` files, so a restart does not lose the charts.
+``MONITOR_HISTORY_HOURS``. On start the history is refilled from the
+history store (history.py), so a restart does not lose the charts.
 
 The web UI (web.py) serves the page and ``/api/monitor``.
 """
 
 from __future__ import annotations
 
-import glob
+import bisect
 import json
 import os
-import bisect
+import sqlite3
 import threading
 import time
 from collections import deque
@@ -23,6 +23,7 @@ from datetime import datetime
 from . import catalog as C
 from . import decode as D
 from .protocol import loose_form, parse_read_list, parse_report
+from .raw_logs import exchange_files, read_lines
 from .registers import RegisterTable
 
 # --------------------------------------------------------------------------
@@ -125,8 +126,9 @@ def meta():
 # --------------------------------------------------------------------------
 
 class Monitor:
-    def __init__(self, log_dir: str, history_hours: float = 48) -> None:
+    def __init__(self, log_dir: str, history_hours: float = 48, store=None) -> None:
         self.log_dir = log_dir
+        self.store = store  # history.HistoryStore: where the charts are refilled from
         self.history_s = history_hours * 3600
         self._lock = threading.Lock()
         self.history: list = []                 # (ts, {key: value}), sorted by ts
@@ -161,7 +163,6 @@ class Monitor:
         resp_text = ((resp or {}).get("body") or {}).get("text", "")
 
         regs = parse_report(form.get("ZAPISZ_ODCZYT", ""))
-        live, settings = decode_registers(regs)
         self.registers.observe(ts, regs, parse_read_list(resp_text) if resp_text else None)
 
         with self._lock:
@@ -191,6 +192,12 @@ class Monitor:
                 self.last_write = {"time": ts, "values": _between(resp_text, "ZAPIS&;", "&KONIEC"),
                                    "source": "local" if rec.get("local") or rec.get("injected")
                                    else "cloud"}
+        self._apply(ts, regs)
+
+    def _apply(self, ts: float, regs: dict) -> None:
+        """Decoded values, alarms and history of one report."""
+        live, settings = decode_registers(regs)
+        with self._lock:
             slots, counter = decode_alarms(regs, ts)
             if counter is not None and (self.alarm_counter is None or ts >= self.alarm_counter[0]):
                 self.alarm_counter = (ts, counter)
@@ -224,35 +231,62 @@ class Monitor:
             self.recent.popleft()
 
     def load_history(self) -> None:
-        """Refill from the newest log files (blocking; run in a thread)."""
+        """Refill the charts after a restart (blocking; run in a thread).
+        With a history store: import old raw logs into it once, then replay
+        it. Without one: read the newest raw logs directly."""
         self.loading = True
         try:
             cutoff = time.time() - self.history_s
-            files = sorted(glob.glob(os.path.join(self.log_dir, "exchanges-*.jsonl")))
-            days = int(self.history_s // 86400) + 2
-            for path in files[-days:]:
-                with open(path, encoding="utf-8") as fh:
-                    for line in fh:
-                        if '"/device/connect"' not in line:
-                            continue
-                        try:
-                            rec = json.loads(line)
-                        except ValueError:
-                            continue
-                        try:
-                            if parse_time(rec["time"]) < cutoff:
-                                continue
-                        except (KeyError, TypeError, ValueError):
-                            continue
-                        self.ingest(rec, live=False)
-        except OSError:
-            pass
+            if self.store is not None:
+                self._load_from_store(cutoff)
+            else:
+                self._load_from_logs(cutoff)
+        except (OSError, sqlite3.Error) as exc:
+            print(f"monitor history reload: {type(exc).__name__}: {exc}", flush=True)
         finally:
             self.loading = False
             self.registers.save(force=True)
 
-    def start(self) -> None:
-        threading.Thread(target=self.load_history, name="monitor-load", daemon=True).start()
+    def _load_from_store(self, cutoff: float) -> None:
+        files = exchange_files(self.log_dir)
+        if files:
+            n = self.store.import_logs(files)
+            if n:
+                print(f"history: imported {n} values from the old raw logs", flush=True)
+        for t, regs in self.store.replay(cutoff, until=self.store.started):
+            self._apply(t, regs)
+
+    def _load_from_logs(self, cutoff: float) -> None:
+        days = int(self.history_s // 86400) + 2
+        for path in exchange_files(self.log_dir)[-2 * days:]:
+            for line in read_lines(path):
+                if '"/device/connect"' not in line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except ValueError:
+                    continue
+                try:
+                    if parse_time(rec["time"]) < cutoff:
+                        continue
+                except (KeyError, TypeError, ValueError):
+                    continue
+                self.ingest(rec, live=False)
+
+    def start(self, before=None) -> None:
+        """Refill in the background; ``before`` runs first in the same thread
+        (packing the raw logs, so the import does not race with it)."""
+        self.loading = True
+
+        def run():
+            if before is not None:
+                try:
+                    before()
+                except Exception as exc:
+                    print(f"monitor start: {type(exc).__name__}: {exc}", flush=True)
+            self.load_history()
+
+        threading.Thread(target=run, name="monitor-load", daemon=True).start()
 
     # -- reading ------------------------------------------------------------
 

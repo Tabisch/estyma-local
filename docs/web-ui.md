@@ -50,20 +50,26 @@ Open `http://<proxy_host>:8089/`.
   volume, which the log deletion leaves alone. JSON at `/api/snapshots`.
 - **Logs** (`/logs`): every log file in the volume with size and date, a
   download link per file and a "Download all (zip)" button. Each `.jsonl`
-  file has a *Delete* button, and *Delete all .jsonl* clears them all (both
-  ask first). Deleting only works when `UI_USER` / `UI_PASSWORD` are set;
+  or `.jsonl.gz` file has a *Delete* button, and *Delete all logs* clears
+  them all (both ask first). Deleting only works when `UI_USER` / `UI_PASSWORD` are set;
   `state.json` (the server's register state), `registers.json` (the
-  register table) and `settings-snapshots.json` (the pellet batches) cannot
+  register table), `history.sqlite3` (the register history) and `settings-snapshots.json` (the pellet batches) cannot
   be deleted from here.
   Charts already loaded in the monitor keep their data until the next restart.
 - **Settings** (`/settings`): settings of this app itself, kept apart from
   the heating controller's settings on `/heating`. It holds the
   *Cloud monitoring* switch (see [cloud-monitoring.md](cloud-monitoring.md))
-  and *Delete old logs automatically*: once switched on, every `.jsonl` log
-  (`exchanges-*`, `cloud-*`, `writes-*`) last written more than the given
+  *Keep raw traffic logs (debugging)*, off by default: writes every
+  exchange to `exchanges-*.jsonl`, gzipped every hour (about 0.6 MB a day).
+  The register history in `history.sqlite3` is kept either way, so this is
+  only needed to debug or to decode new registers. The choice is kept in
+  `raw-logs.json`; until it is first changed, `RAW_LOGS` decides (default
+  `0`). Switching it needs `UI_USER` / `UI_PASSWORD`.
+  *Delete old logs automatically*: once switched on, every `.jsonl` /
+  `.jsonl.gz` log (`exchanges-*`, `cloud-*`, `writes-*`) last written more than the given
   number of days ago (1 to 3650) is deleted, right after the change and then
-  every hour. `state.json`, `registers.json` and the other state files are
-  never touched. The choice is kept in `log-retention.json` in the log volume;
+  every hour. `state.json`, `registers.json`, `history.sqlite3` and the
+  other state files are never touched. The choice is kept in `log-retention.json` in the log volume;
   until it is first changed, `LOG_RETENTION_DAYS` decides (default `0` = keep
   all logs). Changing it needs `UI_USER` / `UI_PASSWORD`, like deleting logs.
   *Answer when the cloud is slow* sets how many seconds (1 to 60) the proxy
