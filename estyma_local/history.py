@@ -15,9 +15,8 @@ apart from one that does not change: during replay a key counts as gone when
 nothing was written for it for ``STALE_S``. Values are stored raw, before the
 glitch rule in decode.py, so replaying gives the readers exactly what the
 controller sent.
-
-Old raw logs (``exchanges-*.jsonl[.gz]``) are imported once, so upgrading
-keeps the charts.
+The history starts empty with the first report after the update; old raw
+logs are not imported.
 """
 
 from __future__ import annotations
@@ -39,7 +38,6 @@ CREATE TABLE IF NOT EXISTS vals (
     t INTEGER NOT NULL, reg INTEGER NOT NULL, idx INTEGER NOT NULL, val INTEGER NOT NULL,
     PRIMARY KEY (t, reg, idx)
 ) WITHOUT ROWID;
-CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT) WITHOUT ROWID;
 """
 
 
@@ -122,44 +120,6 @@ class HistoryStore:
             if self.last_error is None:
                 print(f"history store: {type(exc).__name__}: {exc}", flush=True)
             self.last_error = f"{type(exc).__name__}: {exc}"
-
-    def import_logs(self, paths, before: float | None = None) -> int:
-        """Import old raw logs once (each file is remembered in ``meta``).
-        Only reports from before ``before`` (default: this store's start)
-        are taken, the live ones are already stored. Returns the values
-        written."""
-        from .raw_logs import read_records  # late: raw_logs imports nothing from here
-        before = self.started if before is None else before
-        written = 0
-        for path in paths:
-            name = os.path.basename(path)
-            key = "imported:" + name.replace(".jsonl.gz", ".jsonl")
-            with self._lock:
-                done = self._db.execute("SELECT 1 FROM meta WHERE key = ?", (key + ":done",)).fetchone()
-            if done:
-                continue
-            dedup, batch, complete = _Dedup(), [], True
-            if not os.path.isfile(path):
-                continue
-            for rec in read_records(path):
-                got = report_of(rec)
-                if not got:
-                    continue
-                if got[0] >= before:
-                    complete = False  # still being written: import again next start
-                    continue
-                batch += dedup.rows(int(got[0]), got[1])
-                if len(batch) >= 5000:
-                    self._insert(batch)
-                    written += len(batch)
-                    batch = []
-            self._insert(batch)
-            written += len(batch)
-            if complete:
-                with self._lock, self._db:
-                    self._db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)",
-                                     (key + ":done", str(int(self.clock()))))
-        return written
 
     # -- reading ------------------------------------------------------------
 

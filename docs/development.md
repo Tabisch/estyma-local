@@ -119,8 +119,8 @@ Every controller report is stored in `history.sqlite3` in the log volume
 (`estyma_local/history.py`): table `vals(t, reg, idx, val)` with the raw
 value of each register at Unix time `t`, written only when it changed, plus
 all values once an hour. That is about 0.3 to 0.5 MB a day. The monitor
-refills its charts from it on start. On the first start, old raw logs are
-imported once.
+refills its charts from it on start. It starts empty with the update; old
+raw logs are not imported.
 
 ```sh
 sqlite3 history.sqlite3 "SELECT datetime(t, 'unixepoch'), val FROM vals WHERE reg = 8193 AND idx = 1 ORDER BY t DESC LIMIT 10"

@@ -232,8 +232,8 @@ class Monitor:
 
     def load_history(self) -> None:
         """Refill the charts after a restart (blocking; run in a thread).
-        With a history store: import old raw logs into it once, then replay
-        it. Without one: read the newest raw logs directly."""
+        With a history store: replay it. Without one: read the newest raw
+        logs directly."""
         self.loading = True
         try:
             cutoff = time.time() - self.history_s
@@ -248,11 +248,6 @@ class Monitor:
             self.registers.save(force=True)
 
     def _load_from_store(self, cutoff: float) -> None:
-        files = exchange_files(self.log_dir)
-        if files:
-            n = self.store.import_logs(files)
-            if n:
-                print(f"history: imported {n} values from the old raw logs", flush=True)
         for t, regs in self.store.replay(cutoff, until=self.store.started):
             self._apply(t, regs)
 
@@ -275,7 +270,7 @@ class Monitor:
 
     def start(self, before=None) -> None:
         """Refill in the background; ``before`` runs first in the same thread
-        (packing the raw logs, so the import does not race with it)."""
+        (packing the raw logs)."""
         self.loading = True
 
         def run():

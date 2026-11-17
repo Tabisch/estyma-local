@@ -73,18 +73,6 @@ class StoreTest(unittest.TestCase):
         self.store.ingest(record(T0, report()))
         self.assertEqual(self.store.status()["values"], len(report()))
 
-    def test_import_old_logs_once(self):
-        plain = os.path.join(self.dir, "exchanges-2027-01-15.jsonl")
-        with open(plain, "w") as fh:
-            for i in range(5):
-                fh.write(json.dumps(record(T0 + 20 * i, report(r8193_1=700 + i // 2))) + "\n")
-        R.pack(plain)
-        files = R.exchange_files(self.dir)
-        self.assertEqual([os.path.basename(f) for f in files], ["exchanges-2027-01-15.jsonl.gz"])
-        n = self.store.import_logs(files)
-        self.assertEqual(n, len(report()) + 2)
-        self.assertEqual(self.store.import_logs(files), 0)  # remembered
-
 
 class RawFilesTest(unittest.TestCase):
     def setUp(self):
@@ -177,19 +165,6 @@ class MonitorRefillTest(unittest.TestCase):
         snap = mon.snapshot()
         self.assertEqual(len(snap["history"]["t"]), 10)
         self.assertEqual(snap["history"]["boiler"][-1], mon.snapshot()["current"]["boiler"]["value"])
-        store.close()
-
-    def test_old_raw_logs_imported(self):
-        d = tempfile.mkdtemp()
-        now = time.time()
-        with open(os.path.join(d, "exchanges-2027-01-15.jsonl"), "w") as fh:
-            for i in range(3):
-                fh.write(json.dumps(record(now - 600 + 60 * i, report(r8193_1=700 + i))) + "\n")
-        store = H.HistoryStore(d)
-        mon = Monitor(d, 48, store=store)
-        mon.load_history()
-        self.assertEqual(len(mon.snapshot()["history"]["t"]), 3)
-        self.assertGreater(store.status()["values"], 0)
         store.close()
 
 
