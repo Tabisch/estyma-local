@@ -142,8 +142,8 @@ GROUPS = {
 }
 
 # Ranges are the ones the cloud panels offer (docs/registers.md). Only 8195,
-# 8197 (2026-11-08) and 8292 (2026-11-16) were seen being written by the
-# cloud and taking effect; every other
+# 8197 (2026-11-08), 8292 (2026-11-16) and 8468, 8469, 8242, 8264
+# (2026-11-17) were seen being written by the cloud and taking effect; every other
 # write is untested and needs ALLOW_UNTESTED_WRITES=1 as well.
 _B = "burner"
 _SETTINGS = [
@@ -151,10 +151,10 @@ _SETTINGS = [
              tested=True, group="user", options=R.VALUES[8197], main=True),
     _setting("boiler_target", 8195, "user", tested=True, main=True, label="Boiler target"),
     _setting("boiler_mode", 8194, "user", kind="enum", limits=False),
-    _setting("buffer_top_target", 8468, "user"),
-    _setting("buffer_bottom_target", 8469, "user"),
-    _setting("room_comfort_1", 8242, "user"),
-    _setting("room_eco_1", 8264, "user"),
+    _setting("buffer_top_target", 8468, "user", tested=True),
+    _setting("buffer_bottom_target", 8469, "user", tested=True),
+    _setting("room_comfort_1", 8242, "user", tested=True),
+    _setting("room_eco_1", 8264, "user", tested=True),
     _setting("circuit1_program", 8292, "user", kind="enum", limits=False, tested=True),
     # Boiler (service panel "Kocioł")
     _setting("hyst_on", 8712, "boiler"),

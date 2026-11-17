@@ -207,8 +207,9 @@ class SettingsTest(unittest.TestCase):
         c, _, _ = make()
         c.observe_report(report(**SETTINGS_REPORT))
         with self.assertRaisesRegex(WriteError, "ALLOW_UNTESTED_WRITES"):
-            c.request_write("buffer_top_target", 50)
+            c.request_write("hyst_on", 8)
         c.request_write("boiler_target", 61)  # tested ones still fine
+        c.request_write("buffer_top_target", 50)
 
     def test_scaled_write_and_u8_readback(self):
         c, _, _ = make(allow_untested_writes=True)
