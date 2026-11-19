@@ -78,7 +78,7 @@ Same service, see [home-assistant.md](home-assistant.md).
 | `MQTT_DEVICE_ID` | `boiler` | yes | Second part of the topics and of the unique IDs; change only for a second boiler |
 | `HA_DISCOVERY_PREFIX` | `homeassistant` | yes | Home Assistant's discovery prefix |
 | `MQTT_STALE_SECONDS` | `300` | yes | Seconds without a controller report until the device is unavailable. Keep it well above 100 s: after a slow or failed cloud reply the controller waits about 100 s before its next report |
-| `FUEL_KWH_PER_KG` | (empty) | yes | Calorific value for the energy sensor; empty = controller setting, else 4.8 |
+| `FUEL_KWH_PER_KG` | (empty) | yes | Calorific value (kWh/kg) for the energy sensor and the fuel statistics; empty = controller setting, else 4.8 |
 
 ## Standalone cloud recorder
 

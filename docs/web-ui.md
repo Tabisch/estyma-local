@@ -13,6 +13,13 @@ Open `http://<proxy_host>:8089/`.
   An active alarm shows as a red banner at the top, and an *Alarms* table
   lists the alarms seen in the reports (code, state, start and acknowledge time
   from the controller's clock, same as the display's alarm list).
+  Click the *Fuel counter* tile for the **fuel statistics**: kg (and kWh)
+  today, yesterday, this week, month and year, and a bar chart per day,
+  week, month or year (calendar periods in `CONTROLLER_TZ`, weeks from
+  Monday) with a table view. Periods in which the server was not recording
+  for a while are hatched: their fuel is spread evenly over the gap. kWh
+  use `FUEL_KWH_PER_KG`, else the controller's calorific value, else 4.8.
+  JSON at `/api/fuel?period=day|week|month|year&count=N`.
   The history is kept in memory and rebuilt from the logs in the volume when
   the container starts. The same data is available as JSON at
   `/api/monitor?hours=24`.

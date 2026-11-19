@@ -76,6 +76,27 @@ code { font-size: .85em; word-break: break-all; }
 .pill { display: inline-block; padding: .05rem .5rem; border-radius: 999px; font-size: .8rem; border: 1px solid currentColor; }
 .pill.active, .pill.resetting { color: var(--bad); }
 .pill.cleared { color: var(--muted); }
+button.tile { font: inherit; color: inherit; text-align: left; cursor: pointer; width: 100%; }
+button.tile:hover, button.tile:focus-visible { border-color: var(--accent); }
+button.tile .sub { color: var(--accent); }
+dialog.fuel { width: min(46rem, calc(100% - 32px)); max-width: none; max-height: calc(100% - 32px); padding: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--text); }
+dialog.fuel::backdrop { background: rgba(0,0,0,.45); }
+.fuel-in { padding: 1rem 1rem 1.2rem; }
+.fuel-head { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; }
+.fuel-head h2 { margin: 0; color: var(--text); font-size: 1.1rem; }
+.fuel-head .x { margin-left: auto; }
+@media (max-width: 34rem) { .fuel-head .range { order: 3; } }
+.fuel .tiles { grid-template-columns: repeat(auto-fill, minmax(7.4rem, 1fr)); margin: .8rem 0; }
+.fuel .tile .v { font-size: 1.3rem; }
+.fuel .chart svg { height: 220px; }
+.fuel .bar { fill: var(--accent); }
+.fuel .bar.est { fill: url(#fuel-hatch); stroke: var(--accent); stroke-width: 1; }
+.fuel .bar.hov { opacity: .75; }
+.fuel .readout { font-size: .88rem; color: var(--text-2); min-height: 1.3em; font-variant-numeric: tabular-nums; }
+.fuel .legend i.est { height: .7rem; width: .7rem; background: repeating-linear-gradient(45deg, var(--accent) 0 2px, transparent 2px 5px); border: 1px solid var(--accent); }
+.fuel details { margin-top: .6rem; }
+.fuel summary { cursor: pointer; color: var(--accent); font-size: .88rem; }
+.fuel table { margin-top: .4rem; }
 .h2link { font-size: .85rem; font-weight: 400; color: var(--accent); text-decoration: none; margin-left: .5rem; }
 </style></head><body><main>
 <header>
@@ -113,6 +134,19 @@ code { font-size: .85em; word-break: break-all; }
 
 <h2 data-i18n="h.connection">Connection</h2>
 <div class="wrap"><table><tbody id="conn"></tbody></table></div>
+<dialog class="fuel" id="fuel-dlg" aria-labelledby="fuel-title"><div class="fuel-in">
+<div class="fuel-head"><h2 id="fuel-title" data-i18n="fu.title">Fuel consumption</h2>
+<span class="range" id="fuel-range" role="group"><button data-p="day" data-i18n="fu.p.day">Days</button><button data-p="week" data-i18n="fu.p.week">Weeks</button><button data-p="month" data-i18n="fu.p.month">Months</button><button data-p="year" data-i18n="fu.p.year">Years</button></span>
+<button class="btn x" id="fuel-close" data-i18n="fu.close">Close</button></div>
+<div class="tiles" id="fuel-sum"></div>
+<div class="chart"><h3><span id="fuel-ctitle"></span> <span class="muted">(kg)</span></h3>
+<div class="legend"><span><i class="est"></i><span data-i18n="fu.est">estimated: the server was not recording for part of this period</span></span></div>
+<svg id="fuel-svg" role="img" aria-labelledby="fuel-ctitle"></svg>
+<div class="readout" id="fuel-read"></div></div>
+<details><summary data-i18n="fu.table">Show as table</summary><div class="wrap"><table><thead><tr><th data-i18n="fu.col.period">Period</th><th class="num">kg</th><th class="num">kWh</th></tr></thead><tbody id="fuel-rows"></tbody></table></div></details>
+<p class="muted" id="fuel-note"></p>
+</div></dialog>
+
 <p class="muted" data-i18n="footer">Values are decoded from what the controller reports, about every 20 s. Readings outside a plausible range (corrupted CAN reads) are dropped. Refreshes every 10 s.</p>
 </main>
 <script>
@@ -158,6 +192,13 @@ const I18N = {
     "cl.lastpoll": "last poll {ago}", "cl.every": "every {n} s", "cl.retry": "retry in {n} s", "cl.dataage": "cloud data age {n} s",
     "cl.device": "Device {id}", "cl.local": "local {v}",
     "cl.nodata": "No cloud data yet.",
+    "fu.title": "Fuel consumption", "fu.close": "Close", "fu.p.day": "Days", "fu.p.week": "Weeks", "fu.p.month": "Months", "fu.p.year": "Years",
+    "fu.today": "Today", "fu.yesterday": "Yesterday", "fu.week": "This week", "fu.month": "This month", "fu.year": "This year",
+    "fu.c.day": "Fuel per day", "fu.c.week": "Fuel per week", "fu.c.month": "Fuel per month", "fu.c.year": "Fuel per year",
+    "fu.est": "estimated: the server was not recording for part of this period", "fu.estshort": "estimated",
+    "fu.table": "Show as table", "fu.col.period": "Period", "fu.kw": "Week {n}", "fu.open": "Today {v} kg · statistics",
+    "fu.since": "Recorded since {d}. Calendar periods in the controller's time zone ({tz}); weeks start on Monday. kWh with {k} kWh/kg.",
+    "fu.nodata": "No fuel counter readings recorded yet.", "fu.hint": "Hover or tap a bar for its value.",
   },
   de: {
     "nav.monitor": "Monitor", "nav.settings": "Heizungseinstellungen", "nav.batches": "Pelletchargen", "nav.registers": "Register", "nav.logs": "Logs", "nav.app": "Einstellungen", "loading": "Lädt…",
@@ -194,6 +235,13 @@ const I18N = {
     "cl.lastpoll": "letzte Abfrage {ago}", "cl.every": "alle {n} s", "cl.retry": "neuer Versuch in {n} s", "cl.dataage": "Cloud-Datenalter {n} s",
     "cl.device": "Gerät {id}", "cl.local": "lokal {v}",
     "cl.nodata": "Noch keine Cloud-Daten.",
+    "fu.title": "Brennstoffverbrauch", "fu.close": "Schließen", "fu.p.day": "Tage", "fu.p.week": "Wochen", "fu.p.month": "Monate", "fu.p.year": "Jahre",
+    "fu.today": "Heute", "fu.yesterday": "Gestern", "fu.week": "Diese Woche", "fu.month": "Dieser Monat", "fu.year": "Dieses Jahr",
+    "fu.c.day": "Brennstoff pro Tag", "fu.c.week": "Brennstoff pro Woche", "fu.c.month": "Brennstoff pro Monat", "fu.c.year": "Brennstoff pro Jahr",
+    "fu.est": "geschätzt: der Server hat in diesem Zeitraum zeitweise nicht aufgezeichnet", "fu.estshort": "geschätzt",
+    "fu.table": "Als Tabelle zeigen", "fu.col.period": "Zeitraum", "fu.kw": "KW {n}", "fu.open": "Heute {v} kg · Statistik",
+    "fu.since": "Aufgezeichnet seit {d}. Kalenderzeiträume in der Zeitzone des Reglers ({tz}); Wochen beginnen am Montag. kWh mit {k} kWh/kg.",
+    "fu.nodata": "Noch keine Brennstoffzähler-Werte aufgezeichnet.", "fu.hint": "Für den Wert über einen Balken fahren oder tippen.",
   },
 };
 // Messages the server sends in English (controller.py); translated by pattern.
@@ -331,6 +379,10 @@ function render() {
     const stale = !c || now - c.time > STALE_S;
     const v = !c ? "–" : txt ? esc(txt(c.value)) : fmt(c.value, dec) + (f.unit ? `<small>${f.unit}</small>` : "");
     const extra = sub || (c && stale ? T("tile.asof", { ago: ago(now - c.time) }) : "");
+    if (k === "fuel_counter" && fuelOk) {
+      const today = fuelSum && fuelSum.today;
+      return `<button type="button" class="tile${stale ? " stale" : ""}" id="fuel-tile" aria-haspopup="dialog"><div class="k">${esc(L(k))}</div><div class="v">${v}</div><div class="sub">${esc(T("fu.open", { v: fmt(today, 1) }))}</div></button>`;
+    }
     return `<div class="tile${stale ? " stale" : ""}"><div class="k">${esc(L(k))}</div><div class="v">${v}</div><div class="sub">${esc(extra || "")}</div></div>`;
   }).join("");
 
@@ -503,6 +555,7 @@ $("lang").addEventListener("click", (e) => {
   applyStatic();
   if (data) render();
   if (cloud) renderCloud();
+  if (fuel && $("fuel-dlg").open) renderFuel();
 });
 $("charts").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-series]"); if (!b) return;
@@ -513,9 +566,98 @@ $("charts").addEventListener("click", (e) => {
   b.setAttribute("aria-pressed", String(!hidden[k]));
   CHARTS.forEach((c, i) => { if (c.series.some(([s]) => s === k)) drawChart($("c" + i), c); });
 });
+// -- fuel statistics (click the fuel counter tile) -----------------------------
+let fuelOk = true, fuelSum = null, fuel = null, fuelPeriod = "day", fuelHover = null, fuelAt = 0;
+try { const p = localStorage.getItem("estyma-fuel-period"); if (["day", "week", "month", "year"].includes(p)) fuelPeriod = p; } catch (e) {}
+async function loadFuel(force) {
+  if (!fuelOk || (!force && !$("fuel-dlg").open && Date.now() - fuelAt < 60000)) return;
+  try {
+    const r = await fetch("/api/fuel?period=" + fuelPeriod, { cache: "no-store" });
+    if (r.status === 404) { fuelOk = false; if (data) render(); return; }
+    if (!r.ok) throw new Error(r.status);
+    fuel = await r.json(); fuelSum = fuel.summary; fuelAt = Date.now();
+    if (data) render();
+    if ($("fuel-dlg").open) renderFuel();
+  } catch (e) {}
+}
+function periodLabel(b, long) {
+  const d = new Date(b.start + "T12:00:00");
+  if (fuel.period === "day") return d.toLocaleDateString(lang, long ? { weekday: "short", day: "numeric", month: "short", year: "numeric" } : { day: "numeric" });
+  if (fuel.period === "week") {
+    const t = new Date(d); t.setDate(t.getDate() + 3);              // ISO week: the Thursday's year
+    const y1 = new Date(t.getFullYear(), 0, 4);
+    const n = 1 + Math.round(((t - y1) / 864e5 - 3 + ((y1.getDay() + 6) % 7)) / 7);
+    return long ? T("fu.kw", { n }) + " · " + d.toLocaleDateString(lang, { day: "numeric", month: "short", year: "numeric" }) : String(n);
+  }
+  if (fuel.period === "month") return d.toLocaleDateString(lang, long ? { month: "long", year: "numeric" } : { month: "short" });
+  return String(d.getFullYear());
+}
+function renderFuel() {
+  if (!fuel) return;
+  for (const b of $("fuel-range").children) b.classList.toggle("on", b.dataset.p === fuel.period);
+  const s = fuel.summary, k = fuel.kwh_per_kg;
+  $("fuel-sum").innerHTML = [["today", s.today], ["yesterday", s.yesterday], ["week", s.week], ["month", s.month], ["year", s.year]].map(([key, v]) =>
+    `<div class="tile"><div class="k">${esc(T("fu." + key))}</div><div class="v">${fmt(v, v != null && v < 100 ? 1 : 0)}<small>kg</small></div><div class="sub">${v != null && k ? fmt(v * k, 0) + " kWh" : ""}</div></div>`).join("");
+  $("fuel-ctitle").textContent = T("fu.c." + fuel.period);
+  const B = fuel.buckets.filter((b, i) => b.kg != null || i === fuel.buckets.length - 1);
+  $("fuel-rows").innerHTML = B.slice().reverse().map((b) =>
+    `<tr><td>${esc(periodLabel(b, true))}${b.estimated ? ` <span class="muted">(${esc(T("fu.estshort"))})</span>` : ""}</td><td class="num">${fmt(b.kg, 1)}</td><td class="num">${b.kg != null && k ? fmt(b.kg * k, 0) : "–"}</td></tr>`).join("");
+  const d0 = fuel.first ? new Date(fuel.first * 1000).toLocaleDateString(lang, { day: "numeric", month: "short", year: "numeric" }) : null;
+  $("fuel-note").textContent = d0 ? T("fu.since", { d: d0, tz: fuel.tz, k: k ? fmt(k, 1) : "–" }) : T("fu.nodata");
+  drawFuel(B);
+}
+function drawFuel(B) {
+  const svg = $("fuel-svg"), W = svg.clientWidth || 600, H = svg.clientHeight || 220;
+  const PL = 40, PR = 6, PT = 10, PB = 22;
+  const max = Math.max(1, ...B.map((b) => b.kg || 0));
+  const ticks = niceTicks(0, max, 4), top = Math.max(max, ticks[ticks.length - 1]);
+  const y = (v) => PT + (H - PT - PB) * (1 - v / top);
+  const n = B.length, slot = (W - PL - PR) / Math.max(n, 1), bw = Math.max(2, Math.min(slot - 2, 48));
+  const every = Math.ceil(n / Math.max(1, Math.floor((W - PL - PR) / 34)));
+  let g = `<defs><pattern id="fuel-hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2" height="5" fill="${css("--accent")}"/></pattern></defs>`;
+  for (const t of ticks) g += `<line x1="${PL}" x2="${W - PR}" y1="${y(t)}" y2="${y(t)}" stroke="${css("--grid")}"/><text x="${PL - 6}" y="${y(t) + 4}" text-anchor="end">${fmt(t, 0)}</text>`;
+  B.forEach((b, i) => {
+    const cx = PL + slot * (i + .5), x = cx - bw / 2, v = b.kg || 0, yt = y(v), h = y(0) - yt;
+    const r = Math.min(4, bw / 2, h);
+    if (v > 0) g += `<path class="bar${b.estimated ? " est" : ""}${fuelHover === i ? " hov" : ""}" d="M${x},${y(0)}V${yt + r}Q${x},${yt} ${x + r},${yt}H${x + bw - r}Q${x + bw},${yt} ${x + bw},${yt + r}V${y(0)}Z"/>`;
+    if ((n - 1 - i) % every === 0) g += `<text x="${cx}" y="${H - 6}" text-anchor="middle">${esc(periodLabel(b, false))}</text>`;
+    g += `<rect data-i="${i}" x="${PL + slot * i}" y="${PT}" width="${slot}" height="${H - PT - PB}" fill="transparent"/>`;
+  });
+  g += `<line x1="${PL}" x2="${W - PR}" y1="${y(0)}" y2="${y(0)}" stroke="${css("--border")}"/>`;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.innerHTML = g;
+  const b = B[fuelHover != null && fuelHover < n ? fuelHover : n - 1];
+  $("fuel-read").innerHTML = b ? `<b>${esc(periodLabel(b, true))}</b>: ${fmt(b.kg, 1)} kg${b.kg != null && fuel.kwh_per_kg ? " · " + fmt(b.kg * fuel.kwh_per_kg, 0) + " kWh" : ""}${b.estimated ? " · " + esc(T("fu.estshort")) : ""}` +
+    (fuelHover == null ? ` <span class="muted">· ${esc(T("fu.hint"))}</span>` : "") : "";
+  svg._B = B;
+}
+function fuelPoint(e) {
+  const r = e.target.closest("rect[data-i]");
+  const i = r ? +r.dataset.i : null;
+  if (i !== fuelHover) { fuelHover = i; drawFuel($("fuel-svg")._B); }
+}
+$("fuel-svg").addEventListener("pointermove", fuelPoint);
+$("fuel-svg").addEventListener("pointerdown", fuelPoint);
+$("fuel-svg").addEventListener("pointerleave", () => { fuelHover = null; drawFuel($("fuel-svg")._B); });
+$("tiles").addEventListener("click", (e) => {
+  if (!e.target.closest("#fuel-tile")) return;
+  $("fuel-dlg").showModal(); fuelHover = null;
+  if (fuel) renderFuel();
+  loadFuel(true);
+});
+$("fuel-close").addEventListener("click", () => $("fuel-dlg").close());
+$("fuel-dlg").addEventListener("click", (e) => { if (e.target === $("fuel-dlg")) $("fuel-dlg").close(); });
+$("fuel-range").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b || b.dataset.p === fuelPeriod) return;
+  fuelPeriod = b.dataset.p; fuelHover = null;
+  try { localStorage.setItem("estyma-fuel-period", fuelPeriod); } catch (err) {}
+  loadFuel(true);
+});
+
 applyStatic();
-let resizeT; addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => data && drawCharts(), 150); });
-load(); loadCloud();
+let resizeT; addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (data) drawCharts(); if ($("fuel-dlg").open && fuel) renderFuel(); }, 150); });
+load(); loadCloud(); loadFuel(true);
+setInterval(loadFuel, 10000);
 setInterval(load, 10000);
 setInterval(loadCloud, 10000);
 </script>

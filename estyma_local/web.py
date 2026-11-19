@@ -314,7 +314,7 @@ class WebHandler(BaseHTTPRequestHandler):
         self._json(200, self._with_auth(st))
 
     def _api_fuel(self, query: str):
-        from .fuel_stats import PERIODS
+        from .fuel_stats import PERIODS, calorific_value
         q = urllib.parse.parse_qs(query)
         period = q.get("period", ["day"])[0]
         if period not in PERIODS:
@@ -323,11 +323,8 @@ class WebHandler(BaseHTTPRequestHandler):
             count = int(q.get("count", ["0"])[0]) or None
         except ValueError:
             count = None
-        kwh = None
-        if self.controller is not None:
-            cur = self.controller.current("calorific_value")
-            kwh = cur / 10 if cur is not None and 20 <= cur <= 100 else None
-        self._json(200, self.fuel.snapshot(period, count, kwh_per_kg=kwh))
+        self._json(200, self.fuel.snapshot(period, count,
+                                           kwh_per_kg=calorific_value(self.controller)))
 
     def _api_snapshots(self, _query):
         self._json(200, {"ui_auth": self.auth is not None, "can_save": self.controller is not None,

@@ -24,6 +24,7 @@ gap is spread evenly over it, and the periods that touch a gap are marked
 from __future__ import annotations
 
 import bisect
+import os
 import threading
 import time
 from datetime import date, datetime, timedelta, timezone, tzinfo
@@ -38,6 +39,24 @@ GAP_S = 2 * 3600
 PERIODS = ("day", "week", "month", "year")
 DEFAULT_COUNT = {"day": 31, "week": 12, "month": 12, "year": 5}
 MAX_COUNT = {"day": 400, "week": 104, "month": 60, "year": 20}
+
+
+DEFAULT_KWH_PER_KG = 4.8   # typical wood pellets
+
+
+def calorific_value(ctl=None, env=os.environ) -> float:
+    """kWh per kg: FUEL_KWH_PER_KG, else the controller's setting (8850,
+    raw 20..100 = 2.0..10.0), else 4.8."""
+    try:
+        v = float((env.get("FUEL_KWH_PER_KG") or "").strip())
+        if v > 0:
+            return v
+    except ValueError:
+        pass
+    cur = ctl.current("calorific_value") if ctl is not None else None
+    if cur is not None and 20 <= cur <= 100:
+        return cur / 10
+    return DEFAULT_KWH_PER_KG
 
 
 def period_start(d: date, period: str) -> date:

@@ -45,11 +45,12 @@ from datetime import datetime, timezone
 
 from . import catalog as CAT
 from . import decode as D
+from . import fuel_stats as FS
 from . import monitor as M
 from . import protocol as P
 
 REPO_URL = "https://github.com/Tabisch/estyma-local"
-DEFAULT_KWH_PER_KG = 4.8   # typical wood pellets
+DEFAULT_KWH_PER_KG = FS.DEFAULT_KWH_PER_KG
 
 
 # --------------------------------------------------------------------------
@@ -147,12 +148,7 @@ class StateBuilder:
         return kg
 
     def calorific_value(self, ctl) -> float:
-        if self.kwh_per_kg:
-            return self.kwh_per_kg
-        cur = ctl.current("calorific_value")
-        if cur is not None and 20 <= cur <= 100:
-            return cur / 10
-        return DEFAULT_KWH_PER_KG
+        return self.kwh_per_kg or FS.calorific_value(ctl, env={})
 
     def alarm(self, ctl) -> dict:
         slot = ctl.alarm_slot()
