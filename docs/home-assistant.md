@@ -24,6 +24,7 @@ Entities:
 | Oxygen in flue gas, burner power, burner state (off, ignition, glowing, modulation, burn-out, cleaning, sustain, error) | 8480, 16389, 8199 |
 | Boiler on, boiler pump, heating circuit 1 pump (on/off) | 8197, 8823, 8857 |
 | Fuel consumed (kg), fuel energy (kWh) | 8484 |
+| Fuel used today, fuel used yesterday (kg, calendar days in `CONTROLLER_TZ`) | 8484 via the history store |
 | Alarm (problem on/off, newest alarm slot as attributes), alarm code, alarm text (e.g. "start failure"; `none` when no alarm) | 16400..16460 |
 | Last report, server mode, lambda PWM (diagnostic; lambda PWM disabled by default) | |
 
@@ -33,6 +34,13 @@ calorific value is `FUEL_KWH_PER_KG` if set, otherwise the controller's own
 setting (8850, read in `hybrid`/`local` mode), otherwise 4.8 kWh/kg. Changing
 it makes the total jump, so set it once. A fuel counter reading that goes
 down or jumps implausibly is treated as a corrupted read and skipped.
+
+*Fuel used today* starts at 0 at local midnight (`total_increasing`, so
+Home Assistant's long-term statistics handle the daily reset); *fuel used
+yesterday* holds the previous day's total, handy for a morning notification.
+Both come from the register history (`history.sqlite3`): fuel burnt while
+the server was not recording is spread evenly over the gap. The same numbers
+per day, week, month and year are at `/api/fuel` in the web UI.
 Other values keep their last valid reading for up to 10 minutes when a
 single report carries a corrupted value, so entities don't flicker to
 *unknown*.

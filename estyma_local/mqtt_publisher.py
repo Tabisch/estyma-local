@@ -10,6 +10,8 @@ Topics (``<p>`` = ``MQTT_PREFIX``/``MQTT_DEVICE_ID``, default ``estyma/boiler``)
 * ``<p>/state``        one JSON object with every value (retained), unknown
                        values are ``null``
 * ``<p>/alarm``        the newest alarm slot as JSON (retained)
+  (``fuel_today`` / ``fuel_yesterday``: kg burnt per calendar day in
+  ``CONTROLLER_TZ``, from the history store, see fuel_stats.py)
 * ``<p>/availability`` ``online`` / ``offline`` (retained). Offline when the
                        controller has not reported for ``MQTT_STALE_SECONDS``,
                        and as last will when the server goes away.
@@ -43,11 +45,12 @@ from datetime import datetime, timezone
 
 from . import catalog as CAT
 from . import decode as D
+from . import fuel_stats as FS
 from . import monitor as M
 from . import protocol as P
 
 REPO_URL = "https://github.com/Tabisch/estyma-local"
-DEFAULT_KWH_PER_KG = 4.8   # typical wood pellets
+DEFAULT_KWH_PER_KG = FS.DEFAULT_KWH_PER_KG
 
 
 # --------------------------------------------------------------------------
@@ -77,6 +80,14 @@ ENTITIES = [
     ("sensor", "fuel_total", "Fuel consumed", {"device_class": "weight", "unit_of_measurement": "kg",
                                                "state_class": "total_increasing",
                                                "suggested_display_precision": 1}),
+    ("sensor", "fuel_today", "Fuel used today", {"device_class": "weight", "unit_of_measurement": "kg",
+                                                 "state_class": "total_increasing",
+                                                 "suggested_display_precision": 0,
+                                                 "icon": "mdi:calendar-today"}),
+    ("sensor", "fuel_yesterday", "Fuel used yesterday", {"device_class": "weight",
+                                                         "unit_of_measurement": "kg",
+                                                         "suggested_display_precision": 0,
+                                                         "icon": "mdi:calendar-arrow-left"}),
     ("sensor", "energy", "Fuel energy", {"device_class": "energy", "unit_of_measurement": "kWh",
                                          "state_class": "total_increasing",
                                          "suggested_display_precision": 0}),
@@ -108,8 +119,9 @@ class StateBuilder:
 
     MAX_KG_PER_HOUR = 20.0
 
-    def __init__(self, kwh_per_kg: float | None = None) -> None:
+    def __init__(self, kwh_per_kg: float | None = None, fuel=None) -> None:
         self.kwh_per_kg = kwh_per_kg
+        self.fuel = fuel                  # fuel_stats.FuelStats, for today / yesterday
         self._fuel: tuple | None = None   # (ts, kg) last accepted
         self._good = D.LastGood(self.HOLD_SECONDS)
 
@@ -136,12 +148,7 @@ class StateBuilder:
         return kg
 
     def calorific_value(self, ctl) -> float:
-        if self.kwh_per_kg:
-            return self.kwh_per_kg
-        cur = ctl.current("calorific_value")
-        if cur is not None and 20 <= cur <= 100:
-            return cur / 10
-        return DEFAULT_KWH_PER_KG
+        return self.kwh_per_kg or FS.calorific_value(ctl, env={})
 
     def alarm(self, ctl) -> dict:
         slot = ctl.alarm_slot()
@@ -189,6 +196,9 @@ class StateBuilder:
         kwh = self.calorific_value(ctl)
         st["energy"] = round(fuel * kwh, 1) if fuel is not None else None
         st["kwh_per_kg"] = kwh
+        day = self.fuel.summary() if self.fuel is not None else {}
+        st["fuel_today"] = day.get("today")
+        st["fuel_yesterday"] = day.get("yesterday")
         st["alarm"] = "ON" if alarm["active"] else "OFF"
         st["alarm_code"] = alarm["code"] if alarm["active"] else 0
         if not alarm["active"]:
@@ -243,7 +253,7 @@ class MqttPublisher:
                  password: str | None = None, tls: bool = False, prefix: str = "estyma",
                  device_id: str = "boiler", disc_prefix: str = "homeassistant",
                  stale: float = 300, kwh_per_kg: float | None = None, interval: float = 2,
-                 client_id: str | None = None) -> None:
+                 client_id: str | None = None, fuel=None) -> None:
         import paho.mqtt.client as mqtt   # optional dependency, only when configured
 
         self.ctl = ctl
@@ -253,7 +263,7 @@ class MqttPublisher:
         self.disc_prefix = disc_prefix.strip("/")
         self.stale = stale
         self.interval = interval
-        self.builder = StateBuilder(kwh_per_kg)
+        self.builder = StateBuilder(kwh_per_kg, fuel)
         self.connected = False
         self._online: bool | None = None
         self._seen_live = False          # a fresh report was seen since start
@@ -365,7 +375,7 @@ class MqttPublisher:
         self.client.loop_stop()
 
 
-def from_env(ctl, env=os.environ) -> MqttPublisher | None:
+def from_env(ctl, env=os.environ, fuel=None) -> MqttPublisher | None:
     """A started publisher when MQTT_HOST is set, else None."""
     host = (env.get("MQTT_HOST") or "").strip()
     if not host:
@@ -378,6 +388,6 @@ def from_env(ctl, env=os.environ) -> MqttPublisher | None:
         prefix=env.get("MQTT_PREFIX") or "estyma", device_id=env.get("MQTT_DEVICE_ID") or "boiler",
         disc_prefix=env.get("HA_DISCOVERY_PREFIX") or "homeassistant",
         stale=float(env.get("MQTT_STALE_SECONDS") or 300),
-        kwh_per_kg=float(kwh) if kwh else None)
+        kwh_per_kg=float(kwh) if kwh else None, fuel=fuel)
     pub.start()
     return pub

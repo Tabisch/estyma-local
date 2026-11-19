@@ -183,6 +183,7 @@ class WebHandler(BaseHTTPRequestHandler):
         "/api/log-retention": ("_api_retention", "retention"),
         "/api/cloud-fallback": ("_api_fallback", "fallback"),
         "/api/raw-logs": ("_api_raw_logs", "raw_logs"),
+        "/api/fuel": ("_api_fuel", "fuel"),
     }
     # POST bodies are JSON. ``auth``: also needs UI_USER / UI_PASSWORD set
     # (value: what is refused without it, for the message).
@@ -316,6 +317,19 @@ class WebHandler(BaseHTTPRequestHandler):
         if self.monitor is not None and self.monitor.store is not None:
             st["history"] = self.monitor.store.status()
         self._json(200, self._with_auth(st))
+
+    def _api_fuel(self, query: str):
+        from .fuel_stats import PERIODS, calorific_value
+        q = urllib.parse.parse_qs(query)
+        period = q.get("period", ["day"])[0]
+        if period not in PERIODS:
+            return self._json(400, {"ok": False, "message": f"period must be one of {', '.join(PERIODS)}"})
+        try:
+            count = int(q.get("count", ["0"])[0]) or None
+        except ValueError:
+            count = None
+        self._json(200, self.fuel.snapshot(period, count,
+                                           kwh_per_kg=calorific_value(self.controller)))
 
     def _api_snapshots(self, _query):
         self._json(200, {"ui_auth": self.auth is not None, "can_save": self.controller is not None,
@@ -516,7 +530,7 @@ def is_log(name: str) -> bool:
 def start_web(host: str, port: int, log_dir: str,
                  user: str | None = None, password: str | None = None,
                  monitor=None, controller=None, cloud=None, retention=None,
-                 snapshots=None, fallback=None, raw_logs=None) -> ThreadingHTTPServer:
+                 snapshots=None, fallback=None, raw_logs=None, fuel=None) -> ThreadingHTTPServer:
     """Start the UI in a background thread and return the server. Without
     ``snapshots`` a store in ``log_dir`` is made when there is a controller."""
     auth = f"{user}:{password}".encode() if user and password else None
@@ -527,7 +541,7 @@ def start_web(host: str, port: int, log_dir: str,
                                                 "monitor": monitor, "controller": controller,
                                                 "cloud": cloud, "retention": retention,
                                                 "fallback": fallback, "raw_logs": raw_logs,
-                                                "snapshots": snapshots})
+                                                "snapshots": snapshots, "fuel": fuel})
     server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, name="web", daemon=True).start()

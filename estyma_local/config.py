@@ -126,8 +126,8 @@ ENV = [
     Env("MQTT_STALE_SECONDS", "300", "mqtt", "Seconds without a controller report until the device is "
         "unavailable. Keep it well above 100 s: after a slow or failed cloud reply the controller "
         "waits about 100 s before its next report"),
-    Env("FUEL_KWH_PER_KG", "", "mqtt", "Calorific value for the energy sensor; empty = controller "
-        "setting, else 4.8"),
+    Env("FUEL_KWH_PER_KG", "", "mqtt", "Calorific value (kWh/kg) for the energy sensor and the fuel "
+        "statistics; empty = controller setting, else 4.8"),
     # -- standalone recorder ------------------------------------------------
     Env("INTERVAL", "30", "recorder", "Seconds between polls", compose=False, example=False),
     Env("IDLE_IF_UNCONFIGURED", "", "recorder", "`1` = idle instead of exiting without credentials",
