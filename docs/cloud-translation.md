@@ -2,7 +2,7 @@
 
 The igneo.pl cloud (`POST /info_panel_update`) answers with Polish field names.
 This table gives the literal meaning of each Polish key, a suggested English
-name, the name the EstymaApiWrapper (0.0.70) uses today, and the controller
+name, the name the EstymaApiWrapper (0.0.71) uses today, and the controller
 register from [register-mapping.md](register-mapping.md).
 
 Suffixes: `_sub1` / `_sub3` / `_sub4` are register index 1 / 3 / 4, which is
@@ -142,7 +142,7 @@ hour n). Not confirmed; changing one hour in the web UI would settle it.
 
 ## Suggested wrapper fixes
 
-For EstymaApiWrapper 0.0.70. Renaming keys breaks existing users (the Home
+For EstymaApiWrapper 0.0.71. Renaming keys breaks existing users (the Home
 Assistant integration), so the safest route is to add the corrected names and
 keep the old ones as deprecated aliases for a while.
 

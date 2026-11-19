@@ -19,6 +19,14 @@ Gaps: the store has a reading at least every hour (keyframes). When the
 server was not recording for longer than ``GAP_S``, the fuel burnt in the
 gap is spread evenly over it, and the periods that touch a gap are marked
 ``estimated``.
+
+Imported cloud statistics: the cloud's own fuel per day can be imported once
+(cloud_fuel_import.py, table ``cloud_fuel`` in the history store). Those
+days fill in the time before the server started recording: a day before the
+first local reading counts with the cloud's number, and the day of the first
+reading with the larger of the two (the local one only covers part of it).
+Days the server recorded completely always use the local counter. Buckets
+say how much of their total came from the cloud (``cloud_kg``).
 """
 
 from __future__ import annotations
@@ -100,6 +108,11 @@ class FuelStats:
         self._end: list = []          # b of each segment, for bisect
         self._gaps: list = []         # (a, b) of the spread segments
         self.first: int | None = None  # time of the first usable reading
+        self._cloud: dict = {}        # date -> kg, imported cloud statistics
+        self._cloud_v = None          # store.cloud_version of self._cloud
+        self._used_key = None
+        self._used: list = []         # sorted (date, kg) cloud days that count
+        self._used_days: list = []
 
     # -- feeding ------------------------------------------------------------
 
@@ -141,6 +154,10 @@ class FuelStats:
                     self._feed(t, kg)
             if rows:
                 self._read_until = rows[-1][0] + 1
+            v = getattr(self.store, "cloud_version", None)
+            if v is not None and v != self._cloud_v:
+                self._cloud_v = v
+                self._cloud = {date.fromisoformat(d): kg for d, kg in self.store.cloud_fuel().items()}
 
     # -- reading ------------------------------------------------------------
 
@@ -164,6 +181,45 @@ class FuelStats:
     def _ts(self, d: date) -> float:
         return datetime(d.year, d.month, d.day, tzinfo=self.tz).timestamp()
 
+    def _cloud_used(self) -> list:
+        """The imported days that count: up to the day of the first local
+        reading (all of them without local readings). Under the lock."""
+        key = (self._cloud_v, self.first)
+        if key != self._used_key:
+            last = self.today(self.first) if self.first is not None else None
+            self._used = sorted((d, kg) for d, kg in self._cloud.items() if last is None or d <= last)
+            self._used_days = [d for d, _ in self._used]
+            self._used_key = key
+        return self._used
+
+    def _first_day_ts(self) -> float | None:
+        """Start of the data: the first counting cloud day or the first local
+        reading, whichever is earlier. Under the lock."""
+        used = self._cloud_used()
+        firsts = [x for x in (self._ts(used[0][0]) if used else None, self.first) if x is not None]
+        return min(firsts) if firsts else None
+
+    def _period(self, s: date, e: date) -> dict:
+        """kg in the days [s, e), local readings plus imported cloud days."""
+        a, b = self._ts(s), self._ts(e)
+        with self._lock:
+            first = self._first_day_ts()
+            if first is None or b <= first:
+                return {"kg": None, "cloud_kg": None, "estimated": False}
+            kg = self._burnt_before(b) - self._burnt_before(a)
+            cloud = 0.0
+            used = self._cloud_used()
+            i = bisect.bisect_left(self._used_days, s)
+            while i < len(used) and used[i][0] < e:
+                d, ckg = used[i]
+                local = self._burnt_before(self._ts(d + timedelta(days=1))) - self._burnt_before(self._ts(d))
+                if ckg > local:
+                    kg += ckg - local
+                    cloud += ckg
+                i += 1
+            est = self._estimated(a, b)
+        return {"kg": round(kg, 1), "cloud_kg": round(cloud, 1), "estimated": est}
+
     def today(self, now: float | None = None) -> date:
         now = self.clock() if now is None else now
         return datetime.fromtimestamp(now, self.tz).date()
@@ -182,12 +238,7 @@ class FuelStats:
         out = []
         for s in reversed(starts):
             e = next_start(s, period)
-            a, b = self._ts(s), self._ts(e)
-            covered = self.first is not None and b > self.first
-            with self._lock:
-                est = self._estimated(a, b)
-            out.append({"start": s.isoformat(), "end": e.isoformat(),
-                        "kg": self.between(a, b) if covered else None, "estimated": est})
+            out.append({"start": s.isoformat(), "end": e.isoformat(), **self._period(s, e)})
         return out
 
     def summary(self, now: float | None = None) -> dict:
@@ -202,9 +253,7 @@ class FuelStats:
             s = period_start(d, period)
             for _ in range(back):
                 s = prev_start(s, period)
-            b = self._ts(next_start(s, period))
-            out[key] = (self.between(self._ts(s), b)
-                        if self.first is not None and b > self.first else None)
+            out[key] = self._period(s, next_start(s, period))["kg"]
         return out
 
     def snapshot(self, period: str = "day", count: int | None = None,
@@ -213,5 +262,10 @@ class FuelStats:
         buckets = self.buckets(period, count, now)
         with self._lock:
             counter = self._last[1] if self._last else None
-        return {"period": period, "tz": str(self.tz), "first": self.first, "counter": counter,
-                "kwh_per_kg": kwh_per_kg, "buckets": buckets, "summary": self.summary(now)}
+            first = self._first_day_ts()
+            used = self._cloud_used()
+            cloud = ({"first": used[0][0].isoformat(), "last": used[-1][0].isoformat(), "days": len(used)}
+                     if used else None)
+        return {"period": period, "tz": str(self.tz), "first": first, "local_first": self.first,
+                "cloud": cloud, "counter": counter, "kwh_per_kg": kwh_per_kg,
+                "buckets": buckets, "summary": self.summary(now)}

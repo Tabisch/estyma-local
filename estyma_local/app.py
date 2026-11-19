@@ -177,9 +177,16 @@ def _start_web(cfg: Settings, log: ExchangeLog, ctl: Controller, fallback=None,
               f"(change it in the web UI)", flush=True)
     except Exception as exc:  # never keep the proxy from starting
         print(f"log auto delete unavailable: {type(exc).__name__}: {exc}", flush=True)
+    fuel_import = None
+    if store is not None:
+        try:
+            from .cloud_fuel_import import CloudFuelImport
+            fuel_import = CloudFuelImport(store, fuel)
+        except Exception as exc:  # never keep the proxy from starting
+            print(f"cloud fuel import unavailable: {type(exc).__name__}: {exc}", flush=True)
     start_web(cfg.listen_host, cfg.ui_port, cfg.log_dir, cfg.ui_user, cfg.ui_password,
               monitor=mon, controller=ctl, cloud=cloud, retention=retention,
-              fallback=fallback, raw_logs=log.raw, fuel=fuel)
+              fallback=fallback, raw_logs=log.raw, fuel=fuel, fuel_import=fuel_import)
     auth = "basic auth on" if cfg.ui_user and cfg.ui_password else "no auth"
     print(f"web UI on http://{cfg.listen_host}:{cfg.ui_port}/ ({auth})", flush=True)
 

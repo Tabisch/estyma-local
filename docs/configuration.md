@@ -60,6 +60,7 @@ Same service, see [cloud-monitoring.md](cloud-monitoring.md).
 | `ESTYMA_PASSWORD_FILE` | (empty) |  | Path to a file holding the password (e.g. a Docker secret); only a trailing newline is removed |
 | `ESTYMA_DOMAIN` | `igneo.pl` |  | Which Estyma cloud to log in to |
 | `ESTYMA_LANGUAGE` | `english` |  | Language for the wrapper's value names |
+| `ESTYMA_DEVICE_ID` | (empty) |  | Cloud device to import the fuel statistics of; only needed when the account has several devices |
 | `CLOUD_MONITOR` | `0` | yes | Initial on/off state, only used until it is switched in the web UI |
 | `CLOUD_INTERVAL` | `30` | yes | Seconds between cloud polls |
 
