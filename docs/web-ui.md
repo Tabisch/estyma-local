@@ -19,6 +19,9 @@ Open `http://<proxy_host>:8089/`.
   Monday) with a table view. Periods in which the server was not recording
   for a while are hatched: their fuel is spread evenly over the gap. kWh
   use `FUEL_KWH_PER_KG`, else the controller's calorific value, else 4.8.
+  Days imported from the cloud statistics (see *Settings*) are drawn in
+  their own colour, and the table says how many kg of a period came from
+  the cloud.
   JSON at `/api/fuel?period=day|week|month|year&count=N`.
   The history is kept in memory and rebuilt from the logs in the volume when
   the container starts. The same data is available as JSON at
@@ -67,6 +70,17 @@ Open `http://<proxy_host>:8089/`.
   the heating controller's settings on `/heating`. The *Cloud connection*
   section comes first; the *Debugging/Development* section groups the
   *Poll the Estyma cloud* switch (see [cloud-monitoring.md](cloud-monitoring.md)),
+  *Import fuel statistics from the cloud*: copies the cloud's fuel use per
+  day (EstymaApiWrapper 0.0.71 or newer, same `ESTYMA_*` account) into the
+  table `cloud_fuel` of `history.sqlite3`, apart from the controller's own
+  readings. The fuel statistics use those days only before the first local
+  reading (on that day the larger of the two numbers, since the local one
+  covers only part of it); days the server recorded always use the local
+  counter. Today and the empty days before the first use are not imported.
+  Importing again replaces the stored days, so nothing is counted twice;
+  *Delete imported days* removes them. Needs `UI_USER` / `UI_PASSWORD`; with
+  several devices in the account set `ESTYMA_DEVICE_ID`. Status as JSON at
+  `/api/fuel-import`.
   *Keep raw traffic logs (debugging)*, off by default: writes every
   exchange to `exchanges-*.jsonl`, gzipped every hour (about 0.6 MB a day).
   The register history in `history.sqlite3` is kept either way, so this is

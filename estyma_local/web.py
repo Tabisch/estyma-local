@@ -120,6 +120,7 @@ class WebHandler(BaseHTTPRequestHandler):
     retention = None    # retention.LogRetention or None
     fallback = None     # cloud_fallback.CloudFallback or None
     raw_logs = None     # raw_logs.RawLogSetting or None
+    fuel_import = None  # cloud_fuel_import.CloudFuelImport or None
 
     def log_message(self, fmt, *args):
         pass
@@ -184,6 +185,7 @@ class WebHandler(BaseHTTPRequestHandler):
         "/api/cloud-fallback": ("_api_fallback", "fallback"),
         "/api/raw-logs": ("_api_raw_logs", "raw_logs"),
         "/api/fuel": ("_api_fuel", "fuel"),
+        "/api/fuel-import": ("_api_fuel_import", "fuel_import"),
     }
     # POST bodies are JSON. ``auth``: also needs UI_USER / UI_PASSWORD set
     # (value: what is refused without it, for the message).
@@ -194,6 +196,7 @@ class WebHandler(BaseHTTPRequestHandler):
         "/api/log-retention": ("_post_retention", "retention", "deleting logs"),
         "/api/cloud-fallback": ("_post_fallback", "fallback", "changing the cloud timeout"),
         "/api/raw-logs": ("_post_raw_logs", "raw_logs", "switching raw logs"),
+        "/api/fuel-import": ("_post_fuel_import", "fuel_import", "importing cloud statistics"),
         "/api/set": ("_post_set", "controller", "writes"),
         "/api/cancel": ("_post_cancel", "controller", "writes"),
         "/api/snapshots/save": ("_post_snapshot_save", "snapshots", None),
@@ -331,6 +334,9 @@ class WebHandler(BaseHTTPRequestHandler):
         self._json(200, self.fuel.snapshot(period, count,
                                            kwh_per_kg=calorific_value(self.controller)))
 
+    def _api_fuel_import(self, _query):
+        self._json(200, self._with_auth(self.fuel_import.status()))
+
     def _api_snapshots(self, _query):
         self._json(200, {"ui_auth": self.auth is not None, "can_save": self.controller is not None,
                          "suppliers": self.snapshots.suppliers(), "snapshots": self.snapshots.list()})
@@ -377,6 +383,18 @@ class WebHandler(BaseHTTPRequestHandler):
             st = self.raw_logs.configure(req.get("enabled"))
         except ValueError as exc:
             return self._json(400, {"ok": False, "message": str(exc)})
+        st["ui_auth"] = True
+        self._json(200, {"ok": True, **st})
+
+    def _post_fuel_import(self, req):
+        """{"action": "start"} imports (again), {"action": "clear"} deletes the imported days."""
+        action = req.get("action")
+        if action not in ("start", "clear"):
+            return self._json(400, {"ok": False, "message": "action must be start or clear"})
+        try:
+            st = self.fuel_import.start() if action == "start" else self.fuel_import.clear()
+        except ValueError as exc:
+            return self._json(409, {"ok": False, "message": str(exc)})
         st["ui_auth"] = True
         self._json(200, {"ok": True, **st})
 
@@ -530,7 +548,8 @@ def is_log(name: str) -> bool:
 def start_web(host: str, port: int, log_dir: str,
                  user: str | None = None, password: str | None = None,
                  monitor=None, controller=None, cloud=None, retention=None,
-                 snapshots=None, fallback=None, raw_logs=None, fuel=None) -> ThreadingHTTPServer:
+                 snapshots=None, fallback=None, raw_logs=None, fuel=None,
+                 fuel_import=None) -> ThreadingHTTPServer:
     """Start the UI in a background thread and return the server. Without
     ``snapshots`` a store in ``log_dir`` is made when there is a controller."""
     auth = f"{user}:{password}".encode() if user and password else None
@@ -541,7 +560,8 @@ def start_web(host: str, port: int, log_dir: str,
                                                 "monitor": monitor, "controller": controller,
                                                 "cloud": cloud, "retention": retention,
                                                 "fallback": fallback, "raw_logs": raw_logs,
-                                                "snapshots": snapshots, "fuel": fuel})
+                                                "snapshots": snapshots, "fuel": fuel,
+                                                "fuel_import": fuel_import})
     server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, name="web", daemon=True).start()

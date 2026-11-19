@@ -91,8 +91,10 @@ dialog.fuel::backdrop { background: rgba(0,0,0,.45); }
 .fuel .chart svg { height: 220px; }
 .fuel .bar { fill: var(--accent); }
 .fuel .bar.est { fill: url(#fuel-hatch); stroke: var(--accent); stroke-width: 1; }
+.fuel .bar.cloud { fill: var(--s3); }
 .fuel .bar.hov { opacity: .75; }
 .fuel .readout { font-size: .88rem; color: var(--text-2); min-height: 1.3em; font-variant-numeric: tabular-nums; }
+.fuel .legend i.cloud { height: .7rem; width: .7rem; background: var(--s3); }
 .fuel .legend i.est { height: .7rem; width: .7rem; background: repeating-linear-gradient(45deg, var(--accent) 0 2px, transparent 2px 5px); border: 1px solid var(--accent); }
 .fuel details { margin-top: .6rem; }
 .fuel summary { cursor: pointer; color: var(--accent); font-size: .88rem; }
@@ -140,7 +142,7 @@ dialog.fuel::backdrop { background: rgba(0,0,0,.45); }
 <button class="btn x" id="fuel-close" data-i18n="fu.close">Close</button></div>
 <div class="tiles" id="fuel-sum"></div>
 <div class="chart"><h3><span id="fuel-ctitle"></span> <span class="muted">(kg)</span></h3>
-<div class="legend"><span><i class="est"></i><span data-i18n="fu.est">estimated: the server was not recording for part of this period</span></span></div>
+<div class="legend"><span id="fuel-lcloud" hidden><i class="cloud"></i><span data-i18n="fu.cloud">imported from the cloud statistics</span></span><span><i class="est"></i><span data-i18n="fu.est">estimated: the server was not recording for part of this period</span></span></div>
 <svg id="fuel-svg" role="img" aria-labelledby="fuel-ctitle"></svg>
 <div class="readout" id="fuel-read"></div></div>
 <details><summary data-i18n="fu.table">Show as table</summary><div class="wrap"><table><thead><tr><th data-i18n="fu.col.period">Period</th><th class="num">kg</th><th class="num">kWh</th></tr></thead><tbody id="fuel-rows"></tbody></table></div></details>
@@ -199,6 +201,8 @@ const I18N = {
     "fu.table": "Show as table", "fu.col.period": "Period", "fu.kw": "Week {n}", "fu.open": "Today {v} kg · statistics",
     "fu.since": "Recorded since {d}. Calendar periods in the controller's time zone ({tz}); weeks start on Monday. kWh with {k} kWh/kg.",
     "fu.nodata": "No fuel counter readings recorded yet.", "fu.hint": "Hover or tap a bar for its value.",
+    "fu.cloud": "imported from the cloud statistics", "fu.cloudshort": "{v} kg from the cloud",
+    "fu.cloudnote": "Days from {a} until recording started come from the imported cloud statistics.",
   },
   de: {
     "nav.monitor": "Monitor", "nav.settings": "Heizungseinstellungen", "nav.batches": "Pelletchargen", "nav.registers": "Register", "nav.logs": "Logs", "nav.app": "Einstellungen", "loading": "Lädt…",
@@ -242,6 +246,8 @@ const I18N = {
     "fu.table": "Als Tabelle zeigen", "fu.col.period": "Zeitraum", "fu.kw": "KW {n}", "fu.open": "Heute {v} kg · Statistik",
     "fu.since": "Aufgezeichnet seit {d}. Kalenderzeiträume in der Zeitzone des Reglers ({tz}); Wochen beginnen am Montag. kWh mit {k} kWh/kg.",
     "fu.nodata": "Noch keine Brennstoffzähler-Werte aufgezeichnet.", "fu.hint": "Für den Wert über einen Balken fahren oder tippen.",
+    "fu.cloud": "aus der Cloud-Statistik importiert", "fu.cloudshort": "{v} kg aus der Cloud",
+    "fu.cloudnote": "Die Tage vom {a} bis zum Beginn der Aufzeichnung stammen aus der importierten Cloud-Statistik.",
   },
 };
 // Messages the server sends in English (controller.py); translated by pattern.
@@ -601,9 +607,13 @@ function renderFuel() {
   $("fuel-ctitle").textContent = T("fu.c." + fuel.period);
   const B = fuel.buckets.filter((b, i) => b.kg != null || i === fuel.buckets.length - 1);
   $("fuel-rows").innerHTML = B.slice().reverse().map((b) =>
-    `<tr><td>${esc(periodLabel(b, true))}${b.estimated ? ` <span class="muted">(${esc(T("fu.estshort"))})</span>` : ""}</td><td class="num">${fmt(b.kg, 1)}</td><td class="num">${b.kg != null && k ? fmt(b.kg * k, 0) : "–"}</td></tr>`).join("");
-  const d0 = fuel.first ? new Date(fuel.first * 1000).toLocaleDateString(lang, { day: "numeric", month: "short", year: "numeric" }) : null;
-  $("fuel-note").textContent = d0 ? T("fu.since", { d: d0, tz: fuel.tz, k: k ? fmt(k, 1) : "–" }) : T("fu.nodata");
+    `<tr><td>${esc(periodLabel(b, true))}${b.estimated ? ` <span class="muted">(${esc(T("fu.estshort"))})</span>` : ""}${b.cloud_kg ? ` <span class="muted">(${esc(T("fu.cloudshort", { v: fmt(b.cloud_kg, 1) }))})</span>` : ""}</td><td class="num">${fmt(b.kg, 1)}</td><td class="num">${b.kg != null && k ? fmt(b.kg * k, 0) : "–"}</td></tr>`).join("");
+  const lf = fuel.local_first !== undefined ? fuel.local_first : fuel.first;
+  const d0 = lf ? new Date(lf * 1000).toLocaleDateString(lang, { day: "numeric", month: "short", year: "numeric" }) : null;
+  const cd = (x) => new Date(x + "T12:00:00").toLocaleDateString(lang, { day: "numeric", month: "short", year: "numeric" });
+  $("fuel-note").textContent = (d0 ? T("fu.since", { d: d0, tz: fuel.tz, k: k ? fmt(k, 1) : "–" }) : T("fu.nodata"))
+    + (fuel.cloud ? " " + T("fu.cloudnote", { a: cd(fuel.cloud.first) }) : "");
+  $("fuel-lcloud").hidden = !fuel.cloud;
   drawFuel(B);
 }
 function drawFuel(B) {
@@ -617,9 +627,14 @@ function drawFuel(B) {
   let g = `<defs><pattern id="fuel-hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2" height="5" fill="${css("--accent")}"/></pattern></defs>`;
   for (const t of ticks) g += `<line x1="${PL}" x2="${W - PR}" y1="${y(t)}" y2="${y(t)}" stroke="${css("--grid")}"/><text x="${PL - 6}" y="${y(t) + 4}" text-anchor="end">${fmt(t, 0)}</text>`;
   B.forEach((b, i) => {
-    const cx = PL + slot * (i + .5), x = cx - bw / 2, v = b.kg || 0, yt = y(v), h = y(0) - yt;
-    const r = Math.min(4, bw / 2, h);
-    if (v > 0) g += `<path class="bar${b.estimated ? " est" : ""}${fuelHover === i ? " hov" : ""}" d="M${x},${y(0)}V${yt + r}Q${x},${yt} ${x + r},${yt}H${x + bw - r}Q${x + bw},${yt} ${x + bw},${yt + r}V${y(0)}Z"/>`;
+    const cx = PL + slot * (i + .5), x = cx - bw / 2, v = b.kg || 0, c = Math.min(v, b.cloud_kg || 0), hov = fuelHover === i ? " hov" : "";
+    // bottom to top: the imported cloud days, then the local readings; only the top is rounded
+    const seg = (lo, hi, cls, round) => {
+      const yb = y(lo), yt = y(hi), r = round ? Math.min(4, bw / 2, yb - yt) : 0;
+      return `<path class="bar${cls}${hov}" d="M${x},${yb}V${yt + r}Q${x},${yt} ${x + r},${yt}H${x + bw - r}Q${x + bw},${yt} ${x + bw},${yt + r}V${yb}Z"/>`;
+    };
+    if (c > 0) g += seg(0, c, " cloud", v - c <= 0);
+    if (v - c > 0) g += seg(c, v, b.estimated ? " est" : "", true);
     if ((n - 1 - i) % every === 0) g += `<text x="${cx}" y="${H - 6}" text-anchor="middle">${esc(periodLabel(b, false))}</text>`;
     g += `<rect data-i="${i}" x="${PL + slot * i}" y="${PT}" width="${slot}" height="${H - PT - PB}" fill="transparent"/>`;
   });
@@ -627,7 +642,7 @@ function drawFuel(B) {
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   svg.innerHTML = g;
   const b = B[fuelHover != null && fuelHover < n ? fuelHover : n - 1];
-  $("fuel-read").innerHTML = b ? `<b>${esc(periodLabel(b, true))}</b>: ${fmt(b.kg, 1)} kg${b.kg != null && fuel.kwh_per_kg ? " · " + fmt(b.kg * fuel.kwh_per_kg, 0) + " kWh" : ""}${b.estimated ? " · " + esc(T("fu.estshort")) : ""}` +
+  $("fuel-read").innerHTML = b ? `<b>${esc(periodLabel(b, true))}</b>: ${fmt(b.kg, 1)} kg${b.kg != null && fuel.kwh_per_kg ? " · " + fmt(b.kg * fuel.kwh_per_kg, 0) + " kWh" : ""}${b.estimated ? " · " + esc(T("fu.estshort")) : ""}${b.cloud_kg ? " · " + esc(T("fu.cloudshort", { v: fmt(b.cloud_kg, 1) })) : ""}` +
     (fuelHover == null ? ` <span class="muted">· ${esc(T("fu.hint"))}</span>` : "") : "";
   svg._B = B;
 }

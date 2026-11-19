@@ -87,6 +87,19 @@ code { font-size: .85em; }
 
 <div class="card">
   <div class="row">
+    <div class="what"><b data-i18n="fi.name">Import fuel statistics from the cloud</b><span class="sub" data-i18n="fi.sub">Copies the cloud's fuel use per day into the history once, so the fuel statistics also cover the time before this server was recording.</span></div>
+    <div class="controls">
+      <button class="btn" id="fi-clear" type="button" disabled></button>
+      <button class="btn" id="fi-start" type="button" disabled></button>
+    </div>
+  </div>
+  <div class="status" id="fi-status" data-i18n="loading">Loading…</div>
+  <div class="note" id="fi-note"></div>
+</div>
+<p class="muted" data-i18n="fi.about">Uses the same account as cloud polling (ESTYMA_* in the container environment), takes about a minute. The imported days are kept apart from the controller's own readings and are only used for days before the first local reading; the fuel chart shows them in their own colour. Importing again replaces them, nothing is counted twice.</p>
+
+<div class="card">
+  <div class="row">
     <div class="what"><b data-i18n="rl.name">Keep raw traffic logs (debugging)</b><span class="sub" data-i18n="rl.sub">Writes every exchange between the controller and the cloud to exchanges-*.jsonl, gzipped every hour. Only needed to debug or to decode new registers.</span></div>
     <button class="btn" id="rl-toggle" type="button" disabled></button>
   </div>
@@ -131,6 +144,14 @@ const I18N = {
     "lr.needauth": "Set UI_USER / UI_PASSWORD to change this from the page",
     "lr.unavailable": "Not available: auto delete did not start (see the container log).",
     "lr.about": "Old logs are checked right after a change and then every hour. This applies to exchanges-*, cloud-* and writes-*.jsonl (and .jsonl.gz); state.json, registers.json and history.sqlite3 are never deleted.",
+    "fi.name": "Import fuel statistics from the cloud", "fi.sub": "Copies the cloud's fuel use per day into the history once, so the fuel statistics also cover the time before this server was recording.",
+    "fi.about": "Uses the same account as cloud polling (ESTYMA_* in the container environment), takes about a minute. The imported days are kept apart from the controller's own readings and are only used for days before the first local reading; the fuel chart shows them in their own colour. Importing again replaces them, nothing is counted twice.",
+    "fi.start": "Import", "fi.again": "Import again", "fi.clear": "Delete imported days",
+    "fi.s.none": "Nothing imported yet", "fi.s.stored": "{n} days imported ({a} – {b}, {kg} kg)", "fi.when": "imported {ago}",
+    "fi.s.running": "Importing… {done} of {total} months", "fi.s.error": "Import failed",
+    "fi.confirm": "Import the fuel statistics from the cloud now?", "fi.confirmclear": "Delete the {n} imported days? The local readings are not touched.",
+    "fi.needauth": "Set UI_USER / UI_PASSWORD to import from the page",
+    "fi.unavailable": "Not available: no history store (see the container log).",
     "rl.name": "Keep raw traffic logs (debugging)", "rl.sub": "Writes every exchange between the controller and the cloud to exchanges-*.jsonl, gzipped every hour. Only needed to debug or to decode new registers.",
     "rl.about": "The history of all register values is kept in history.sqlite3 either way (only the values that changed, about 0.5 MB a day); the monitor refills its charts from it after a restart. Raw logs take about 0.6 MB a day.",
     "rl.on": "Switch on", "rl.off": "Switch off", "rl.s.on": "On", "rl.s.off": "Off, only the history is kept",
@@ -167,6 +188,14 @@ const I18N = {
     "lr.needauth": "UI_USER / UI_PASSWORD setzen, um dies von der Seite zu ändern",
     "lr.unavailable": "Nicht verfügbar: Das automatische Löschen ist nicht gestartet (siehe Container-Log).",
     "lr.about": "Alte Logs werden direkt nach einer Änderung und dann stündlich geprüft. Gilt für exchanges-*, cloud-* und writes-*.jsonl (und .jsonl.gz); state.json, registers.json und history.sqlite3 werden nie gelöscht.",
+    "fi.name": "Brennstoffstatistik aus der Cloud importieren", "fi.sub": "Übernimmt den Brennstoffverbrauch pro Tag einmalig aus der Cloud in den Verlauf, damit die Statistik auch die Zeit abdeckt, bevor dieser Server aufgezeichnet hat.",
+    "fi.about": "Nutzt dasselbe Konto wie die Cloud-Abfrage (ESTYMA_* in der Container-Umgebung) und dauert etwa eine Minute. Die importierten Tage werden getrennt von den eigenen Messwerten des Reglers gespeichert und nur für Tage vor dem ersten lokalen Messwert verwendet; das Verbrauchsdiagramm zeigt sie in eigener Farbe. Ein erneuter Import ersetzt sie, nichts wird doppelt gezählt.",
+    "fi.start": "Importieren", "fi.again": "Erneut importieren", "fi.clear": "Importierte Tage löschen",
+    "fi.s.none": "Noch nichts importiert", "fi.s.stored": "{n} Tage importiert ({a} – {b}, {kg} kg)", "fi.when": "importiert {ago}",
+    "fi.s.running": "Import läuft… {done} von {total} Monaten", "fi.s.error": "Import fehlgeschlagen",
+    "fi.confirm": "Brennstoffstatistik jetzt aus der Cloud importieren?", "fi.confirmclear": "Die {n} importierten Tage löschen? Die lokalen Messwerte bleiben unberührt.",
+    "fi.needauth": "UI_USER / UI_PASSWORD setzen, um von der Seite zu importieren",
+    "fi.unavailable": "Nicht verfügbar: kein Verlaufsspeicher (siehe Container-Log).",
     "rl.name": "Rohe Verkehrs-Logs behalten (Fehlersuche)", "rl.sub": "Schreibt jeden Austausch zwischen Regler und Cloud in exchanges-*.jsonl, stündlich gzip-komprimiert. Nur zur Fehlersuche oder zum Entschlüsseln neuer Register nötig.",
     "rl.about": "Der Verlauf aller Registerwerte wird in jedem Fall in history.sqlite3 gespeichert (nur geänderte Werte, etwa 0,5 MB am Tag); der Monitor füllt seine Diagramme nach einem Neustart daraus. Rohe Logs brauchen etwa 0,6 MB am Tag.",
     "rl.on": "Einschalten", "rl.off": "Ausschalten", "rl.s.on": "An", "rl.s.off": "Aus, nur der Verlauf wird gespeichert",
@@ -196,6 +225,14 @@ const SERVER_MSG = {
     [/^seconds must be 0 \(off\) or between (\d+) and (\d+)$/, "Sekunden müssen 0 (aus) oder zwischen $1 und $2 sein"],
     [/^set UI_USER and UI_PASSWORD to allow changing the cloud timeout from the web UI$/, "UI_USER und UI_PASSWORD setzen, um die Cloud-Wartezeit aus der Web-Oberfläche zu ändern"],
     [/^days must be between (\d+) and (\d+)$/, "Tage müssen zwischen $1 und $2 liegen"],
+    [/^set UI_USER and UI_PASSWORD to allow importing cloud statistics from the web UI$/, "UI_USER und UI_PASSWORD setzen, um Cloud-Statistiken aus der Web-Oberfläche zu importieren"],
+    [/^EstymaApiWrapper 0\.0\.71 or newer is needed$/, "EstymaApiWrapper 0.0.71 oder neuer wird benötigt"],
+    [/^an import is already running$/, "ein Import läuft bereits"],
+    [/^(\d+) days imported$/, "$1 Tage importiert"],
+    [/^(\d+) imported days deleted$/, "$1 importierte Tage gelöscht"],
+    [/^the cloud has no fuel statistics for this device$/, "die Cloud hat keine Brennstoffstatistik für dieses Gerät"],
+    [/^no device in this cloud account$/, "kein Gerät in diesem Cloud-Konto"],
+    [/^several devices in this account \((.+)\): set ESTYMA_DEVICE_ID to the one to import$/, "mehrere Geräte in diesem Konto ($1): ESTYMA_DEVICE_ID auf das zu importierende setzen"],
     [/^set UI_USER and UI_PASSWORD to allow switching raw logs from the web UI$/, "UI_USER und UI_PASSWORD setzen, um die rohen Logs aus der Web-Oberfläche zu schalten"],
   ],
 };
@@ -268,6 +305,53 @@ $("cloud-toggle").addEventListener("click", async () => {
   if (cloudNote) setTimeout(() => { cloudNote = null; renderCloud(); }, 8000);
   loadCloud();
 });
+
+// -- cloud fuel statistics import ---------------------------------------------
+let fi = null, fiErr = null, fiNote = null;
+const day = (d) => d ? new Date(d + "T12:00:00").toLocaleDateString(lang, { day: "numeric", month: "short", year: "numeric" }) : "?";
+async function loadFi() {
+  try {
+    const r = await fetch("/api/fuel-import", { cache: "no-store" });
+    if (r.status === 404) { fi = "missing"; fiErr = null; }
+    else if (!r.ok) throw new Error("HTTP " + r.status);
+    else { fi = await r.json(); fiErr = null; }
+  } catch (e) { fiErr = e.message; }
+  renderFi();
+  if (fi && fi.state === "running") setTimeout(loadFi, 1500);
+}
+function renderFi() {
+  const b = $("fi-start"), c = $("fi-clear"), st = $("fi-status"), note = $("fi-note");
+  b.textContent = T("fi.start"); c.textContent = T("fi.clear");
+  if (fiErr && !fi) { st.textContent = T("unreachable", { e: fiErr }); return; }
+  if (!fi) return;
+  if (fi === "missing") { st.textContent = T("fi.unavailable"); b.disabled = c.disabled = true; c.hidden = true; return; }
+  const s = fi.stored || {}, running = fi.state === "running";
+  const col = running ? "var(--warn)" : fi.state === "error" ? "var(--bad)" : s.days ? "var(--good)" : "var(--muted)";
+  const head = running ? T("fi.s.running", { done: fi.done, total: fi.total || "?" }) : fi.state === "error" ? T("fi.s.error")
+    : s.days ? T("fi.s.stored", { n: s.days, a: day(s.first), b: day(s.last), kg: Math.round(s.kg || 0).toLocaleString(lang) }) : T("fi.s.none");
+  const parts = [`<span><span class="dot" style="background:${col}"></span><b>${esc(head)}</b>${fi.message && !running ? " · " + esc(srvMsg(fi.message)) : ""}</span>`];
+  if (s.days && s.imported) parts.push(`<span>${esc(T("fi.when", { ago: ago(fi.now - s.imported) }))}</span>`);
+  if (!fi.configured && fi.problem) parts.push(`<span>${esc(srvMsg(fi.problem))}</span>`);
+  if (fiErr) parts.push(`<span style="color:var(--bad)">${esc(T("unreachable", { e: fiErr }))}</span>`);
+  st.innerHTML = parts.join("");
+  b.textContent = T(s.days ? "fi.again" : "fi.start");
+  b.classList.toggle("primary", !s.days);
+  b.disabled = !fi.configured || !fi.ui_auth || running;
+  c.hidden = !s.days; c.disabled = !fi.ui_auth || running;
+  note.className = "note" + (fiNote && fiNote.err ? " err" : "");
+  note.textContent = fiNote ? srvMsg(fiNote.text) : fi.configured && !fi.ui_auth ? T("fi.needauth") : "";
+}
+async function postFi(action) {
+  try {
+    const r = await fetch("/api/fuel-import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
+    const j = await r.json().catch(() => ({ message: "HTTP " + r.status }));
+    fiNote = !r.ok || j.ok === false ? { text: j.message, err: true } : null;
+  } catch (e) { fiNote = { text: e.message, err: true }; }
+  if (fiNote) setTimeout(() => { fiNote = null; renderFi(); }, 8000);
+  loadFi();
+}
+$("fi-start").addEventListener("click", () => { if (fi && fi !== "missing" && confirm(T("fi.confirm"))) postFi("start"); });
+$("fi-clear").addEventListener("click", () => { if (fi && fi !== "missing" && confirm(T("fi.confirmclear", { n: fi.stored.days }))) postFi("clear"); });
 
 // -- raw traffic logs --------------------------------------------------------
 let rl = null, rlErr = null, rlNote = null;
@@ -434,6 +518,7 @@ function applyLang() {
   document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = T(el.dataset.i18n); });
   for (const b of $("lang").children) b.classList.toggle("on", b.dataset.l === lang);
   renderCloud();
+  renderFi();
   renderFb();
   renderRl();
   renderRet();
@@ -446,6 +531,7 @@ $("lang").addEventListener("click", (e) => {
 });
 applyLang();
 loadCloud();
+loadFi();
 loadFb();
 loadRl();
 loadRet();

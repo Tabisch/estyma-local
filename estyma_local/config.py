@@ -110,6 +110,8 @@ ENV = [
     Env("ESTYMA_DOMAIN", "igneo.pl", "cloud", "Which Estyma cloud to log in to", compose=False, example=False),
     Env("ESTYMA_LANGUAGE", "english", "cloud", "Language for the wrapper's value names",
         compose=False, example=False),
+    Env("ESTYMA_DEVICE_ID", "", "cloud", "Cloud device to import the fuel statistics of; only needed "
+        "when the account has several devices", compose=False, example=False),
     Env("CLOUD_MONITOR", "0", "cloud", "Initial on/off state, only used until it is switched in the web UI"),
     Env("CLOUD_INTERVAL", "30", "cloud", "Seconds between cloud polls"),
     # -- MQTT ---------------------------------------------------------------

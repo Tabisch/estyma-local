@@ -40,7 +40,9 @@ Home Assistant's long-term statistics handle the daily reset); *fuel used
 yesterday* holds the previous day's total, handy for a morning notification.
 Both come from the register history (`history.sqlite3`): fuel burnt while
 the server was not recording is spread evenly over the gap. The same numbers
-per day, week, month and year are at `/api/fuel` in the web UI.
+per day, week, month and year are at `/api/fuel` in the web UI. Fuel statistics
+imported from the cloud only fill in days before the server's first reading,
+so they don't change *fuel used today* or *yesterday* once it is running.
 Other values keep their last valid reading for up to 10 minutes when a
 single report carries a corrupted value, so entities don't flicker to
 *unknown*.

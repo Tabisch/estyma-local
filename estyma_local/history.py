@@ -14,7 +14,13 @@ value is written again, so a key that is no longer reported can be told
 apart from one that does not change: during replay a key counts as gone when
 nothing was written for it for ``STALE_S``. Values are stored raw, before the
 glitch rule in decode.py, so replaying gives the readers exactly what the
-controller sent."""
+controller sent.
+
+Table ``cloud_fuel(day, kg, device, imported)``: fuel burnt per calendar day
+as the Estyma cloud's statistics show it, imported once on request
+(cloud_fuel_import.py). Kept apart from ``vals`` so imported numbers are
+never mixed up with the controller's own readings; one row per day, so
+importing again replaces instead of adding."""
 
 from __future__ import annotations
 
@@ -35,6 +41,9 @@ CREATE TABLE IF NOT EXISTS vals (
     t INTEGER NOT NULL, reg INTEGER NOT NULL, idx INTEGER NOT NULL, val INTEGER NOT NULL,
     PRIMARY KEY (t, reg, idx)
 ) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS cloud_fuel (
+    day TEXT PRIMARY KEY, kg REAL NOT NULL, device TEXT, imported REAL NOT NULL
+);
 """
 
 
@@ -87,6 +96,7 @@ class HistoryStore:
         self._db.executescript(SCHEMA)
         self._live = _Dedup()
         self.last_error = None
+        self.cloud_version = 0   # bumped on every cloud_fuel change, for FuelStats
 
     def close(self) -> None:
         with self._lock:
@@ -148,6 +158,35 @@ class HistoryStore:
             return self._db.execute(
                 "SELECT t, val FROM vals WHERE reg = ? AND idx = ? AND t >= ? AND t < ? ORDER BY t",
                 (reg, idx, int(since), int(until if until is not None else 2**62))).fetchall()
+
+    # -- imported cloud fuel statistics ----------------------------------------
+
+    def put_cloud_fuel(self, days: dict, device: str | None = None) -> int:
+        """Store {"YYYY-MM-DD": kg}; a day already there is replaced."""
+        now = self.clock()
+        rows = [(d, float(kg), device, now) for d, kg in days.items()]
+        with self._lock, self._db:
+            self._db.executemany("INSERT OR REPLACE INTO cloud_fuel VALUES (?, ?, ?, ?)", rows)
+        self.cloud_version += 1
+        return len(rows)
+
+    def cloud_fuel(self) -> dict:
+        """{"YYYY-MM-DD": kg} of every imported day."""
+        with self._lock:
+            return dict(self._db.execute("SELECT day, kg FROM cloud_fuel ORDER BY day").fetchall())
+
+    def cloud_fuel_status(self) -> dict:
+        with self._lock:
+            n, first, last, imported, kg = self._db.execute(
+                "SELECT count(*), min(day), max(day), max(imported), sum(kg) FROM cloud_fuel").fetchone()
+        return {"days": n, "first": first, "last": last, "imported": imported,
+                "kg": round(kg, 1) if kg is not None else None}
+
+    def clear_cloud_fuel(self) -> int:
+        with self._lock, self._db:
+            n = self._db.execute("DELETE FROM cloud_fuel").rowcount
+        self.cloud_version += 1
+        return n
 
     def status(self) -> dict:
         with self._lock:
