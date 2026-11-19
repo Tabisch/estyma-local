@@ -120,6 +120,21 @@ class SnapshotStore:
             items = [dict(s) for s in self._items]
         return sorted(items, key=lambda s: (s.get("date", ""), s.get("created", 0)), reverse=True)
 
+    def latest(self) -> dict | None:
+        """The snapshot saved last (by save time, not by its date), for the
+        "changed since the last save" marks on ``/heating``: its id, when
+        and for which supplier, and the saved value per setting key."""
+        with self._lock:
+            snap = max(self._items, key=lambda s: s.get("created") or 0, default=None)
+            if snap is None:
+                return None
+            return {
+                "id": snap["id"], "created": snap.get("created"), "date": snap.get("date"),
+                "supplier": snap.get("supplier", ""),
+                "values": {it["key"]: it.get("value") for it in snap.get("settings", [])
+                           if isinstance(it, dict) and "key" in it},
+            }
+
     def suppliers(self) -> list[str]:
         with self._lock:
             names = {s.get("supplier", "") for s in self._items}

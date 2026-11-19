@@ -191,6 +191,8 @@ class ServerTest(unittest.TestCase):
                             {"supplier": "Supplier A", "date": "2026-11-01", "comment": "test"})
         self.assertEqual(code, 200, res)
         sid = res["snapshot"]["id"]
+        _, st = self.ui("GET", "/api/settings")
+        self.assertEqual((st["last_save"]["id"], st["last_save"]["values"]["hyst_on"]), (sid, 10))
         _, lst = self.ui("GET", "/api/snapshots")
         self.assertEqual(lst["suppliers"], ["Supplier A"])
         items = {i["key"]: i for i in lst["snapshots"][0]["settings"]}
