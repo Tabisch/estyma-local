@@ -59,17 +59,6 @@ code { font-size: .85em; }
 </header>
 <p class="intro" data-i18n="intro">Settings of this app. The heating controller's own settings are on the "Heating settings" page.</p>
 
-<h2 data-i18n="h.cloud">Cloud monitoring</h2>
-<div class="card">
-  <div class="row">
-    <div class="what"><b data-i18n="cl.name">Poll the Estyma cloud</b><span class="sub" data-i18n="cl.sub">Reads the values the cloud shows, to compare them with the local ones.</span></div>
-    <button class="btn" id="cloud-toggle" type="button" disabled></button>
-  </div>
-  <div class="status" id="cloud-status" data-i18n="loading">Loading…</div>
-  <div class="note" id="cloud-note"></div>
-</div>
-<p class="muted" data-i18n="cl.about">Polls the Estyma cloud with the account from the container environment (ESTYMA_EMAIL / ESTYMA_PASSWORD) and writes cloud-*.jsonl next to the other logs. The credentials never pass through this page. The latest cloud values are shown on the monitor page while this is on.</p>
-
 <h2 data-i18n="h.fb">Cloud connection</h2>
 <div class="card">
   <div class="row">
@@ -84,7 +73,17 @@ code { font-size: .85em; }
 </div>
 <p class="muted" data-i18n="fb.about">Used in proxy and hybrid mode. The controller waits about 14 s for a reply; when it gets none it skips about 80 s before it reports again. The local reply asks for the usual registers, so the controller does not notice. The cloud still receives the report; its late reply is only logged.</p>
 
-<h2 data-i18n="h.logs">Logs</h2>
+<h2 data-i18n="h.dev">Debugging/Development</h2>
+<div class="card">
+  <div class="row">
+    <div class="what"><b data-i18n="cl.name">Poll the Estyma cloud</b><span class="sub" data-i18n="cl.sub">Reads the values the cloud shows, to compare them with the local ones.</span></div>
+    <button class="btn" id="cloud-toggle" type="button" disabled></button>
+  </div>
+  <div class="status" id="cloud-status" data-i18n="loading">Loading…</div>
+  <div class="note" id="cloud-note"></div>
+</div>
+<p class="muted" data-i18n="cl.about">Polls the Estyma cloud with the account from the container environment (ESTYMA_EMAIL / ESTYMA_PASSWORD) and writes cloud-*.jsonl next to the other logs. The credentials never pass through this page. The latest cloud values are shown on the monitor page while this is on.</p>
+
 <div class="card">
   <div class="row">
     <div class="what"><b data-i18n="rl.name">Keep raw traffic logs (debugging)</b><span class="sub" data-i18n="rl.sub">Writes every exchange between the controller and the cloud to exchanges-*.jsonl, gzipped every hour. Only needed to debug or to decode new registers.</span></div>
@@ -115,7 +114,7 @@ const I18N = {
     "title": "Settings", "nav.monitor": "Monitor", "nav.heating": "Heating settings", "nav.batches": "Pellet batches", "nav.registers": "Registers", "nav.logs": "Logs", "nav.app": "Settings",
     "loading": "Loading…", "unreachable": "Not reachable ({e})",
     "intro": "Settings of this app. The heating controller's own settings are on the \"Heating settings\" page.",
-    "h.cloud": "Cloud monitoring", "cl.name": "Poll the Estyma cloud", "cl.sub": "Reads the values the cloud shows, to compare them with the local ones.",
+    "cl.name": "Poll the Estyma cloud", "cl.sub": "Reads the values the cloud shows, to compare them with the local ones.",
     "cl.about": "Polls the Estyma cloud with the account from the container environment (ESTYMA_EMAIL / ESTYMA_PASSWORD) and writes cloud-*.jsonl next to the other logs. The credentials never pass through this page. The latest cloud values are shown on the monitor page while this is on.",
     "cl.on": "Switch on", "cl.off": "Switch off", "cl.confirmoff": "Stop polling the cloud?",
     "cl.s.off": "Off", "cl.s.unconfigured": "Not configured", "cl.s.connecting": "Logging in…", "cl.s.running": "Running", "cl.s.error": "Problem",
@@ -131,7 +130,7 @@ const I18N = {
     "fb.needauth": "Set UI_USER / UI_PASSWORD to change this from the page",
     "fb.unavailable": "Not available: no cloud (UPSTREAM) is set, or the setting did not start (see the container log).",
     "fb.about": "Used in proxy and hybrid mode. The controller waits about 14 s for a reply; when it gets none it skips about 80 s before it reports again. The local reply asks for the usual registers, so the controller does not notice. The cloud still receives the report; its late reply is only logged.",
-    "h.logs": "Logs", "lr.name": "Delete old logs automatically", "lr.sub": "Removes .jsonl log files that were last written more than the given number of days ago.",
+    "h.dev": "Debugging/Development", "lr.name": "Delete old logs automatically", "lr.sub": "Removes .jsonl log files that were last written more than the given number of days ago.",
     "lr.keep": "Keep", "lr.days": "days", "lr.on": "Switch on", "lr.off": "Switch off", "lr.save": "Save",
     "lr.s.on": "On", "lr.s.off": "Off, all logs are kept", "lr.after": "deletes logs older than {n} days",
     "lr.last": "last check {ago}", "lr.deleted": "{n} files deleted so far", "lr.badday": "Enter a whole number of days from 1 to 3650.",
@@ -152,7 +151,7 @@ const I18N = {
     "title": "Einstellungen", "nav.monitor": "Monitor", "nav.heating": "Heizungseinstellungen", "nav.batches": "Pelletchargen", "nav.registers": "Register", "nav.logs": "Logs", "nav.app": "Einstellungen",
     "loading": "Lädt…", "unreachable": "Nicht erreichbar ({e})",
     "intro": "Einstellungen dieser App. Die Einstellungen des Heizungsreglers selbst stehen auf der Seite \"Heizungseinstellungen\".",
-    "h.cloud": "Cloud-Überwachung", "cl.name": "Estyma-Cloud abfragen", "cl.sub": "Liest die Werte, die die Cloud anzeigt, um sie mit den lokalen zu vergleichen.",
+    "cl.name": "Estyma-Cloud abfragen", "cl.sub": "Liest die Werte, die die Cloud anzeigt, um sie mit den lokalen zu vergleichen.",
     "cl.about": "Fragt die Estyma-Cloud mit dem Konto aus der Container-Umgebung ab (ESTYMA_EMAIL / ESTYMA_PASSWORD) und schreibt cloud-*.jsonl neben die anderen Logs. Die Zugangsdaten laufen nie über diese Seite. Solange dies an ist, zeigt die Monitor-Seite die letzten Cloud-Werte.",
     "cl.on": "Einschalten", "cl.off": "Ausschalten", "cl.confirmoff": "Cloud-Abfrage beenden?",
     "cl.s.off": "Aus", "cl.s.unconfigured": "Nicht eingerichtet", "cl.s.connecting": "Anmeldung…", "cl.s.running": "Läuft", "cl.s.error": "Problem",
@@ -168,7 +167,7 @@ const I18N = {
     "fb.needauth": "UI_USER / UI_PASSWORD setzen, um dies von der Seite zu ändern",
     "fb.unavailable": "Nicht verfügbar: keine Cloud (UPSTREAM) gesetzt, oder die Einstellung ist nicht gestartet (siehe Container-Log).",
     "fb.about": "Gilt im Modus proxy und hybrid. Der Regler wartet etwa 14 s auf eine Antwort; bekommt er keine, meldet er sich erst etwa 80 s später wieder. Die lokale Antwort fragt die üblichen Register ab, der Regler merkt also nichts. Die Cloud bekommt den Bericht trotzdem; ihre späte Antwort wird nur geloggt.",
-    "h.logs": "Logs", "lr.name": "Alte Logs automatisch löschen", "lr.sub": "Entfernt .jsonl-Logdateien, die zuletzt vor mehr als der angegebenen Zahl von Tagen geschrieben wurden.",
+    "h.dev": "Debugging/Entwicklung", "lr.name": "Alte Logs automatisch löschen", "lr.sub": "Entfernt .jsonl-Logdateien, die zuletzt vor mehr als der angegebenen Zahl von Tagen geschrieben wurden.",
     "lr.keep": "Behalten:", "lr.days": "Tage", "lr.on": "Einschalten", "lr.off": "Ausschalten", "lr.save": "Speichern",
     "lr.s.on": "An", "lr.s.off": "Aus, alle Logs bleiben", "lr.after": "löscht Logs älter als {n} Tage",
     "lr.last": "letzte Prüfung {ago}", "lr.deleted": "bisher {n} Dateien gelöscht", "lr.badday": "Eine ganze Zahl von 1 bis 3650 Tagen eingeben.",

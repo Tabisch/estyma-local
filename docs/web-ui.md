@@ -57,8 +57,9 @@ Open `http://<proxy_host>:8089/`.
   be deleted from here.
   Charts already loaded in the monitor keep their data until the next restart.
 - **Settings** (`/settings`): settings of this app itself, kept apart from
-  the heating controller's settings on `/heating`. It holds the
-  *Cloud monitoring* switch (see [cloud-monitoring.md](cloud-monitoring.md))
+  the heating controller's settings on `/heating`. The *Cloud connection*
+  section comes first; the *Debugging/Development* section groups the
+  *Poll the Estyma cloud* switch (see [cloud-monitoring.md](cloud-monitoring.md)),
   *Keep raw traffic logs (debugging)*, off by default: writes every
   exchange to `exchanges-*.jsonl`, gzipped every hour (about 0.6 MB a day).
   The register history in `history.sqlite3` is kept either way, so this is
