@@ -296,8 +296,10 @@ class WebHandler(BaseHTTPRequestHandler):
 
     def _api_settings(self, _query):
         snap = self._with_auth(self.controller.settings_snapshot())
-        # the last pellet batch save, so the page can mark what changed since
+        # the last pellet batch save, so the page can mark what changed since,
         snap["last_save"] = self.snapshots.latest() if self.snapshots is not None else None
+        # and every save whose settings all equal the current ones
+        snap["matching_saves"] = self.snapshots.matching(snap) if self.snapshots is not None else []
         self._json(200, snap)
 
     def _api_cloud(self, _query):
