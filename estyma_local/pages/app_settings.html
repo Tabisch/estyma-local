@@ -24,6 +24,7 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 syst
 main { max-width: 60rem; margin: 0 auto; padding: 1rem 16px 3rem; }
 header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem 1.5rem; }
 h1 { font-size: 1.35rem; margin: .2rem 0; }
+.sub-row { justify-content: flex-start; gap: .5rem; margin-top: .7rem; padding-top: .7rem; border-top: 1px solid var(--border); }
 h2 { font-size: 1.05rem; margin: 1.6rem 0 .5rem; }
 nav { display: flex; flex-wrap: wrap; row-gap: .25rem; }
 nav a { color: var(--accent); text-decoration: none; margin-right: 1rem; white-space: nowrap; }
@@ -89,23 +90,16 @@ code { font-size: .85em; }
     <div class="what"><b data-i18n="rl.name">Keep raw traffic logs (debugging)</b><span class="sub" data-i18n="rl.sub">Writes every exchange between the controller and the cloud to exchanges-*.jsonl, gzipped every hour. Only needed to debug or to decode new registers.</span></div>
     <button class="btn" id="rl-toggle" type="button" disabled></button>
   </div>
-  <div class="status" id="rl-status" data-i18n="loading">Loading…</div>
-  <div class="note" id="rl-note"></div>
-</div>
-<p class="muted" data-i18n="rl.about">The history of all register values is kept in history.sqlite3 either way (only the values that changed, about 0.5 MB a day); the monitor refills its charts from it after a restart. Raw logs take about 0.6 MB a day.</p>
-
-<div class="card">
-  <div class="row">
-    <div class="what"><b data-i18n="lr.name">Delete old logs automatically</b><span class="sub" data-i18n="lr.sub">Removes .jsonl log files that were last written more than the given number of days ago.</span></div>
-    <div class="controls">
-      <label class="days"><span data-i18n="lr.keep">Keep</span> <input id="lr-days" type="number" min="1" max="3650" step="1" inputmode="numeric" disabled> <span data-i18n="lr.days">days</span></label>
-      <button class="btn" id="lr-save" type="button" disabled></button>
-    </div>
+  <div class="row sub-row">
+    <label class="days"><span data-i18n="lr.keep">Keep logs for</span> <input id="lr-days" type="number" min="0" max="3650" step="1" inputmode="numeric" disabled> <span data-i18n="lr.days">days (0 = forever)</span></label>
+    <button class="btn" id="lr-save" type="button" disabled></button>
   </div>
-  <div class="status" id="lr-status" data-i18n="loading">Loading…</div>
+  <div class="status" id="rl-status" data-i18n="loading">Loading…</div>
+  <div class="status" id="lr-status"></div>
+  <div class="note" id="rl-note"></div>
   <div class="note" id="lr-note"></div>
 </div>
-<p class="muted" data-i18n="lr.about">Checked right after a change and then every hour. Applies to exchanges-*, cloud-* and writes-*.jsonl (and .jsonl.gz); state.json, registers.json and history.sqlite3 are never deleted.</p>
+<p class="muted"><span data-i18n="rl.about">The history of all register values is kept in history.sqlite3 either way (only the values that changed, about 0.5 MB a day); the monitor refills its charts from it after a restart. Raw logs take about 0.6 MB a day.</span> <span data-i18n="lr.about">Old logs are checked right after a change and then every hour. This applies to exchanges-*, cloud-* and writes-*.jsonl (and .jsonl.gz); state.json, registers.json and history.sqlite3 are never deleted.</span></p>
 </main>
 <script>
 "use strict";
@@ -130,14 +124,13 @@ const I18N = {
     "fb.needauth": "Set UI_USER / UI_PASSWORD to change this from the page",
     "fb.unavailable": "Not available: no cloud (UPSTREAM) is set, or the setting did not start (see the container log).",
     "fb.about": "Used in proxy and hybrid mode. The controller waits about 14 s for a reply; when it gets none it skips about 80 s before it reports again. The local reply asks for the usual registers, so the controller does not notice. The cloud still receives the report; its late reply is only logged.",
-    "h.dev": "Debugging/Development", "lr.name": "Delete old logs automatically", "lr.sub": "Removes .jsonl log files that were last written more than the given number of days ago.",
-    "lr.keep": "Keep", "lr.days": "days", "lr.on": "Switch on", "lr.off": "Switch off", "lr.save": "Save",
-    "lr.s.on": "On", "lr.s.off": "Off, all logs are kept", "lr.after": "deletes logs older than {n} days",
-    "lr.last": "last check {ago}", "lr.deleted": "{n} files deleted so far", "lr.badday": "Enter a whole number of days from 1 to 3650.",
-    "lr.confirm": "Delete all .jsonl logs older than {n} days now and from now on?", "lr.confirmoff": "Stop deleting old logs?",
+    "h.dev": "Debugging/Development", "lr.keep": "Keep logs for", "lr.days": "days (0 = forever)", "lr.save": "Save",
+    "lr.s.on": "Deletes logs older than {n} days", "lr.s.off": "Logs are kept forever",
+    "lr.last": "last check {ago}", "lr.deleted": "{n} files deleted so far", "lr.badday": "Enter a whole number of days from 0 (keep forever) to 3650.",
+    "lr.confirm": "Delete all .jsonl logs older than {n} days now and from now on?", "lr.confirmoff": "Keep all logs forever?",
     "lr.needauth": "Set UI_USER / UI_PASSWORD to change this from the page",
     "lr.unavailable": "Not available: auto delete did not start (see the container log).",
-    "lr.about": "Checked right after a change and then every hour. Applies to exchanges-*, cloud-* and writes-*.jsonl (and .jsonl.gz); state.json, registers.json and history.sqlite3 are never deleted.",
+    "lr.about": "Old logs are checked right after a change and then every hour. This applies to exchanges-*, cloud-* and writes-*.jsonl (and .jsonl.gz); state.json, registers.json and history.sqlite3 are never deleted.",
     "rl.name": "Keep raw traffic logs (debugging)", "rl.sub": "Writes every exchange between the controller and the cloud to exchanges-*.jsonl, gzipped every hour. Only needed to debug or to decode new registers.",
     "rl.about": "The history of all register values is kept in history.sqlite3 either way (only the values that changed, about 0.5 MB a day); the monitor refills its charts from it after a restart. Raw logs take about 0.6 MB a day.",
     "rl.on": "Switch on", "rl.off": "Switch off", "rl.s.on": "On", "rl.s.off": "Off, only the history is kept",
@@ -167,14 +160,13 @@ const I18N = {
     "fb.needauth": "UI_USER / UI_PASSWORD setzen, um dies von der Seite zu ändern",
     "fb.unavailable": "Nicht verfügbar: keine Cloud (UPSTREAM) gesetzt, oder die Einstellung ist nicht gestartet (siehe Container-Log).",
     "fb.about": "Gilt im Modus proxy und hybrid. Der Regler wartet etwa 14 s auf eine Antwort; bekommt er keine, meldet er sich erst etwa 80 s später wieder. Die lokale Antwort fragt die üblichen Register ab, der Regler merkt also nichts. Die Cloud bekommt den Bericht trotzdem; ihre späte Antwort wird nur geloggt.",
-    "h.dev": "Debugging/Entwicklung", "lr.name": "Alte Logs automatisch löschen", "lr.sub": "Entfernt .jsonl-Logdateien, die zuletzt vor mehr als der angegebenen Zahl von Tagen geschrieben wurden.",
-    "lr.keep": "Behalten:", "lr.days": "Tage", "lr.on": "Einschalten", "lr.off": "Ausschalten", "lr.save": "Speichern",
-    "lr.s.on": "An", "lr.s.off": "Aus, alle Logs bleiben", "lr.after": "löscht Logs älter als {n} Tage",
-    "lr.last": "letzte Prüfung {ago}", "lr.deleted": "bisher {n} Dateien gelöscht", "lr.badday": "Eine ganze Zahl von 1 bis 3650 Tagen eingeben.",
-    "lr.confirm": "Alle .jsonl-Logs älter als {n} Tage jetzt und künftig löschen?", "lr.confirmoff": "Alte Logs nicht mehr löschen?",
+    "h.dev": "Debugging/Entwicklung", "lr.keep": "Logs behalten für", "lr.days": "Tage (0 = für immer)", "lr.save": "Speichern",
+    "lr.s.on": "Löscht Logs älter als {n} Tage", "lr.s.off": "Logs bleiben für immer",
+    "lr.last": "letzte Prüfung {ago}", "lr.deleted": "bisher {n} Dateien gelöscht", "lr.badday": "Eine ganze Zahl von 0 (für immer behalten) bis 3650 Tagen eingeben.",
+    "lr.confirm": "Alle .jsonl-Logs älter als {n} Tage jetzt und künftig löschen?", "lr.confirmoff": "Alle Logs für immer behalten?",
     "lr.needauth": "UI_USER / UI_PASSWORD setzen, um dies von der Seite zu ändern",
     "lr.unavailable": "Nicht verfügbar: Das automatische Löschen ist nicht gestartet (siehe Container-Log).",
-    "lr.about": "Wird direkt nach einer Änderung und dann stündlich geprüft. Gilt für exchanges-*, cloud-* und writes-*.jsonl (und .jsonl.gz); state.json, registers.json und history.sqlite3 werden nie gelöscht.",
+    "lr.about": "Alte Logs werden direkt nach einer Änderung und dann stündlich geprüft. Gilt für exchanges-*, cloud-* und writes-*.jsonl (und .jsonl.gz); state.json, registers.json und history.sqlite3 werden nie gelöscht.",
     "rl.name": "Rohe Verkehrs-Logs behalten (Fehlersuche)", "rl.sub": "Schreibt jeden Austausch zwischen Regler und Cloud in exchanges-*.jsonl, stündlich gzip-komprimiert. Nur zur Fehlersuche oder zum Entschlüsseln neuer Register nötig.",
     "rl.about": "Der Verlauf aller Registerwerte wird in jedem Fall in history.sqlite3 gespeichert (nur geänderte Werte, etwa 0,5 MB am Tag); der Monitor füllt seine Diagramme nach einem Neustart daraus. Rohe Logs brauchen etwa 0,6 MB am Tag.",
     "rl.on": "Einschalten", "rl.off": "Ausschalten", "rl.s.on": "An", "rl.s.off": "Aus, nur der Verlauf wird gespeichert",
@@ -335,45 +327,42 @@ async function loadRet() {
 }
 function retDays() {
   const v = $("lr-days").value.trim();
-  return /^\d+$/.test(v) && +v >= 1 && +v <= 3650 ? +v : null;
+  return /^\d+$/.test(v) && +v <= 3650 ? +v : null;
 }
 function renderRet() {
   const b = $("lr-save"), inp = $("lr-days"), st = $("lr-status"), note = $("lr-note");
-  if (retErr && !ret) { st.textContent = T("unreachable", { e: retErr }); b.textContent = T("lr.on"); return; }
+  if (retErr && !ret) { st.textContent = T("unreachable", { e: retErr }); b.textContent = T("lr.save"); return; }
   if (!ret) return;
   if (ret === "missing") {
-    st.textContent = T("lr.unavailable"); b.textContent = T("lr.on"); b.disabled = inp.disabled = true;
+    st.textContent = T("lr.unavailable"); b.textContent = T("lr.save"); b.disabled = inp.disabled = true;
     return;
   }
-  const c = ret;
-  if (!retDirty) inp.value = c.days;
-  const changed = retDays() !== c.days;  // also when the field is invalid: Save, disabled
-  const parts = [`<span><span class="dot" style="background:${c.enabled ? "var(--good)" : "var(--muted)"}"></span><b>${esc(T(c.enabled ? "lr.s.on" : "lr.s.off"))}</b>${c.enabled ? " · " + esc(T("lr.after", { n: c.days })) : ""}</span>`];
+  const c = ret, cur = c.enabled ? c.days : 0;   // 0 = keep forever
+  if (!retDirty) inp.value = cur;
+  const days = retDays();
+  const parts = [`<span><span class="dot" style="background:${c.enabled ? "var(--good)" : "var(--muted)"}"></span><b>${esc(T(c.enabled ? "lr.s.on" : "lr.s.off", { n: c.days }))}</b></span>`];
   if (c.enabled && c.last_sweep) parts.push(`<span>${esc(T("lr.last", { ago: ago(c.now - c.last_sweep) }))}</span>`);
   if (c.deleted_total) parts.push(`<span>${esc(T("lr.deleted", { n: c.deleted_total }))}</span>`);
   if (c.error) parts.push(`<span style="color:var(--bad)">${esc(c.error)}</span>`);
   if (retErr) parts.push(`<span style="color:var(--bad)">${esc(T("unreachable", { e: retErr }))}</span>`);
   st.innerHTML = parts.join("");
-  // On: "Save" while the days were edited, else "Switch off". Off: "Switch on".
-  const mode = c.enabled ? (changed ? "save" : "off") : "on";
-  b.dataset.mode = mode;
-  b.textContent = T("lr." + mode);
-  b.classList.toggle("primary", mode !== "off");
-  b.disabled = inp.disabled = !c.ui_auth;
-  if (c.ui_auth && mode !== "off" && retDays() === null) b.disabled = true;
+  b.textContent = T("lr.save");
+  b.classList.toggle("primary", days !== null && days !== cur);
+  inp.disabled = !c.ui_auth;
+  b.disabled = !c.ui_auth || days === null || days === cur;
   note.className = "note" + (retNote && retNote.err ? " err" : "");
   note.textContent = retNote ? srvMsg(retNote.text)
-    : !c.ui_auth ? T("lr.needauth") : retDays() === null ? T("lr.badday") : "";
+    : !c.ui_auth ? T("lr.needauth") : days === null ? T("lr.badday") : "";
 }
 $("lr-days").addEventListener("input", () => { retDirty = true; renderRet(); });
 $("lr-save").addEventListener("click", async () => {
   if (!ret || ret === "missing") return;
-  const mode = $("lr-save").dataset.mode, days = retDays();
-  const enabled = mode !== "off";
-  if (enabled && days === null) return;
+  const days = retDays();
+  if (days === null) return;
+  const enabled = days > 0;
   if (!confirm(enabled ? T("lr.confirm", { n: days }) : T("lr.confirmoff"))) return;
   try {
-    const r = await fetch("/api/log-retention", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled, days: days ?? ret.days }) });
+    const r = await fetch("/api/log-retention", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled, days: enabled ? days : ret.days }) });
     const j = await r.json().catch(() => ({ message: "HTTP " + r.status }));
     retNote = !r.ok || j.ok === false ? { text: j.message, err: true } : null;
     if (!retNote) { ret = j; retDirty = false; }

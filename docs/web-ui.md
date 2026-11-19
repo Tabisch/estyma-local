@@ -66,9 +66,9 @@ Open `http://<proxy_host>:8089/`.
   only needed to debug or to decode new registers. The choice is kept in
   `raw-logs.json`; until it is first changed, `RAW_LOGS` decides (default
   `0`). Switching it needs `UI_USER` / `UI_PASSWORD`.
-  *Delete old logs automatically*: once switched on, every `.jsonl` /
-  `.jsonl.gz` log (`exchanges-*`, `cloud-*`, `writes-*`) last written more than the given
-  number of days ago (1 to 3650) is deleted, right after the change and then
+  The same card has *Keep logs for N days (0 = forever)*: with N from 1 to
+  3650, every `.jsonl` / `.jsonl.gz` log (`exchanges-*`, `cloud-*`, `writes-*`)
+  last written more than N days ago is deleted, right after the change and then
   every hour. `state.json`, `registers.json`, `history.sqlite3` and the
   other state files are never touched. The choice is kept in `log-retention.json` in the log volume;
   until it is first changed, `LOG_RETENTION_DAYS` decides (default `0` = keep
