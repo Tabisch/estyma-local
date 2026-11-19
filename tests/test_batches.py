@@ -53,6 +53,29 @@ class SnapshotStoreTest(unittest.TestCase):
         again.delete(a["id"])
         self.assertEqual([s["id"] for s in SnapshotStore(self.dir).list()], [b["id"]])
 
+    def test_latest_is_last_saved_not_newest_date(self):
+        self.assertIsNone(self.store.latest())
+        a = self.store.add(controller_with({(8712, 1): 10}).settings_snapshot(), "A", "2026-12-01")
+        self.t += 10
+        b = self.store.add(controller_with({(8712, 1): 12}).settings_snapshot(), "B", "2026-10-01")
+        last = self.store.latest()
+        self.assertEqual((last["id"], last["supplier"]), (b["id"], "B"))
+        self.assertEqual(last["values"]["hyst_on"], 12)
+        self.assertIsNone(last["values"]["hyst_off"])
+        self.assertNotEqual(a["id"], last["id"])
+
+    def test_matching_compares_against_all_saves(self):
+        a = self.store.add(controller_with({(8712, 1): 10, (8195, 1): 62}).settings_snapshot(), "A", "2026-10-01")
+        self.t += 10
+        self.store.add(controller_with({(8712, 1): 12, (8195, 1): 62}).settings_snapshot(), "B", "2026-11-01")
+        self.t += 10
+        c = self.store.add(controller_with({(8712, 1): 10}).settings_snapshot(), "C", "2026-11-02")
+        now = controller_with({(8712, 1): 10, (8195, 1): 62}).settings_snapshot()
+        # B differs; C has fewer values, but all it has match; last saved first
+        self.assertEqual([m["id"] for m in self.store.matching(now)], [c["id"], a["id"]])
+        self.assertEqual(self.store.matching(controller_with({(8712, 1): 11}).settings_snapshot()), [])
+        self.assertEqual(self.store.matching(controller_with().settings_snapshot()), [])  # nothing in common
+
     def test_default_date_is_today(self):
         from datetime import date
         s = self.store.add(controller_with({(8712, 1): 10}).settings_snapshot(), "X")

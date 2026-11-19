@@ -78,6 +78,13 @@ def settings_items(settings_snapshot: dict) -> list[dict]:
     return out
 
 
+def _same(a, b) -> bool:
+    try:
+        return abs(float(a) - float(b)) < 1e-9
+    except (TypeError, ValueError):
+        return a == b
+
+
 class SnapshotStore:
     """Thread safe list of snapshots in one JSON file."""
 
@@ -119,6 +126,44 @@ class SnapshotStore:
         with self._lock:
             items = [dict(s) for s in self._items]
         return sorted(items, key=lambda s: (s.get("date", ""), s.get("created", 0)), reverse=True)
+
+    def latest(self) -> dict | None:
+        """The snapshot saved last (by save time, not by its date), for the
+        "changed since the last save" marks on ``/heating``: its id, when
+        and for which supplier, and the saved value per setting key."""
+        with self._lock:
+            snap = max(self._items, key=lambda s: s.get("created") or 0, default=None)
+            if snap is None:
+                return None
+            return {
+                "id": snap["id"], "created": snap.get("created"), "date": snap.get("date"),
+                "supplier": snap.get("supplier", ""),
+                "values": {it["key"]: it.get("value") for it in snap.get("settings", [])
+                           if isinstance(it, dict) and "key" in it},
+            }
+
+    def matching(self, settings_snapshot: dict) -> list[dict]:
+        """Snapshots whose settings all equal the current ones, last saved
+        first. Only settings that have a value both now and in the snapshot
+        are compared; a snapshot with none in common does not match."""
+        now = {it["key"]: it.get("value") for g in settings_snapshot.get("groups", [])
+               for it in g.get("items", []) if it.get("value") is not None}
+        out = []
+        with self._lock:
+            snaps = sorted(self._items, key=lambda s: s.get("created") or 0, reverse=True)
+            for snap in snaps:
+                common = 0
+                for it in snap.get("settings", []):
+                    if not isinstance(it, dict) or it.get("value") is None or it.get("key") not in now:
+                        continue
+                    if not _same(it["value"], now[it["key"]]):
+                        break
+                    common += 1
+                else:
+                    if common:
+                        out.append({"id": snap["id"], "created": snap.get("created"),
+                                    "date": snap.get("date"), "supplier": snap.get("supplier", "")})
+        return out
 
     def suppliers(self) -> list[str]:
         with self._lock:

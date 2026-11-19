@@ -40,6 +40,11 @@ nav a.on { color: var(--text); font-weight: 600; }
 .item { display: grid; grid-template-columns: minmax(0, 1fr) 7rem minmax(15rem, auto); gap: .2rem 1rem; align-items: center; padding: .55rem .8rem; border-bottom: 1px solid var(--border); }
 .item:last-child { border-bottom: 0; }
 .item.pending { background: var(--hl); }
+.item.changed { box-shadow: inset 3px 0 0 var(--warn); }
+.pill.changed { color: var(--warn); }
+.saved, .status .saved b { color: var(--warn); }
+.status .match, .status .match b { color: var(--good); }
+.edit .dirty { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .name { min-width: 0; }
 .name .sub, .sub { color: var(--muted); font-size: .8rem; }
 .cur { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
@@ -97,6 +102,9 @@ const I18N = {
     "n.untested": "Only the boiler target and on/off were seen being written on the real controller. The other settings are marked \"untested\" and stay locked unless ALLOW_UNTESTED_WRITES=1. Change them one at a time and check the result on the controller's own screen.",
     "n.untestedon": "ALLOW_UNTESTED_WRITES=1: settings marked \"untested\" can be written. Their write path was not tested on a real controller yet; change one at a time and check the result on the controller's own screen.",
     "untested": "untested", "untested.t": "Writing this register was not yet seen working on a real controller", "tested": "tested", "likely": "likely",
+    "chg.n": "{n} changed since the last save ({d}, {s})", "chg.one": "1 changed since the last save ({d}, {s})", "chg.none": "No changes since the last save ({d}, {s})",
+    "match": "Matches the saved settings of {l}", "match.sep": ", ",
+    "chg": "changed", "chg.t": "Differs from the last saved pellet batch settings", "saved": "saved {v}",
     "set": "Set", "cancel": "Cancel", "range": "{lo}–{hi}", "seen": "read {ago}", "notread": "not read yet",
     "pending": "Sending {v}, poll {n}…", "locked": "Locked: {r}",
     "confirm": "Change \"{l}\" from {a} to {b}?", "confirm.untested": "\n\nThis register's write path has not been tested on a real controller yet. Check the result on the controller's screen.",
@@ -120,6 +128,9 @@ const I18N = {
     "n.untested": "Nur Kessel-Soll und An/Aus wurden am echten Regler beim Schreiben beobachtet. Die anderen Einstellungen sind als \"ungetestet\" markiert und bleiben gesperrt, solange ALLOW_UNTESTED_WRITES nicht 1 ist. Einzeln ändern und das Ergebnis am Display des Reglers prüfen.",
     "n.untestedon": "ALLOW_UNTESTED_WRITES=1: als \"ungetestet\" markierte Einstellungen können geschrieben werden. Ihr Schreibweg wurde an einem echten Regler noch nicht getestet; einzeln ändern und das Ergebnis am Display des Reglers prüfen.",
     "untested": "ungetestet", "untested.t": "Schreiben dieses Registers wurde an einem echten Regler noch nicht beobachtet", "tested": "getestet", "likely": "wahrscheinlich",
+    "chg.n": "{n} geändert seit dem letzten Speichern ({d}, {s})", "chg.one": "1 geändert seit dem letzten Speichern ({d}, {s})", "chg.none": "Keine Änderungen seit dem letzten Speichern ({d}, {s})",
+    "match": "Entspricht den gespeicherten Einstellungen von {l}", "match.sep": ", ",
+    "chg": "geändert", "chg.t": "Weicht von den zuletzt gespeicherten Einstellungen der Pelletcharge ab", "saved": "gespeichert {v}",
     "set": "Setzen", "cancel": "Abbrechen", "range": "{lo}–{hi}", "seen": "gelesen {ago}", "notread": "noch nicht gelesen",
     "pending": "Sende {v}, Abfrage {n}…", "locked": "Gesperrt: {r}",
     "confirm": "\"{l}\" von {a} auf {b} ändern?", "confirm.untested": "\n\nDer Schreibweg dieses Registers wurde an einem echten Regler noch nicht getestet. Ergebnis am Display des Reglers prüfen.",
@@ -189,6 +200,13 @@ function show(it, v) {
   if (it.kind === "bool") return v ? (lang === "de" ? "an" : "on") : (lang === "de" ? "aus" : "off");
   return Number(v).toLocaleString(lang, { minimumFractionDigits: decimals(it), maximumFractionDigits: decimals(it) });
 }
+// Value of a setting in the last pellet batch save, if it differs from now.
+function savedDiff(it, ls) {
+  if (!ls || !ls.values || it.value == null) return undefined;
+  const v = ls.values[it.key];
+  if (v == null || Math.abs(Number(v) - Number(it.value)) < 1e-9) return undefined;
+  return v;
+}
 const withUnit = (it, v) => show(it, v) + (it.unit && v != null && !it.options ? " " + it.unit : "");
 
 let data = null, error = null, notes = {}, edits = {}, items = {};
@@ -201,6 +219,19 @@ function render() {
     `<span>${T("st.writes", { s: `<b>${T(d.writes_enabled ? "st.on" : "st.off")}</b>` })}${d.writes_enabled ? ", " + T("st.untested", { s: `<b>${T(d.allow_untested_writes ? "st.on" : "st.off")}</b>` }) : ""}</span>`];
   st.push(`<span>${s.sent ? T("st.reading") : s.read ? T("st.read", { ago: ago(d.now - s.read) }) : T("st.never")}</span>`);
   if (s.can_read) st.push(`<button class="btn" id="readnow"${s.sent || s.due ? " disabled" : ""}>${T("st.readnow")}</button>`);
+  const fmtDay = (day) => esc(new Date(day + "T00:00").toLocaleDateString(lang));
+  const match = d.matching_saves || [];
+  // When the settings equal a saved batch, say which; only otherwise mark
+  // what differs from the last save.
+  const ls = match.length ? null : d.last_save;
+  if (match.length) {
+    st.push(`<a href="/batches" class="match"><b>${T("match", { l: match.map((m) => `${esc(m.supplier)} (${fmtDay(m.date)})`).join(T("match.sep")) })}</b></a>`);
+  } else if (ls) {
+    let n = 0;
+    for (const g of d.groups) for (const it of g.items) if (savedDiff(it, ls) !== undefined) n++;
+    const v = { n, d: fmtDay(ls.date), s: esc(ls.supplier) };
+    st.push(`<a href="/batches" class="${n ? "saved" : ""}">${n ? `<b>${T(n === 1 ? "chg.one" : "chg.n", v)}</b>` : T("chg.none", v)}</a>`);
+  }
   if (d.alarm_active) st.push(`<span style="color:var(--bad)"><b>${T("st.alarm")}</b></span>`);
   if (error) st.push(`<span style="color:var(--bad)">${esc(T("unreachable", { e: error }))}</span>`);
   if (notes._read) st.push(`<span class="${notes._read.err ? "note err" : ""}">${esc(srvMsg(notes._read.text))}</span>`);
@@ -220,23 +251,28 @@ function render() {
     items[it.key] = it;
     const p = pend[it.key], canEdit = it.allowed && d.ui_auth;
     const dis = canEdit ? "" : " disabled";
-    const val = edits[it.key] ?? (it.value == null ? "" : String(it.value));
+    const cur = it.value == null ? "" : String(it.value);
+    const val = edits[it.key] ?? cur;
+    const dirty = it.key in edits && edits[it.key] !== cur ? " dirty" : "";
+    const sv = savedDiff(it, ls);
     let ctl;
     if (it.options) {
       const opts = Object.entries(it.options).map(([k, v]) => `<option value="${esc(k)}"${String(val) === k ? " selected" : ""}>${esc(v[lang === "de" ? 1 : 0])}</option>`).join("");
-      ctl = `<select data-in="${it.key}"${dis}>${it.value == null ? '<option value="">–</option>' : ""}${opts}</select>`;
+      ctl = `<select class="${dirty}" data-in="${it.key}"${dis}>${it.value == null ? '<option value="">–</option>' : ""}${opts}</select>`;
     } else {
-      ctl = `<input type="number" data-in="${it.key}" min="${it.min}" max="${it.max}" step="${it.step}" value="${esc(val)}"${dis}>`
+      ctl = `<input type="number" class="${dirty}" data-in="${it.key}" min="${it.min}" max="${it.max}" step="${it.step}" value="${esc(val)}"${dis}>`
         + `<span class="sub">${esc(T("range", { lo: show(it, it.min), hi: show(it, it.max) }))}${it.unit ? " " + esc(it.unit) : ""}</span>`;
     }
     ctl += `<button class="btn primary" data-set="${it.key}"${dis}>${T("set")}</button>`;
     if (p) ctl += `<button class="btn" data-cancel="${it.key}">${T("cancel")}</button>`;
     const pills = (it.tested ? "" : `<span class="pill untested" title="${esc(T("untested.t"))}">${T("untested")}</span>`)
-      + (it.conf === "likely" ? `<span class="pill likely">${T("likely")}</span>` : "");
+      + (it.conf === "likely" ? `<span class="pill likely">${T("likely")}</span>` : "")
+      + (sv !== undefined ? `<span class="pill changed" title="${esc(T("chg.t"))}">${T("chg")}</span>` : "");
     const sub = [it.register, it.seen ? T("seen", { ago: ago(d.now - it.seen) }) : T("notread")].join(" · ");
     const nt = notes[it.key];
     const note = nt ? srvMsg(nt.text) : p ? T("pending", { v: withUnit(it, p.value), n: p.sent }) : !it.allowed && d.writes_enabled && d.mode !== "proxy" && it.reason !== "ALLOW_UNTESTED_WRITES=0" ? T("locked", { r: srvMsg(it.reason) }) : "";
-    return `<div class="item${p ? " pending" : ""}"><div class="name">${esc(L(it))}${pills}<div class="sub">${esc(sub)}</div></div>`
+    const was = sv !== undefined ? ` · <span class="saved">${esc(T("saved", { v: withUnit(it, sv) }))}</span>` : "";
+    return `<div class="item${p ? " pending" : ""}${sv !== undefined ? " changed" : ""}"><div class="name">${esc(L(it))}${pills}<div class="sub">${esc(sub)}${was}</div></div>`
       + `<div class="cur">${esc(show(it, it.value))}${it.unit && it.value != null && !it.options ? `<small>${esc(it.unit)}</small>` : ""}</div>`
       + `<div class="edit">${ctl}</div><div class="note${nt && nt.err ? " err" : ""}">${esc(note)}</div></div>`;
   }).join("")}</div>`).join("");
@@ -268,7 +304,10 @@ async function post(url, body, k) {
 
 document.addEventListener("input", (e) => {
   const k = e.target.dataset && e.target.dataset.in;
-  if (k) edits[k] = e.target.value;
+  if (!k) return;
+  edits[k] = e.target.value;
+  const it = items[k];
+  e.target.classList.toggle("dirty", !!it && e.target.value !== (it.value == null ? "" : String(it.value)));
 });
 document.addEventListener("keydown", (e) => {
   const k = e.key === "Enter" && e.target.dataset && e.target.dataset.in;
