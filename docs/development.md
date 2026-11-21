@@ -69,6 +69,10 @@ pushes it to `ghcr.io/tabisch/estyma-local`. Every build gets the commit SHA as 
   stable release (no `-` in the name, so `v1.1.0-beta1` leaves `latest` alone),
 - builds from `main`: `main`.
 
+The workflow passes the tag or branch name and the commit SHA as the `VERSION`
+and `REVISION` build args; the web UI footer shows them. A local
+`docker build .` shows `dev`; running from a git checkout shows `git describe`.
+
 It builds when:
 
 - a push to `main` contains a commit whose message includes `[build]`, e.g.
