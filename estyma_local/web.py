@@ -28,6 +28,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .batches import SnapshotError
 from .controller import WriteError
+from .version import REVISION, VERSION, add_footer
 
 STARTED = time.time()
 PAGES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pages")
@@ -336,7 +337,8 @@ class WebHandler(BaseHTTPRequestHandler):
                          "suppliers": self.snapshots.suppliers(), "snapshots": self.snapshots.list()})
 
     def _health(self):
-        out = {"ok": True, "uptime_s": round(time.time() - STARTED)}
+        out = {"ok": True, "version": VERSION, "revision": REVISION,
+               "uptime_s": round(time.time() - STARTED)}
         if self.controller is not None:
             last = self.controller.last_report
             out["mode"] = self.controller.mode
@@ -451,7 +453,7 @@ class WebHandler(BaseHTTPRequestHandler):
             zip_link='<a class="button" href="/all.zip" data-i18n="zip">Download all (zip)</a>' if files else "",
             rows=rows,
         ).encode()
-        self._send(200, body, "text/html; charset=utf-8")
+        self._send(200, add_footer(body), "text/html; charset=utf-8")
 
     def _del_button(self, name: str) -> str:
         if not is_log(name):
@@ -484,7 +486,7 @@ class WebHandler(BaseHTTPRequestHandler):
 
     def _page(self, name: str):
         with open(os.path.join(PAGES, name), "rb") as fh:
-            self._send(200, fh.read(), "text/html; charset=utf-8")
+            self._send(200, add_footer(fh.read()), "text/html; charset=utf-8")
 
     def _file(self, name: str):
         # Only plain file names directly inside LOG_DIR.

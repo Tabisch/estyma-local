@@ -8,6 +8,12 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.
  && mkdir -p /logs && chown estyma:estyma /logs
 COPY estyma_local/ /app/estyma_local/
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+# Version shown in the web UI footer, /api/health and the MQTT discovery.
+# CI passes the tag (v1.0.0) or branch name and the commit SHA; a plain
+# "docker build ." shows "dev".
+ARG VERSION=dev
+ARG REVISION=
+ENV ESTYMA_VERSION=$VERSION ESTYMA_REVISION=$REVISION
 ENV PYTHONUNBUFFERED=1 LISTEN_PORT=80 LOG_DIR=/logs
 VOLUME /logs
 EXPOSE 80 8089

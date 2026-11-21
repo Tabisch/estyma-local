@@ -2,6 +2,10 @@
 
 Open `http://<proxy_host>:8089/`.
 
+Every page ends with a footer showing the running version, e.g.
+`estyma-local v1.0.0 (3f2a9c1)` (also in `/api/health` and the MQTT
+discovery's `origin.sw_version`).
+
 - **Monitor** (`/`): the values the controller reports to the cloud,
   decoded from the proxied traffic and refreshed every 10 s: boiler, buffer,
   heating circuit, outside and flue gas temperatures, O2, burner power and
