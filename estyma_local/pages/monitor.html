@@ -97,6 +97,10 @@ dialog.fuel::backdrop { background: rgba(0,0,0,.45); }
 .fuel details { margin-top: .6rem; }
 .fuel summary { cursor: pointer; color: var(--accent); font-size: .88rem; }
 .fuel table { margin-top: .4rem; }
+.fuel .bar.fail { fill: var(--bad); }
+.fuel .legend i.ok, .fuel .legend i.fail { height: .7rem; width: .7rem; border-radius: 2px; background: var(--accent); }
+.fuel .legend i.fail { background: var(--bad); }
+.tile .sub .warn { color: var(--bad); }
 .h2link { font-size: .85rem; font-weight: 400; color: var(--accent); text-decoration: none; margin-left: .5rem; }
 </style></head><body><main>
 <header>
@@ -147,6 +151,19 @@ dialog.fuel::backdrop { background: rgba(0,0,0,.45); }
 <p class="muted" id="fuel-note"></p>
 </div></dialog>
 
+<dialog class="fuel" id="burn-dlg" aria-labelledby="burn-title"><div class="fuel-in">
+<div class="fuel-head"><h2 id="burn-title" data-i18n="bu.title">Burner statistics</h2>
+<span class="range" id="burn-range" role="group"><button data-p="day" data-i18n="fu.p.day">Days</button><button data-p="week" data-i18n="fu.p.week">Weeks</button><button data-p="month" data-i18n="fu.p.month">Months</button><button data-p="year" data-i18n="fu.p.year">Years</button></span>
+<button class="btn x" id="burn-close" data-i18n="fu.close">Close</button></div>
+<div class="tiles" id="burn-sum"></div>
+<div class="chart"><h3 id="burn-ctitle"></h3>
+<div class="legend"><span><i class="ok"></i><span data-i18n="bu.l.ok">successful starts</span></span><span><i class="fail"></i><span data-i18n="bu.l.fail">failed starts</span></span><span><i class="est"></i><span data-i18n="fu.est">estimated: the server was not recording for part of this period</span></span></div>
+<svg id="burn-svg" role="img" aria-labelledby="burn-ctitle"></svg>
+<div class="readout" id="burn-read"></div></div>
+<details><summary data-i18n="fu.table">Show as table</summary><div class="wrap"><table><thead><tr><th data-i18n="fu.col.period">Period</th><th class="num" data-i18n="bu.col.starts">Starts</th><th class="num" data-i18n="bu.col.failed">Failed</th><th class="num" data-i18n="bu.col.errors">Error stops</th><th class="num" data-i18n="bu.col.hours">Burner hours</th><th class="num" data-i18n="bu.col.avg">Avg. burn</th></tr></thead><tbody id="burn-rows"></tbody></table></div></details>
+<p class="muted" id="burn-note"></p>
+</div></dialog>
+
 <p class="muted" data-i18n="footer">Values are decoded from what the controller reports, about every 20 s. Readings outside a plausible range (corrupted CAN reads) are dropped. Refreshes every 10 s.</p>
 </main>
 <script>
@@ -192,6 +209,14 @@ const I18N = {
     "cl.lastpoll": "last poll {ago}", "cl.every": "every {n} s", "cl.retry": "retry in {n} s", "cl.dataage": "cloud data age {n} s",
     "cl.device": "Device {id}", "cl.local": "local {v}",
     "cl.nodata": "No cloud data yet.",
+    "bu.title": "Burner statistics", "bu.open": "Today {n} starts · {h} h · statistics",
+    "bu.c.day": "Burner starts per day", "bu.c.week": "Burner starts per week", "bu.c.month": "Burner starts per month", "bu.c.year": "Burner starts per year",
+    "bu.l.ok": "successful starts", "bu.l.fail": "failed starts",
+    "bu.col.starts": "Starts", "bu.col.failed": "Failed", "bu.col.errors": "Error stops", "bu.col.hours": "Burner hours", "bu.col.avg": "Avg. burn",
+    "bu.tile": "{n} starts", "bu.h": "{h} h burning", "bu.f": "{f} failed", "bu.avg": "{m} min per burn",
+    "bu.read": "{n} starts ({f} failed) · {e} error stops · {h} h burning · {a}",
+    "bu.note": "Recorded since {d}. A start is every ignition; it failed when the burner left ignition before the flame was established (glowing, modulation or sustain). Burner hours count glowing, modulation and sustain. Calendar periods in the controller's time zone ({tz}). Many short burns usually mean the hysteresis or power settings are off.",
+    "bu.nodata": "No burner state readings recorded yet.",
     "fu.title": "Fuel consumption", "fu.close": "Close", "fu.p.day": "Days", "fu.p.week": "Weeks", "fu.p.month": "Months", "fu.p.year": "Years",
     "fu.today": "Today", "fu.yesterday": "Yesterday", "fu.week": "This week", "fu.month": "This month", "fu.year": "This year",
     "fu.c.day": "Fuel per day", "fu.c.week": "Fuel per week", "fu.c.month": "Fuel per month", "fu.c.year": "Fuel per year",
@@ -238,6 +263,14 @@ const I18N = {
     "cl.lastpoll": "letzte Abfrage {ago}", "cl.every": "alle {n} s", "cl.retry": "neuer Versuch in {n} s", "cl.dataage": "Cloud-Datenalter {n} s",
     "cl.device": "Gerät {id}", "cl.local": "lokal {v}",
     "cl.nodata": "Noch keine Cloud-Daten.",
+    "bu.title": "Brennerstatistik", "bu.open": "Heute {n} Starts · {h} h · Statistik",
+    "bu.c.day": "Brennerstarts pro Tag", "bu.c.week": "Brennerstarts pro Woche", "bu.c.month": "Brennerstarts pro Monat", "bu.c.year": "Brennerstarts pro Jahr",
+    "bu.l.ok": "erfolgreiche Starts", "bu.l.fail": "fehlgeschlagene Starts",
+    "bu.col.starts": "Starts", "bu.col.failed": "Fehlgeschlagen", "bu.col.errors": "Fehlerstopps", "bu.col.hours": "Brennerstunden", "bu.col.avg": "Ø Brenndauer",
+    "bu.tile": "{n} Starts", "bu.h": "{h} h Flamme", "bu.f": "{f} fehlgeschlagen", "bu.avg": "{m} min pro Brennphase",
+    "bu.read": "{n} Starts ({f} fehlgeschlagen) · {e} Fehlerstopps · {h} h Flamme · {a}",
+    "bu.note": "Aufgezeichnet seit {d}. Ein Start ist jede Zündung; er ist fehlgeschlagen, wenn der Brenner die Zündung verlassen hat, bevor die Flamme stand (Glühen, Modulation oder Aufrechterhaltung). Brennerstunden zählen Glühen, Modulation und Aufrechterhaltung. Kalenderzeiträume in der Zeitzone des Reglers ({tz}). Viele kurze Brennphasen deuten meist auf unpassende Hysterese- oder Leistungseinstellungen hin.",
+    "bu.nodata": "Noch keine Brennerstatus-Werte aufgezeichnet.",
     "fu.title": "Brennstoffverbrauch", "fu.close": "Schließen", "fu.p.day": "Tage", "fu.p.week": "Wochen", "fu.p.month": "Monate", "fu.p.year": "Jahre",
     "fu.today": "Heute", "fu.yesterday": "Gestern", "fu.week": "Diese Woche", "fu.month": "Dieser Monat", "fu.year": "Dieses Jahr",
     "fu.c.day": "Brennstoff pro Tag", "fu.c.week": "Brennstoff pro Woche", "fu.c.month": "Brennstoff pro Monat", "fu.c.year": "Brennstoff pro Jahr",
@@ -385,6 +418,10 @@ function render() {
     const stale = !c || now - c.time > STALE_S;
     const v = !c ? "–" : txt ? esc(txt(c.value)) : fmt(c.value, dec) + (f.unit ? `<small>${f.unit}</small>` : "");
     const extra = sub || (c && stale ? T("tile.asof", { ago: ago(now - c.time) }) : "");
+    if (k === "burner_state" && burnOk) {
+      const t = burnSum && burnSum.today;
+      return `<button type="button" class="tile${stale ? " stale" : ""}" id="burn-tile" aria-haspopup="dialog"><div class="k">${esc(L(k))}</div><div class="v">${v}</div><div class="sub">${esc(T("bu.open", { n: t ? t.starts : "–", h: t ? fmt(t.hours, 1) : "–" }))}</div></button>`;
+    }
     if (k === "fuel_counter" && fuelOk) {
       const today = fuelSum && fuelSum.today;
       return `<button type="button" class="tile${stale ? " stale" : ""}" id="fuel-tile" aria-haspopup="dialog"><div class="k">${esc(L(k))}</div><div class="v">${v}</div><div class="sub">${esc(T("fu.open", { v: fmt(today, 1) }))}</div></button>`;
@@ -562,6 +599,7 @@ $("lang").addEventListener("click", (e) => {
   if (data) render();
   if (cloud) renderCloud();
   if (fuel && $("fuel-dlg").open) renderFuel();
+  if (burn && $("burn-dlg").open) renderBurn();
 });
 $("charts").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-series]"); if (!b) return;
@@ -668,10 +706,94 @@ $("fuel-range").addEventListener("click", (e) => {
   loadFuel(true);
 });
 
+// -- burner statistics (click the burner state tile) --------------------------
+let burnOk = true, burnSum = null, burn = null, burnPeriod = "day", burnHover = null, burnAt = 0;
+try { const p = localStorage.getItem("estyma-burn-period"); if (["day", "week", "month", "year"].includes(p)) burnPeriod = p; } catch (e) {}
+async function loadBurn(force) {
+  if (!burnOk || (!force && !$("burn-dlg").open && Date.now() - burnAt < 60000)) return;
+  try {
+    const r = await fetch("/api/burner?period=" + burnPeriod, { cache: "no-store" });
+    if (r.status === 404) { burnOk = false; if (data) render(); return; }
+    if (!r.ok) throw new Error(r.status);
+    burn = await r.json(); burnSum = burn.summary; burnAt = Date.now();
+    if (data) render();
+    if ($("burn-dlg").open) renderBurn();
+  } catch (e) {}
+}
+// periodLabel() reads fuel.period; use the burner's period while labelling.
+function burnLabel(b, long) { const f = fuel; fuel = { period: burn.period }; try { return periodLabel(b, long); } finally { fuel = f; } }
+const burnAvg = (b) => b.avg_burn_min != null ? T("bu.avg", { m: fmt(b.avg_burn_min, 0) }) : "–";
+function renderBurn() {
+  if (!burn) return;
+  for (const b of $("burn-range").children) b.classList.toggle("on", b.dataset.p === burn.period);
+  const s = burn.summary || {};
+  $("burn-sum").innerHTML = ["today", "yesterday", "week", "month", "year"].map((key) => {
+    const v = s[key];
+    const sub = v ? [esc(T("bu.h", { h: fmt(v.hours, 1) })), `<span class="${v.failed ? "warn" : ""}">${esc(T("bu.f", { f: v.failed }))}</span>`, v.avg_burn_min != null ? esc(burnAvg(v)) : ""].filter(Boolean).join(" · ") : "";
+    return `<div class="tile"><div class="k">${esc(T("fu." + key))}</div><div class="v">${v ? v.starts : "–"}<small>${esc(T("bu.col.starts"))}</small></div><div class="sub">${sub}</div></div>`;
+  }).join("");
+  $("burn-ctitle").textContent = T("bu.c." + burn.period);
+  const B = burn.buckets.filter((b, i) => b.starts != null || i === burn.buckets.length - 1);
+  $("burn-rows").innerHTML = B.slice().reverse().map((b) =>
+    `<tr><td>${esc(burnLabel(b, true))}${b.estimated ? ` <span class="muted">(${esc(T("fu.estshort"))})</span>` : ""}</td><td class="num">${b.starts ?? "–"}</td><td class="num">${b.failed ?? "–"}</td><td class="num">${b.errors ?? "–"}</td><td class="num">${fmt(b.hours, 1)}</td><td class="num">${b.avg_burn_min != null ? fmt(b.avg_burn_min, 0) + " min" : "–"}</td></tr>`).join("");
+  const d0 = burn.first ? new Date(burn.first * 1000).toLocaleDateString(lang, { day: "numeric", month: "short", year: "numeric" }) : null;
+  $("burn-note").textContent = d0 ? T("bu.note", { d: d0, tz: burn.tz }) : T("bu.nodata");
+  drawBurn(B);
+}
+function drawBurn(B) {
+  const svg = $("burn-svg"), W = svg.clientWidth || 600, H = svg.clientHeight || 220;
+  const PL = 40, PR = 6, PT = 10, PB = 22;
+  const max = Math.max(1, ...B.map((b) => b.starts || 0));
+  const ticks = niceTicks(0, max, 4).filter((t) => Number.isInteger(t)), top = Math.max(max, ticks[ticks.length - 1] || 1);
+  const y = (v) => PT + (H - PT - PB) * (1 - v / top);
+  const n = B.length, slot = (W - PL - PR) / Math.max(n, 1), bw = Math.max(2, Math.min(slot - 2, 48));
+  const every = Math.ceil(n / Math.max(1, Math.floor((W - PL - PR) / 34)));
+  let g = `<defs><pattern id="burn-hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2" height="5" fill="${css("--accent")}"/></pattern></defs>`;
+  for (const t of ticks) g += `<line x1="${PL}" x2="${W - PR}" y1="${y(t)}" y2="${y(t)}" stroke="${css("--grid")}"/><text x="${PL - 6}" y="${y(t) + 4}" text-anchor="end">${fmt(t, 0)}</text>`;
+  B.forEach((b, i) => {
+    const cx = PL + slot * (i + .5), x = cx - bw / 2, all = b.starts || 0, bad = b.failed || 0;
+    const hov = burnHover === i ? " hov" : "";
+    if (all - bad > 0) g += `<rect class="bar${b.estimated ? " est" : ""}${hov}" x="${x}" y="${y(all - bad)}" width="${bw}" height="${y(0) - y(all - bad)}" rx="2" style="${b.estimated ? "fill:url(#burn-hatch)" : ""}"/>`;
+    if (bad > 0) g += `<rect class="bar fail${hov}" x="${x}" y="${y(all)}" width="${bw}" height="${y(all - bad) - y(all)}" rx="2"/>`;
+    if ((n - 1 - i) % every === 0) g += `<text x="${cx}" y="${H - 6}" text-anchor="middle">${esc(burnLabel(b, false))}</text>`;
+    g += `<rect data-i="${i}" x="${PL + slot * i}" y="${PT}" width="${slot}" height="${H - PT - PB}" fill="transparent"/>`;
+  });
+  g += `<line x1="${PL}" x2="${W - PR}" y1="${y(0)}" y2="${y(0)}" stroke="${css("--border")}"/>`;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.innerHTML = g;
+  const b = B[burnHover != null && burnHover < n ? burnHover : n - 1];
+  $("burn-read").innerHTML = b ? `<b>${esc(burnLabel(b, true))}</b>: ` + (b.starts == null ? "–" : esc(T("bu.read", { n: b.starts, f: b.failed, e: b.errors, h: fmt(b.hours, 1), a: burnAvg(b) })))
+    + (b.estimated ? " · " + esc(T("fu.estshort")) : "") + (burnHover == null ? ` <span class="muted">· ${esc(T("fu.hint"))}</span>` : "") : "";
+  svg._B = B;
+}
+function burnPoint(e) {
+  const r = e.target.closest("rect[data-i]");
+  const i = r ? +r.dataset.i : null;
+  if (i !== burnHover) { burnHover = i; drawBurn($("burn-svg")._B); }
+}
+$("burn-svg").addEventListener("pointermove", burnPoint);
+$("burn-svg").addEventListener("pointerdown", burnPoint);
+$("burn-svg").addEventListener("pointerleave", () => { burnHover = null; drawBurn($("burn-svg")._B); });
+$("tiles").addEventListener("click", (e) => {
+  if (!e.target.closest("#burn-tile")) return;
+  $("burn-dlg").showModal(); burnHover = null;
+  if (burn) renderBurn();
+  loadBurn(true);
+});
+$("burn-close").addEventListener("click", () => $("burn-dlg").close());
+$("burn-dlg").addEventListener("click", (e) => { if (e.target === $("burn-dlg")) $("burn-dlg").close(); });
+$("burn-range").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b || b.dataset.p === burnPeriod) return;
+  burnPeriod = b.dataset.p; burnHover = null;
+  try { localStorage.setItem("estyma-burn-period", burnPeriod); } catch (err) {}
+  loadBurn(true);
+});
+
 applyStatic();
-let resizeT; addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (data) drawCharts(); if ($("fuel-dlg").open && fuel) renderFuel(); }, 150); });
-load(); loadCloud(); loadFuel(true);
+let resizeT; addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (data) drawCharts(); if ($("fuel-dlg").open && fuel) renderFuel(); if ($("burn-dlg").open && burn) renderBurn(); }, 150); });
+load(); loadCloud(); loadFuel(true); loadBurn(true);
 setInterval(loadFuel, 10000);
+setInterval(loadBurn, 10000);
 setInterval(load, 10000);
 setInterval(loadCloud, 10000);
 </script>

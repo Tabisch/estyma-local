@@ -139,6 +139,8 @@ class WebHandler(BaseHTTPRequestHandler):
     retention = None    # retention.LogRetention or None
     fallback = None     # cloud_fallback.CloudFallback or None
     raw_logs = None     # raw_logs.RawLogSetting or None
+    fuel = None         # fuel_stats.FuelStats or None
+    burner = None       # burner_stats.BurnerStats or None
 
     def log_message(self, fmt, *args):
         pass
@@ -223,6 +225,7 @@ class WebHandler(BaseHTTPRequestHandler):
         "/api/cloud-fallback": ("_api_fallback", "fallback"),
         "/api/raw-logs": ("_api_raw_logs", "raw_logs"),
         "/api/fuel": ("_api_fuel", "fuel"),
+        "/api/burner": ("_api_burner", "burner"),
     }
     # POST bodies are JSON. ``auth``: also needs UI_USER / UI_PASSWORD set
     # (value: what is refused without it, for the message).
@@ -461,6 +464,18 @@ class WebHandler(BaseHTTPRequestHandler):
             st["history"] = self.monitor.store.status()
         self._json(200, self._with_auth(st))
 
+    def _api_burner(self, query: str):
+        from .fuel_stats import PERIODS
+        q = urllib.parse.parse_qs(query)
+        period = q.get("period", ["day"])[0]
+        if period not in PERIODS:
+            return self._json(400, {"ok": False, "message": f"period must be one of {', '.join(PERIODS)}"})
+        try:
+            count = int(q.get("count", ["0"])[0]) or None
+        except ValueError:
+            count = None
+        self._json(200, self.burner.snapshot(period, count))
+
     def _api_fuel(self, query: str):
         from .fuel_stats import PERIODS, calorific_value
         q = urllib.parse.parse_qs(query)
@@ -690,7 +705,7 @@ def is_log(name: str) -> bool:
 def start_web(host: str, port: int, log_dir: str,
               user: str | None = None, password: str | None = None,
               monitor=None, controller=None, cloud=None, retention=None,
-              snapshots=None, fallback=None, raw_logs=None, fuel=None,
+              snapshots=None, fallback=None, raw_logs=None, fuel=None, burner=None,
               authn=None, trust_proxy: bool = False,
               no_login_for_tests: bool = False) -> ThreadingHTTPServer:
     """Start the UI in a background thread and return the server. Without
@@ -713,7 +728,8 @@ def start_web(host: str, port: int, log_dir: str,
                                                 "monitor": monitor, "controller": controller,
                                                 "cloud": cloud, "retention": retention,
                                                 "fallback": fallback, "raw_logs": raw_logs,
-                                                "snapshots": snapshots, "fuel": fuel})
+                                                "snapshots": snapshots, "fuel": fuel,
+                                                "burner": burner})
     server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, name="web", daemon=True).start()

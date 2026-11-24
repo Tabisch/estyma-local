@@ -24,6 +24,15 @@ discovery's `origin.sw_version`).
   for a while are hatched: their fuel is spread evenly over the gap. kWh
   use `FUEL_KWH_PER_KG`, else the controller's calorific value, else 4.8.
   JSON at `/api/fuel?period=day|week|month|year&count=N`.
+  Click the *Burner state* tile for the **burner statistics**: starts,
+  failed starts, error stops, burner hours and the average burn per start,
+  today, yesterday, this week, month and year, with a chart of the starts per
+  day, week, month or year (failed starts in red) and a table view. A start
+  is every ignition (state 1); it failed when the burner left ignition before
+  the flame was established (glowing, modulation or sustain). Burner hours
+  count glowing, modulation and sustain. Time in which the server was not
+  recording is not counted and those periods are hatched. JSON at
+  `/api/burner?period=day|week|month|year&count=N`.
   The history is kept in memory and rebuilt from the logs in the volume when
   the container starts. The same data is available as JSON at
   `/api/monitor?hours=24`.

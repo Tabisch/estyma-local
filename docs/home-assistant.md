@@ -28,6 +28,7 @@ Entities:
 | Fuel consumed (kg), fuel energy (kWh) | 8484 |
 | Fuel used today, fuel used yesterday (kg, calendar days in `CONTROLLER_TZ`) | 8484 via the history store |
 | Fuel cost today, fuel cost yesterday (EUR) | the above × the pellet batch price per tonne |
+| Burner starts today, failed burner starts today, burner hours today, burner starts yesterday, average burn yesterday (min) | 8199 via the history store |
 | Alarm (problem on/off, newest alarm slot as attributes), alarm code, alarm text (e.g. "start failure"; `none` when no alarm) | 16400..16460 |
 | Last report, server mode, lambda PWM (diagnostic; lambda PWM disabled by default) | |
 | Heating circuit 1 program, room comfort / eco temperature, buffer top / bottom target | 8292, 8242, 8264, 8468, 8469 |
@@ -46,6 +47,11 @@ yesterday* holds the previous day's total, handy for a morning notification.
 Both come from the register history (`history.sqlite3`): fuel burnt while
 the server was not recording is spread evenly over the gap. The same numbers
 per day, week, month and year are at `/api/fuel` in the web UI.
+*Burner starts* count every ignition, *failed* ones left ignition before
+the flame was established; *burner hours* are the time in glowing,
+modulation or sustain, and *average burn* is burner hours per successful
+start. The today values reset at midnight (`total_increasing`). Statistics
+per day, week, month and year are at `/api/burner`.
 *Fuel cost today / yesterday* price that fuel with the price per tonne of
 the pellet batch in effect that day (entered on `/batches`); they are
 *unknown* until a batch has a price.

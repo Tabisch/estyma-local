@@ -159,8 +159,18 @@ def _fuel_stats(cfg: Settings, store, snapshots=None):
     return stats
 
 
+def _burner_stats(cfg: Settings, store):
+    """Burner starts, failed starts and hours per day/week/month/year."""
+    if store is None:
+        return None
+    from .burner_stats import BurnerStats
+    stats = BurnerStats(store, load_tz(cfg.controller_tz))
+    threading.Thread(target=stats.refresh, name="burner-stats", daemon=True).start()
+    return stats
+
+
 def _start_web(cfg: Settings, log: ExchangeLog, ctl: Controller, fallback=None,
-               store=None, fuel=None, snapshots=None) -> None:
+               store=None, fuel=None, snapshots=None, burner=None) -> None:
     """Monitor, optional cloud monitoring and the web UI on UI_PORT."""
     from .monitor import Monitor
     from .web import start_web
@@ -191,15 +201,15 @@ def _start_web(cfg: Settings, log: ExchangeLog, ctl: Controller, fallback=None,
                           cfg.ui_viewer_password, cfg.log_dir, cfg.ui_session_days)
     start_web(cfg.listen_host, cfg.ui_port, cfg.log_dir, monitor=mon, controller=ctl, cloud=cloud,
               retention=retention, fallback=fallback, raw_logs=log.raw, fuel=fuel,
-              snapshots=snapshots, authn=authn, trust_proxy=cfg.ui_trust_proxy)
+              snapshots=snapshots, burner=burner, authn=authn, trust_proxy=cfg.ui_trust_proxy)
     auth = "login on" + (", read-only user" if len(authn.users) > 1 else "")
     print(f"web UI on http://{cfg.listen_host}:{cfg.ui_port}/ ({auth})", flush=True)
 
 
-def _start_mqtt(ctl: Controller, fuel=None):
+def _start_mqtt(ctl: Controller, fuel=None, burner=None):
     try:
         from .mqtt_publisher import from_env
-        return from_env(ctl, fuel=fuel)
+        return from_env(ctl, fuel=fuel, burner=burner)
     except Exception as exc:  # never keep the proxy from starting
         print(f"mqtt publisher unavailable: {type(exc).__name__}: {exc}", flush=True)
         return None
@@ -243,9 +253,10 @@ def run(cfg: Settings) -> int:
     except Exception as exc:  # never keep the proxy from starting
         print(f"pellet batches unavailable: {type(exc).__name__}: {exc}", flush=True)
     fuel = _fuel_stats(cfg, store, snapshots)
+    burner = _burner_stats(cfg, store)
     if cfg.ui_port:
-        _start_web(cfg, log, ctl, fallback, store, fuel, snapshots)
-    mqtt = _start_mqtt(ctl, fuel) if cfg.mqtt_host else None
+        _start_web(cfg, log, ctl, fallback, store, fuel, snapshots, burner)
+    mqtt = _start_mqtt(ctl, fuel, burner) if cfg.mqtt_host else None
     try:
         server.serve_forever()
     except KeyboardInterrupt:
