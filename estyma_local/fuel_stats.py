@@ -19,6 +19,13 @@ Gaps: the store has a reading at least every hour (keyframes). When the
 server was not recording for longer than ``GAP_S``, the fuel burnt in the
 gap is spread evenly over it, and the periods that touch a gap are marked
 ``estimated``.
+
+Cost: with ``prices`` (a callable returning ``(date, price per tonne,
+supplier)`` oldest first, SnapshotStore.prices), the fuel burnt on a day
+costs the price of the last priced pellet batch dated on or before that
+day, from local midnight. Fuel burnt before the first priced batch has no
+price: a period with some of it is marked ``cost_partial`` (its cost counts
+the priced part only), one with nothing priced has ``cost`` None.
 """
 
 from __future__ import annotations
@@ -39,6 +46,7 @@ GAP_S = 2 * 3600
 PERIODS = ("day", "week", "month", "year")
 DEFAULT_COUNT = {"day": 31, "week": 12, "month": 12, "year": 5}
 MAX_COUNT = {"day": 400, "week": 104, "month": 60, "year": 20}
+UNPRICED_KG = 0.05         # less unpriced fuel than this does not make a cost partial
 
 
 DEFAULT_KWH_PER_KG = 4.8   # typical wood pellets
@@ -86,8 +94,11 @@ def prev_start(d: date, period: str) -> date:
 
 
 class FuelStats:
-    def __init__(self, store, tz: tzinfo | None = None, clock=time.time) -> None:
+    def __init__(self, store, tz: tzinfo | None = None, clock=time.time, prices=None,
+                 currency: str = "EUR") -> None:
         self.store = store
+        self.prices = prices          # callable -> [(date iso, price per tonne, supplier)]
+        self.currency = currency
         self.tz = tz or timezone.utc
         self.clock = clock
         self._lock = threading.Lock()
@@ -161,6 +172,57 @@ class FuelStats:
         with self._lock:
             return round(self._burnt_before(b) - self._burnt_before(a), 1)
 
+    def _price_steps(self) -> list:
+        """[(from Unix time, price per tonne, supplier)], oldest first."""
+        if self.prices is None:
+            return []
+        out = []
+        try:
+            rows = self.prices()
+        except Exception as exc:  # never break the fuel statistics
+            print(f"fuel stats: cannot read batch prices: {type(exc).__name__}: {exc}", flush=True)
+            return []
+        for day, price, supplier in rows:
+            try:
+                out.append((self._ts(date.fromisoformat(day)), float(price), supplier))
+            except (TypeError, ValueError):
+                continue
+        out.sort(key=lambda x: x[0])
+        return out
+
+    def _cost(self, a: float, b: float, steps: list) -> tuple:
+        """(cost, kg without a price) of the fuel burnt in [a, b); the lock
+        must be held. cost is None when no part of [a, b) has a price."""
+        cost, unpriced, priced = 0.0, 0.0, False
+        times = [t for t, _, _ in steps]
+        cuts = [a, *(t for t in times if a < t < b), b]
+        for x, y in zip(cuts, cuts[1:]):
+            kg = self._burnt_before(y) - self._burnt_before(x)
+            i = bisect.bisect_right(times, x) - 1
+            if i < 0:
+                unpriced += kg
+            else:
+                priced = True
+                cost += kg * steps[i][1] / 1000
+        return (round(cost, 2) if priced else None), unpriced
+
+    def cost_between(self, a: float, b: float) -> dict:
+        """{cost, partial} for the fuel burnt in [a, b)."""
+        steps = self._price_steps()
+        with self._lock:
+            cost, unpriced = self._cost(a, b, steps)
+        return {"cost": cost, "partial": cost is not None and unpriced >= UNPRICED_KG}
+
+    def price_at(self, t: float | None = None) -> dict | None:
+        """The batch price in effect at ``t`` (default now)."""
+        t = self.clock() if t is None else t
+        cur = None
+        for start, price, supplier in self._price_steps():
+            if start <= t:
+                cur = {"price": price, "supplier": supplier,
+                       "since": datetime.fromtimestamp(start, self.tz).date().isoformat()}
+        return cur
+
     def _ts(self, d: date) -> float:
         return datetime(d.year, d.month, d.day, tzinfo=self.tz).timestamp()
 
@@ -179,6 +241,7 @@ class FuelStats:
         starts = [start]
         for _ in range(count - 1):
             starts.append(prev_start(starts[-1], period))
+        steps = self._price_steps()
         out = []
         for s in reversed(starts):
             e = next_start(s, period)
@@ -186,15 +249,15 @@ class FuelStats:
             covered = self.first is not None and b > self.first
             with self._lock:
                 est = self._estimated(a, b)
+                cost, unpriced = self._cost(a, b, steps) if covered else (None, 0.0)
             out.append({"start": s.isoformat(), "end": e.isoformat(),
-                        "kg": self.between(a, b) if covered else None, "estimated": est})
+                        "kg": self.between(a, b) if covered else None, "estimated": est,
+                        "cost": cost, "cost_partial": cost is not None and unpriced >= UNPRICED_KG})
         return out
 
-    def summary(self, now: float | None = None) -> dict:
-        """kg today, yesterday, this week, this month and this year."""
-        self.refresh()
+    def _summary_periods(self, now: float | None):
+        """(key, start, end) of today, yesterday, this and last week, month, year."""
         d = self.today(now)
-        out = {}
         for key, period, back in (("today", "day", 0), ("yesterday", "day", 1),
                                   ("week", "week", 0), ("last_week", "week", 1),
                                   ("month", "month", 0), ("last_month", "month", 1),
@@ -202,9 +265,21 @@ class FuelStats:
             s = period_start(d, period)
             for _ in range(back):
                 s = prev_start(s, period)
-            b = self._ts(next_start(s, period))
-            out[key] = (self.between(self._ts(s), b)
-                        if self.first is not None and b > self.first else None)
+            yield key, self._ts(s), self._ts(next_start(s, period))
+
+    def summary(self, now: float | None = None) -> dict:
+        """kg today, yesterday, this week, this month and this year."""
+        self.refresh()
+        return {key: (self.between(a, b) if self.first is not None and b > self.first else None)
+                for key, a, b in self._summary_periods(now)}
+
+    def cost_summary(self, now: float | None = None) -> dict:
+        """Like ``summary``, the cost of that fuel: {key: {cost, partial}}."""
+        self.refresh()
+        out = {}
+        for key, a, b in self._summary_periods(now):
+            out[key] = (self.cost_between(a, b) if self.first is not None and b > self.first
+                        else {"cost": None, "partial": False})
         return out
 
     def snapshot(self, period: str = "day", count: int | None = None,
@@ -214,4 +289,6 @@ class FuelStats:
         with self._lock:
             counter = self._last[1] if self._last else None
         return {"period": period, "tz": str(self.tz), "first": self.first, "counter": counter,
-                "kwh_per_kg": kwh_per_kg, "buckets": buckets, "summary": self.summary(now)}
+                "kwh_per_kg": kwh_per_kg, "buckets": buckets, "summary": self.summary(now),
+                "currency": self.currency, "price": self.price_at(now),
+                "cost_summary": self.cost_summary(now)}

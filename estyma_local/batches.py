@@ -11,6 +11,11 @@ Snapshots are kept in ``settings-snapshots.json`` in LOG_DIR, next to
 the automatic log deletion removes it. Each snapshot stores the labels,
 units and option names as they were, so it still reads the same after the
 catalog changes.
+
+A snapshot can carry the batch's price per tonne (``price``, in
+``CURRENCY``). The fuel statistics (fuel_stats.py) use the price of the
+batch in effect on each day for the cost of the fuel burnt, see
+``SnapshotStore.prices``.
 """
 
 from __future__ import annotations
@@ -28,6 +33,9 @@ FILE_NAME = "settings-snapshots.json"
 MAX_SNAPSHOTS = 2000
 MAX_SUPPLIER = 100
 MAX_COMMENT = 4000
+MAX_PRICE = 100000.0
+CURRENCY = "EUR"
+KEEP = object()   # update(): leave the value as it is
 
 
 class SnapshotError(ValueError):
@@ -50,6 +58,21 @@ def _clean_text(value, name: str, limit: int, required: bool = False) -> str:
     if len(text) > limit:
         raise SnapshotError(f"{name} is too long (max {limit} characters)")
     return text
+
+
+def _clean_price(value) -> float | None:
+    """Price per tonne, or None for no price. Accepts a decimal comma."""
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    if isinstance(value, bool):
+        raise SnapshotError("price must be a number")
+    try:
+        price = float(str(value).strip().replace(",", ".")) if isinstance(value, str) else float(value)
+    except (TypeError, ValueError):
+        raise SnapshotError("price must be a number") from None
+    if not 0 <= price <= MAX_PRICE:
+        raise SnapshotError(f"price must be between 0 and {MAX_PRICE:.0f}")
+    return round(price, 2)
 
 
 def settings_items(settings_snapshot: dict) -> list[dict]:
@@ -170,8 +193,27 @@ class SnapshotStore:
             names = {s.get("supplier", "") for s in self._items}
         return sorted((n for n in names if n), key=str.lower)
 
-    def add(self, settings_snapshot: dict, supplier, day=None, comment=None) -> dict:
+    def prices(self) -> list[tuple[str, float, str]]:
+        """(date, price per tonne, supplier) of the batches with a price,
+        oldest first. A price holds from its batch's date until the date of
+        the next batch with a price; batches without a price (say a second
+        save after tuning the settings) keep the price in effect. Of several
+        priced batches on one day the one saved last wins."""
+        with self._lock:
+            items = [(s.get("date", ""), s.get("created") or 0, s.get("price"), s.get("supplier", ""))
+                     for s in self._items if isinstance(s.get("price"), (int, float))]
+        items.sort(key=lambda x: (x[0], x[1]))
+        out: list = []
+        for day, _created, price, supplier in items:
+            if out and out[-1][0] == day:
+                out[-1] = (day, float(price), supplier)
+            else:
+                out.append((day, float(price), supplier))
+        return out
+
+    def add(self, settings_snapshot: dict, supplier, day=None, comment=None, price=None) -> dict:
         supplier = _clean_text(supplier, "supplier", MAX_SUPPLIER, required=True)
+        price = _clean_price(price)
         comment = _clean_text(comment, "comment", MAX_COMMENT)
         day = _clean_date(day)
         items = settings_items(settings_snapshot)
@@ -179,7 +221,7 @@ class SnapshotStore:
             raise SnapshotError("no settings read yet, read the settings first")
         snap = {
             "id": uuid.uuid4().hex[:12], "created": self.clock(), "updated": None,
-            "date": day, "supplier": supplier, "comment": comment,
+            "date": day, "supplier": supplier, "comment": comment, "price": price,
             "mode": settings_snapshot.get("mode"),
             "settings_read": (settings_snapshot.get("settings") or {}).get("read"),
             "settings": items,
@@ -196,8 +238,11 @@ class SnapshotStore:
         print(f"settings snapshot saved: {snap['date']} {snap['supplier']!r}", flush=True)
         return snap
 
-    def update(self, snap_id: str, supplier=None, day=None, comment=None) -> dict:
-        """Change supplier, date or comment; the settings stay as saved."""
+    def update(self, snap_id: str, supplier=None, day=None, comment=None, price=KEEP) -> dict:
+        """Change supplier, date, comment or price (None or "" removes it);
+        the settings stay as saved."""
+        if price is not KEEP:
+            price = _clean_price(price)
         with self._lock:
             snap = next((s for s in self._items if s["id"] == snap_id), None)
             if snap is None:
@@ -209,6 +254,8 @@ class SnapshotStore:
                 new["date"] = _clean_date(day)
             if comment is not None:
                 new["comment"] = _clean_text(comment, "comment", MAX_COMMENT)
+            if price is not KEEP:
+                new["price"] = price
             new["updated"] = self.clock()
             i = self._items.index(snap)
             self._items[i] = new

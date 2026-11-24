@@ -143,7 +143,7 @@ dialog.fuel::backdrop { background: rgba(0,0,0,.45); }
 <div class="legend"><span><i class="est"></i><span data-i18n="fu.est">estimated: the server was not recording for part of this period</span></span></div>
 <svg id="fuel-svg" role="img" aria-labelledby="fuel-ctitle"></svg>
 <div class="readout" id="fuel-read"></div></div>
-<details><summary data-i18n="fu.table">Show as table</summary><div class="wrap"><table><thead><tr><th data-i18n="fu.col.period">Period</th><th class="num">kg</th><th class="num">kWh</th></tr></thead><tbody id="fuel-rows"></tbody></table></div></details>
+<details><summary data-i18n="fu.table">Show as table</summary><div class="wrap"><table><thead><tr><th data-i18n="fu.col.period">Period</th><th class="num">kg</th><th class="num">kWh</th><th class="num" data-i18n="fu.col.cost" style="text-align:right">Cost</th></tr></thead><tbody id="fuel-rows"></tbody></table></div></details>
 <p class="muted" id="fuel-note"></p>
 </div></dialog>
 
@@ -199,6 +199,9 @@ const I18N = {
     "fu.table": "Show as table", "fu.col.period": "Period", "fu.kw": "Week {n}", "fu.open": "Today {v} kg · statistics",
     "fu.since": "Recorded since {d}. Calendar periods in the controller's time zone ({tz}); weeks start on Monday. kWh with {k} kWh/kg.",
     "fu.nodata": "No fuel counter readings recorded yet.", "fu.hint": "Hover or tap a bar for its value.",
+    "fu.col.cost": "Cost", "fu.partial": "only the part with a batch price", "fu.partshort": "partly",
+    "fu.price": "Cost with the price of the pellet batch in effect on each day, now {p}/t ({s}, since {d}).",
+    "fu.noprice": "Enter a price per tonne on \"Pellet batches\" to see the cost.",
   },
   de: {
     "nav.monitor": "Monitor", "nav.settings": "Heizungseinstellungen", "nav.batches": "Pelletchargen", "nav.registers": "Register", "nav.logs": "Logs", "nav.app": "Einstellungen", "loading": "Lädt…",
@@ -242,6 +245,9 @@ const I18N = {
     "fu.table": "Als Tabelle zeigen", "fu.col.period": "Zeitraum", "fu.kw": "KW {n}", "fu.open": "Heute {v} kg · Statistik",
     "fu.since": "Aufgezeichnet seit {d}. Kalenderzeiträume in der Zeitzone des Reglers ({tz}); Wochen beginnen am Montag. kWh mit {k} kWh/kg.",
     "fu.nodata": "Noch keine Brennstoffzähler-Werte aufgezeichnet.", "fu.hint": "Für den Wert über einen Balken fahren oder tippen.",
+    "fu.col.cost": "Kosten", "fu.partial": "nur der Teil mit Chargenpreis", "fu.partshort": "teilweise",
+    "fu.price": "Kosten mit dem Preis der an jedem Tag gültigen Pelletcharge, aktuell {p}/t ({s}, seit {d}).",
+    "fu.noprice": "Unter \"Pelletchargen\" einen Preis pro Tonne eintragen, um die Kosten zu sehen.",
   },
 };
 // Messages the server sends in English (controller.py); translated by pattern.
@@ -592,18 +598,26 @@ function periodLabel(b, long) {
   if (fuel.period === "month") return d.toLocaleDateString(lang, long ? { month: "long", year: "numeric" } : { month: "short" });
   return String(d.getFullYear());
 }
+// Money in the server's currency (EUR); "≈" when only part of the fuel had a batch price.
+const money = (c, partial) => c == null ? "–" : (partial ? "≈ " : "") + Number(c).toLocaleString(lang, { style: "currency", currency: (fuel && fuel.currency) || "EUR" });
 function renderFuel() {
   if (!fuel) return;
   for (const b of $("fuel-range").children) b.classList.toggle("on", b.dataset.p === fuel.period);
-  const s = fuel.summary, k = fuel.kwh_per_kg;
-  $("fuel-sum").innerHTML = [["today", s.today], ["yesterday", s.yesterday], ["week", s.week], ["month", s.month], ["year", s.year]].map(([key, v]) =>
-    `<div class="tile"><div class="k">${esc(T("fu." + key))}</div><div class="v">${fmt(v, v != null && v < 100 ? 1 : 0)}<small>kg</small></div><div class="sub">${v != null && k ? fmt(v * k, 0) + " kWh" : ""}</div></div>`).join("");
+  const s = fuel.summary, k = fuel.kwh_per_kg, cs = fuel.cost_summary || {};
+  $("fuel-sum").innerHTML = [["today", s.today], ["yesterday", s.yesterday], ["week", s.week], ["month", s.month], ["year", s.year]].map(([key, v]) => {
+    const c = cs[key] || {};
+    const sub = [v != null && k ? fmt(v * k, 0) + " kWh" : "", c.cost != null ? money(c.cost, c.partial) : ""].filter(Boolean).join(" · ");
+    return `<div class="tile"${c.partial ? ` title="${esc(T("fu.partial"))}"` : ""}><div class="k">${esc(T("fu." + key))}</div><div class="v">${fmt(v, v != null && v < 100 ? 1 : 0)}<small>kg</small></div><div class="sub">${sub}</div></div>`;
+  }).join("");
   $("fuel-ctitle").textContent = T("fu.c." + fuel.period);
   const B = fuel.buckets.filter((b, i) => b.kg != null || i === fuel.buckets.length - 1);
   $("fuel-rows").innerHTML = B.slice().reverse().map((b) =>
-    `<tr><td>${esc(periodLabel(b, true))}${b.estimated ? ` <span class="muted">(${esc(T("fu.estshort"))})</span>` : ""}</td><td class="num">${fmt(b.kg, 1)}</td><td class="num">${b.kg != null && k ? fmt(b.kg * k, 0) : "–"}</td></tr>`).join("");
+    `<tr><td>${esc(periodLabel(b, true))}${b.estimated ? ` <span class="muted">(${esc(T("fu.estshort"))})</span>` : ""}</td><td class="num">${fmt(b.kg, 1)}</td><td class="num">${b.kg != null && k ? fmt(b.kg * k, 0) : "–"}</td><td class="num"${b.cost_partial ? ` title="${esc(T("fu.partial"))}"` : ""}>${money(b.cost, b.cost_partial)}</td></tr>`).join("");
   const d0 = fuel.first ? new Date(fuel.first * 1000).toLocaleDateString(lang, { day: "numeric", month: "short", year: "numeric" }) : null;
-  $("fuel-note").textContent = d0 ? T("fu.since", { d: d0, tz: fuel.tz, k: k ? fmt(k, 1) : "–" }) : T("fu.nodata");
+  const pr = fuel.price;
+  $("fuel-note").textContent = d0 ? T("fu.since", { d: d0, tz: fuel.tz, k: k ? fmt(k, 1) : "–" }) + " "
+    + (pr ? T("fu.price", { p: money(pr.price), s: pr.supplier, d: new Date(pr.since + "T12:00:00").toLocaleDateString(lang, { day: "numeric", month: "short", year: "numeric" }) }) : T("fu.noprice"))
+    : T("fu.nodata");
   drawFuel(B);
 }
 function drawFuel(B) {
@@ -627,7 +641,7 @@ function drawFuel(B) {
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   svg.innerHTML = g;
   const b = B[fuelHover != null && fuelHover < n ? fuelHover : n - 1];
-  $("fuel-read").innerHTML = b ? `<b>${esc(periodLabel(b, true))}</b>: ${fmt(b.kg, 1)} kg${b.kg != null && fuel.kwh_per_kg ? " · " + fmt(b.kg * fuel.kwh_per_kg, 0) + " kWh" : ""}${b.estimated ? " · " + esc(T("fu.estshort")) : ""}` +
+  $("fuel-read").innerHTML = b ? `<b>${esc(periodLabel(b, true))}</b>: ${fmt(b.kg, 1)} kg${b.kg != null && fuel.kwh_per_kg ? " · " + fmt(b.kg * fuel.kwh_per_kg, 0) + " kWh" : ""}${b.cost != null ? " · " + esc(money(b.cost, b.cost_partial)) + (b.cost_partial ? ` <span class="muted">(${esc(T("fu.partshort"))})</span>` : "") : ""}${b.estimated ? " · " + esc(T("fu.estshort")) : ""}` +
     (fuelHover == null ? ` <span class="muted">· ${esc(T("fu.hint"))}</span>` : "") : "";
   svg._B = B;
 }

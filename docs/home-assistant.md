@@ -25,6 +25,7 @@ Entities:
 | Boiler on, boiler pump, heating circuit 1 pump (on/off) | 8197, 8823, 8857 |
 | Fuel consumed (kg), fuel energy (kWh) | 8484 |
 | Fuel used today, fuel used yesterday (kg, calendar days in `CONTROLLER_TZ`) | 8484 via the history store |
+| Fuel cost today, fuel cost yesterday (EUR) | the above × the pellet batch price per tonne |
 | Alarm (problem on/off, newest alarm slot as attributes), alarm code, alarm text (e.g. "start failure"; `none` when no alarm) | 16400..16460 |
 | Last report, server mode, lambda PWM (diagnostic; lambda PWM disabled by default) | |
 
@@ -41,6 +42,9 @@ yesterday* holds the previous day's total, handy for a morning notification.
 Both come from the register history (`history.sqlite3`): fuel burnt while
 the server was not recording is spread evenly over the gap. The same numbers
 per day, week, month and year are at `/api/fuel` in the web UI.
+*Fuel cost today / yesterday* price that fuel with the price per tonne of
+the pellet batch in effect that day (entered on `/batches`); they are
+*unknown* until a batch has a price.
 Other values keep their last valid reading for up to 10 minutes when a
 single report carries a corrupted value, so entities don't flicker to
 *unknown*.
