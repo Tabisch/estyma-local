@@ -8,8 +8,9 @@ never on the proxy port. Files are only served from directly inside LOG_DIR.
 Login (auth.py): every page and API call needs a logged-in user, except
 ``/login`` and ``/api/health``. The admin may do everything; the viewer may
 look but not change anything or download logs. Browsers get a session
-cookie from ``/login``; scripts may send HTTP basic auth instead. Without a
-login (``UI_AUTH=0``) the UI is open and read only. POST bodies must be JSON
+cookie from ``/login``; scripts may send HTTP basic auth instead. The login
+cannot be switched off (only unit tests start the UI without one, and then
+it is read only). POST bodies must be JSON
 and a cross-site ``Origin`` is refused, so other web pages cannot post to it.
 
 Logs contain whatever the controller sends (device IDs, PINs, ...). Keep the
@@ -128,7 +129,7 @@ def human_size(n: int) -> str:
 class WebHandler(BaseHTTPRequestHandler):
     server_version = "estyma-web"
     log_dir: str
-    authn = None        # auth.Auth, or None when the login is off (UI_AUTH=0)
+    authn = None        # auth.Auth; None only in unit tests (read only)
     trust_proxy = False # UI_TRUST_PROXY: client address from X-Forwarded-For
     user = None         # auth.User of this request
     monitor = None      # monitor.Monitor or None
@@ -317,7 +318,7 @@ class WebHandler(BaseHTTPRequestHandler):
             return self._json(403, {"ok": False, "message": f"read-only login: {what} needs the admin login"})
         if needs_auth and self.authn is None:
             return self._json(403, {"ok": False, "message":
-                                    f"turn the login on (UI_AUTH=1) to allow {needs_auth} from the web UI"})
+                                    f"{needs_auth} needs a login"})
         req = self._read_json()
         if req is not None:
             getattr(self, name)(req)
@@ -359,7 +360,7 @@ class WebHandler(BaseHTTPRequestHandler):
 
     def _post_login(self, req):
         if self.authn is None:
-            return self._json(409, {"ok": False, "message": "the login is off (UI_AUTH=0)"})
+            return self._json(409, {"ok": False, "message": "no login configured"})
         try:
             user = self.authn.attempt(str(req.get("user") or ""), str(req.get("password") or ""),
                                       self._client())
@@ -688,15 +689,18 @@ def start_web(host: str, port: int, log_dir: str,
               user: str | None = None, password: str | None = None,
               monitor=None, controller=None, cloud=None, retention=None,
               snapshots=None, fallback=None, raw_logs=None, fuel=None,
-              authn=None, trust_proxy: bool = False) -> ThreadingHTTPServer:
+              authn=None, trust_proxy: bool = False,
+              no_login_for_tests: bool = False) -> ThreadingHTTPServer:
     """Start the UI in a background thread and return the server. Without
     ``snapshots`` a store in ``log_dir`` is made when there is a controller.
 
     ``authn``: an auth.Auth (app.py builds it from the configuration). For
-    tests and scripts, ``user``/``password`` alone make a single admin; with
-    neither the UI is open and read only."""
+    tests, ``user``/``password`` alone make a single admin. The login is
+    required: only ``no_login_for_tests=True`` starts an open, read-only UI."""
     if authn is None and user and password:
         authn = A.Auth([A.User(user, password, A.ADMIN)])
+    if authn is None and not no_login_for_tests:
+        raise ValueError("the web UI needs a login (auth.Auth or user and password)")
     if snapshots is None and controller is not None:
         from .batches import SnapshotStore
         snapshots = SnapshotStore(log_dir)

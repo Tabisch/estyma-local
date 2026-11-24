@@ -123,8 +123,7 @@ address, that address is refused for 15 minutes. Scripts can send HTTP basic
 auth with each request instead of logging in, e.g.
 `curl -u admin:PASSWORD http://host:8089/api/settings`.
 
-`UI_AUTH=0` turns the login off. The UI is then open to everyone who can
-reach the port and read only: no writes, no settings changes, no deleting.
+The login cannot be switched off.
 
 The logs contain whatever the controller sends (device IDs, PINs, ...). Keep
 port 8089 reachable from your LAN only. To reach the UI over HTTPS (for

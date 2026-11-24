@@ -17,9 +17,8 @@ services:
       # controller, so the provider's normal hostname works here.
       UPSTREAM: "http://igneo.pl:80"
       UPSTREAM_TIMEOUT: "30"
-      # Web UI login (on by default). Without UI_PASSWORD a password is
+      # Web UI login (always on). Without UI_PASSWORD a password is
       # created on first start and printed to the container log.
-      UI_AUTH: "${UI_AUTH:-1}"                     # 0 = no login, UI open and read only
       UI_USER: "${UI_USER:-}"                      # admin user, empty = admin
       UI_PASSWORD: "${UI_PASSWORD:-}"
       UI_VIEWER_USER: "${UI_VIEWER_USER:-}"        # optional read-only user

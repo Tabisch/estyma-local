@@ -95,7 +95,7 @@ class RetentionApiTest(unittest.TestCase):
 
     def ui(self, auth):
         user, pw = auth or (None, None)
-        srv = start_web("127.0.0.1", 0, self.dir, user, pw, retention=self.ret)
+        srv = start_web("127.0.0.1", 0, self.dir, user, pw, no_login_for_tests=not (user and pw), retention=self.ret)
         self.servers.append(srv)
         return srv.server_address[1]
 
@@ -135,7 +135,7 @@ class RetentionApiTest(unittest.TestCase):
         self.assertEqual((self.ret.enabled, self.ret.days), (True, 7))
 
     def test_missing_without_retention(self):
-        srv = start_web("127.0.0.1", 0, self.dir)
+        srv = start_web("127.0.0.1", 0, self.dir, no_login_for_tests=True)
         self.servers.append(srv)
         code, _ = self.call(srv.server_address[1], "GET")
         self.assertEqual(code, 404)

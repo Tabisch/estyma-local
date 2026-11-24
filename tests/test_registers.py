@@ -123,7 +123,7 @@ class MonitorFeedTest(unittest.TestCase):
         regs = {(r["reg"], r["idx"]): r for r in mon.registers.snapshot()}
         self.assertIn((8790, 1), regs)
         self.assertIn((8471, 1), regs)            # asked for by the cloud, never reported
-        ui = start_web("127.0.0.1", 0, d, monitor=mon)
+        ui = start_web("127.0.0.1", 0, d, no_login_for_tests=True, monitor=mon)
         try:
             c = http.client.HTTPConnection("127.0.0.1", ui.server_address[1], timeout=5)
             c.request("GET", "/api/registers")

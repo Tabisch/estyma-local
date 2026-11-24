@@ -60,8 +60,6 @@ ENV = [
         compose=False, example=False),
     Env("UI_PORT", "8089", "proxy", "Web UI port. Inside the container `0` turns the UI off; in "
         "`docker-compose.yml` it is the host port (inside it stays 8089)"),
-    Env("UI_AUTH", "1", "proxy", "`1` = the web UI needs a login (default). `0` = open to "
-        "everyone on the network and read only (no writes, no settings changes)"),
     Env("UI_USER", "", "proxy", "Admin user of the web UI (may change everything). Empty = `admin`"),
     Env("UI_PASSWORD", "", "proxy", "Admin password. Empty = a password is created on first start, "
         "printed to the container log and kept in `.ui-password` in the logs volume", secret=True),

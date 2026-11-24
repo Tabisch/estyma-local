@@ -96,15 +96,14 @@ class AuthUnitTest(unittest.TestCase):
         self.assertIsNone(self.a.session(tok))
 
     def test_generated_password(self):
-        a = A.from_settings(True, None, None, None, None, self.dir)
+        a = A.from_settings(None, None, None, None, self.dir)
         pw = open(os.path.join(self.dir, A.PASSWORD_FILE)).read().strip()
         self.assertGreaterEqual(len(pw), 12)
         self.assertEqual(a.check("admin", pw).role, A.ADMIN)
         self.assertEqual(oct(os.stat(os.path.join(self.dir, A.PASSWORD_FILE)).st_mode & 0o777), "0o600")
-        b = A.from_settings(True, None, None, None, None, self.dir)   # same password after a restart
+        b = A.from_settings(None, None, None, None, self.dir)   # same password after a restart
         self.assertIsNotNone(b.check("admin", pw))
-        self.assertIsNone(A.from_settings(False, "a", "b", None, None, self.dir))
-        c = A.from_settings(True, "me", "mine-123", "v", "view-123", self.dir)
+        c = A.from_settings("me", "mine-123", "v", "view-123", self.dir)
         self.assertEqual([u.role for u in c.users], [A.ADMIN, A.VIEWER])
 
 
@@ -118,7 +117,7 @@ class WebLoginTest(unittest.TestCase):
                               writes_enabled=True)
         self.ctl.observe_report(report())
         self.authn = A.Auth(users(), log_dir=self.dir)
-        self.ui = start_web("127.0.0.1", 0, self.dir, controller=self.ctl, authn=self.authn)
+        self.ui = start_web("127.0.0.1", 0, self.dir, no_login_for_tests=True, controller=self.ctl, authn=self.authn)
         self.addCleanup(self.ui.shutdown)
         self.base = f"http://127.0.0.1:{self.ui.server_address[1]}"
 
@@ -235,13 +234,21 @@ class WebLoginTest(unittest.TestCase):
         self.assertNotIn(b".ui-sessions", page)
 
 
-class LoginOffTest(unittest.TestCase):
-    def test_open_and_read_only(self):
+class LoginRequiredTest(unittest.TestCase):
+    def test_ui_refuses_to_start_without_login(self):
+        with self.assertRaisesRegex(ValueError, "needs a login"):
+            start_web("127.0.0.1", 0, tempfile.mkdtemp())
+
+    def test_no_setting_turns_it_off(self):
+        from estyma_local import config as K
+        self.assertNotIn("UI_AUTH", K.BY_NAME)
+
+    def test_test_mode_is_read_only(self):
         d = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, d, True)
         ctl = Controller("hybrid", d, state_file=f"{d}/s.json", writes_enabled=True)
         ctl.observe_report(report())
-        ui = start_web("127.0.0.1", 0, d, controller=ctl)
+        ui = start_web("127.0.0.1", 0, d, no_login_for_tests=True, controller=ctl)
         self.addCleanup(ui.shutdown)
         base = f"http://127.0.0.1:{ui.server_address[1]}"
         with urllib.request.urlopen(base + "/api/settings") as r:
@@ -251,7 +258,7 @@ class LoginOffTest(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as cm:
             urllib.request.urlopen(r)
         self.assertEqual(cm.exception.code, 403)
-        self.assertIn("UI_AUTH=1", json.loads(cm.exception.read())["message"])
+        self.assertIn("needs a login", json.loads(cm.exception.read())["message"])
 
 
 if __name__ == "__main__":

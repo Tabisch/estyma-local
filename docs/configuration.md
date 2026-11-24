@@ -23,7 +23,6 @@ The `estyma-proxy` service, default command of the image.
 | `ESTYMA_VERSION` | (empty) |  | Version shown in the web UI footer, `/api/health` and the MQTT discovery. Set by the image build (tag such as `v1.0.0`, or branch name); empty = `git describe`, else `dev` |
 | `ESTYMA_REVISION` | (empty) |  | Commit SHA shown next to the version. Set by the image build |
 | `UI_PORT` | `8089` | yes | Web UI port. Inside the container `0` turns the UI off; in `docker-compose.yml` it is the host port (inside it stays 8089) |
-| `UI_AUTH` | `1` | yes | `1` = the web UI needs a login (default). `0` = open to everyone on the network and read only (no writes, no settings changes) |
 | `UI_USER` | (empty) | yes | Admin user of the web UI (may change everything). Empty = `admin` |
 | `UI_PASSWORD` | (empty) | yes | Admin password. Empty = a password is created on first start, printed to the container log and kept in `.ui-password` in the logs volume |
 | `UI_VIEWER_USER` | (empty) | yes | Optional read-only user: sees every page, cannot change anything or download logs |

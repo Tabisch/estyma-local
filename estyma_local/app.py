@@ -58,7 +58,6 @@ class Settings:
     ui_port: int
     ui_user: str | None
     ui_password: str | None
-    ui_auth: bool
     ui_viewer_user: str | None
     ui_viewer_password: str | None
     ui_session_days: float
@@ -113,7 +112,6 @@ def load_config(argv=None, environ=None) -> Settings:
                    allow_power_writes=flag("ALLOW_POWER_WRITES"),
                    allow_untested_writes=flag("ALLOW_UNTESTED_WRITES"),
                    local_fallback=flag("LOCAL_FALLBACK"), cloud_mirror=flag("CLOUD_MIRROR"),
-                   ui_auth=(e("UI_AUTH") or "1").strip().lower() not in ("0", "false", "no", "off"),
                    ui_viewer_user=e("UI_VIEWER_USER"), ui_viewer_password=e("UI_VIEWER_PASSWORD"),
                    ui_session_days=float(e("UI_SESSION_DAYS")), ui_trust_proxy=flag("UI_TRUST_PROXY"),
                    mqtt_host=e("MQTT_HOST"))
@@ -186,13 +184,12 @@ def _start_web(cfg: Settings, log: ExchangeLog, ctl: Controller, fallback=None,
     except Exception as exc:  # never keep the proxy from starting
         print(f"log auto delete unavailable: {type(exc).__name__}: {exc}", flush=True)
     from .auth import from_settings
-    authn = from_settings(cfg.ui_auth, cfg.ui_user, cfg.ui_password, cfg.ui_viewer_user,
+    authn = from_settings(cfg.ui_user, cfg.ui_password, cfg.ui_viewer_user,
                           cfg.ui_viewer_password, cfg.log_dir, cfg.ui_session_days)
     start_web(cfg.listen_host, cfg.ui_port, cfg.log_dir, monitor=mon, controller=ctl, cloud=cloud,
               retention=retention, fallback=fallback, raw_logs=log.raw, fuel=fuel,
               authn=authn, trust_proxy=cfg.ui_trust_proxy)
-    auth = (("login on" + (", read-only user" if len(authn.users) > 1 else ""))
-            if authn else "login off, read only")
+    auth = "login on" + (", read-only user" if len(authn.users) > 1 else "")
     print(f"web UI on http://{cfg.listen_host}:{cfg.ui_port}/ ({auth})", flush=True)
 
 

@@ -7,11 +7,10 @@ Two users:
 * viewer (``UI_VIEWER_USER`` / ``UI_VIEWER_PASSWORD``, optional): every page
   and value, but no changes and no log downloads (the logs hold device IDs).
 
-The login is on by default. Without ``UI_USER`` / ``UI_PASSWORD`` the server
-makes up a password for the user ``admin`` on first start, keeps it in
-``.ui-password`` in LOG_DIR (hidden from the logs page) and prints it to the
-container log. ``UI_AUTH=0`` turns the login off: the UI is then open to the
-LAN and read only, as before the login existed.
+The login is always on; it cannot be switched off. Without ``UI_USER`` /
+``UI_PASSWORD`` the server makes up a password for the user ``admin`` on
+first start, keeps it in ``.ui-password`` in LOG_DIR (hidden from the logs
+page) and prints it to the container log.
 
 Browsers log in on ``/login`` and get a session cookie (HttpOnly,
 SameSite=Strict, Secure behind HTTPS). Scripts can still send HTTP basic
@@ -240,12 +239,9 @@ class Auth:
             print(f"web UI: saving sessions failed: {exc}", flush=True)
 
 
-def from_settings(enabled: bool, user, password, viewer_user, viewer_password, log_dir: str,
-                  session_days: float = 30) -> Auth | None:
-    """The Auth for the configuration, or None when the login is off."""
-    if not enabled:
-        print("web UI: login OFF (UI_AUTH=0), open to the network and read only", flush=True)
-        return None
+def from_settings(user, password, viewer_user, viewer_password, log_dir: str,
+                  session_days: float = 30) -> Auth:
+    """The Auth for the configuration (the login is always on)."""
     if not (user and password):
         user = user or "admin"
         password, new = generated_password(log_dir)

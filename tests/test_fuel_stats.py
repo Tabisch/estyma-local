@@ -122,7 +122,7 @@ class StatsTest(unittest.TestCase):
     def test_api(self):
         self.counter(ts(2027, 1, 15, 8), 1000)
         self.counter(ts(2027, 1, 15, 9), 1002)
-        srv = start_web("127.0.0.1", 0, self.dir, fuel=self.stats)
+        srv = start_web("127.0.0.1", 0, self.dir, no_login_for_tests=True, fuel=self.stats)
         self.addCleanup(srv.server_close)
         self.addCleanup(srv.shutdown)
         port = srv.server_address[1]

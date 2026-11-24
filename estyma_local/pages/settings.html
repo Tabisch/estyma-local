@@ -120,7 +120,7 @@ const I18N = {
     "st.alarm": "Alarm active, only on/off can be written", "unreachable": "Not reachable ({e})",
     "n.proxy": "MODE=proxy: read only. The page shows the settings the cloud's service panel read last; set MODE=hybrid or MODE=local to read and change them here.",
     "n.writesoff": "Writes are off. Set WRITES_ENABLED=1 to change settings.",
-    "n.noauth": "Only the admin login can change settings. The login is off (UI_AUTH=0) or you are logged in read only.",
+    "n.noauth": "You are logged in read only; only the admin login can change settings.",
     "n.untested": "Only the boiler target and on/off were seen being written on the real controller. The other settings are marked \"untested\" and stay locked unless ALLOW_UNTESTED_WRITES=1. Change them one at a time and check the result on the controller's own screen.",
     "n.untestedon": "ALLOW_UNTESTED_WRITES=1: settings marked \"untested\" can be written. Their write path was not tested on a real controller yet; change one at a time and check the result on the controller's own screen.",
     "untested": "untested", "untested.t": "Writing this register was not yet seen working on a real controller", "tested": "tested", "likely": "likely",
@@ -152,7 +152,7 @@ const I18N = {
     "st.alarm": "Alarm aktiv, nur An/Aus kann geschrieben werden", "unreachable": "Nicht erreichbar ({e})",
     "n.proxy": "MODE=proxy: nur lesen. Die Seite zeigt die Einstellungen, die das Servicepanel der Cloud zuletzt gelesen hat; MODE=hybrid oder MODE=local setzen, um sie hier zu lesen und zu ändern.",
     "n.writesoff": "Schreiben ist aus. WRITES_ENABLED=1 setzen, um Einstellungen zu ändern.",
-    "n.noauth": "Nur mit der Admin-Anmeldung lassen sich Einstellungen ändern. Die Anmeldung ist aus (UI_AUTH=0) oder du bist nur zum Lesen angemeldet.",
+    "n.noauth": "Du bist nur zum Lesen angemeldet; nur mit der Admin-Anmeldung lassen sich Einstellungen ändern.",
     "n.untested": "Nur Kessel-Soll und An/Aus wurden am echten Regler beim Schreiben beobachtet. Die anderen Einstellungen sind als \"ungetestet\" markiert und bleiben gesperrt, solange ALLOW_UNTESTED_WRITES nicht 1 ist. Einzeln ändern und das Ergebnis am Display des Reglers prüfen.",
     "n.untestedon": "ALLOW_UNTESTED_WRITES=1: als \"ungetestet\" markierte Einstellungen können geschrieben werden. Ihr Schreibweg wurde an einem echten Regler noch nicht getestet; einzeln ändern und das Ergebnis am Display des Reglers prüfen.",
     "untested": "ungetestet", "untested.t": "Schreiben dieses Registers wurde an einem echten Regler noch nicht beobachtet", "tested": "getestet", "likely": "wahrscheinlich",
@@ -179,7 +179,6 @@ const I18N = {
 const SERVER_MSG = {
   de: [
     [/^read-only login: (.+) needs the admin login$/, "Nur-Lesen-Anmeldung: dafür ist die Admin-Anmeldung nötig"],
-    [/^turn the login on \(UI_AUTH=1\) to allow (.+) from the web UI$/, "Anmeldung einschalten (UI_AUTH=1), um das aus der Web-Oberfläche zu erlauben"],
     [/^MODE=proxy \(set MODE=hybrid or local\)$/, "MODE=proxy (MODE=hybrid oder local setzen)"],
     [/^alarm active$/, "Alarm aktiv"],
     [/^'(.+)' is not writable$/, "'$1' ist nicht schreibbar"],
