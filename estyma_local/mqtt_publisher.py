@@ -20,7 +20,9 @@ Topics (``<p>`` = ``MQTT_PREFIX``/``MQTT_DEVICE_ID``, default ``estyma/boiler``)
   (``fuel_today`` / ``fuel_yesterday``: kg burnt per calendar day in
   ``CONTROLLER_TZ``, from the history store, see fuel_stats.py;
   ``fuel_cost_today`` / ``fuel_cost_yesterday``: their cost in EUR from the
-  pellet batch prices, null without a price)
+  pellet batch prices, null without a price; ``burner_*``: starts, failed
+  starts and hours today, starts and average burn yesterday, see
+  burner_stats.py)
 * ``<p>/set/<key>``    commands (only with ``MQTT_WRITES=1``), e.g.
                        ``estyma/boiler/set/boiler_target`` ``62``
 * ``<p>/write``        result of each command as JSON (not retained)
@@ -103,6 +105,17 @@ ENTITIES = [
                                                          "unit_of_measurement": "kg",
                                                          "suggested_display_precision": 0,
                                                          "icon": "mdi:calendar-arrow-left"}),
+    ("sensor", "burner_starts_today", "Burner starts today", {"state_class": "total_increasing",
+                                                              "icon": "mdi:fire-alert"}),
+    ("sensor", "burner_failed_starts_today", "Burner failed starts today", {
+        "state_class": "total_increasing", "icon": "mdi:fire-off"}),
+    ("sensor", "burner_hours_today", "Burner hours today", {
+        "device_class": "duration", "unit_of_measurement": "h", "state_class": "total_increasing",
+        "suggested_display_precision": 1, "icon": "mdi:fire"}),
+    ("sensor", "burner_starts_yesterday", "Burner starts yesterday", {"icon": "mdi:fire-alert"}),
+    ("sensor", "burner_avg_burn_yesterday", "Burner average burn yesterday", {
+        "device_class": "duration", "unit_of_measurement": "min", "suggested_display_precision": 0,
+        "icon": "mdi:timer-outline"}),
     ("sensor", "fuel_cost_today", "Fuel cost today", {"device_class": "monetary", "unit_of_measurement": "EUR",
                                                        "suggested_display_precision": 2,
                                                        "icon": "mdi:cash"}),
@@ -174,9 +187,10 @@ class StateBuilder:
 
     MAX_KG_PER_HOUR = 20.0
 
-    def __init__(self, kwh_per_kg: float | None = None, fuel=None) -> None:
+    def __init__(self, kwh_per_kg: float | None = None, fuel=None, burner=None) -> None:
         self.kwh_per_kg = kwh_per_kg
         self.fuel = fuel                  # fuel_stats.FuelStats, for today / yesterday
+        self.burner = burner              # burner_stats.BurnerStats, for today / yesterday
         self._fuel: tuple | None = None   # (ts, kg) last accepted
         self._good = D.LastGood(self.HOLD_SECONDS)
 
@@ -258,6 +272,13 @@ class StateBuilder:
         cost = self.fuel.cost_summary() if self.fuel is not None else {}
         st["fuel_cost_today"] = (cost.get("today") or {}).get("cost")
         st["fuel_cost_yesterday"] = (cost.get("yesterday") or {}).get("cost")
+        bs = self.burner.summary() if self.burner is not None else {}
+        today, yday = bs.get("today") or {}, bs.get("yesterday") or {}
+        st["burner_starts_today"] = today.get("starts")
+        st["burner_failed_starts_today"] = today.get("failed")
+        st["burner_hours_today"] = today.get("hours")
+        st["burner_starts_yesterday"] = yday.get("starts")
+        st["burner_avg_burn_yesterday"] = yday.get("avg_burn_min")
         st["alarm"] = "ON" if alarm["active"] else "OFF"
         st["alarm_code"] = alarm["code"] if alarm["active"] else 0
         if not alarm["active"]:
@@ -376,7 +397,8 @@ class MqttPublisher:
                  password: str | None = None, tls: bool = False, prefix: str = "estyma",
                  device_id: str = "boiler", disc_prefix: str = "homeassistant",
                  stale: float = 300, kwh_per_kg: float | None = None, interval: float = 2,
-                 client_id: str | None = None, fuel=None, writes: bool = False) -> None:
+                 client_id: str | None = None, fuel=None, writes: bool = False,
+                 burner=None) -> None:
         import paho.mqtt.client as mqtt   # optional dependency, only when configured
 
         self.ctl = ctl
@@ -386,7 +408,7 @@ class MqttPublisher:
         self.disc_prefix = disc_prefix.strip("/")
         self.stale = stale
         self.interval = interval
-        self.builder = StateBuilder(kwh_per_kg, fuel)
+        self.builder = StateBuilder(kwh_per_kg, fuel, burner)
         self.connected = False
         self._online: bool | None = None
         self._seen_live = False          # a fresh report was seen since start
@@ -616,7 +638,7 @@ class MqttPublisher:
         self.client.loop_stop()
 
 
-def from_env(ctl, env=os.environ, fuel=None) -> MqttPublisher | None:
+def from_env(ctl, env=os.environ, fuel=None, burner=None) -> MqttPublisher | None:
     """A started publisher when MQTT_HOST is set, else None."""
     host = (env.get("MQTT_HOST") or "").strip()
     if not host:
@@ -629,7 +651,7 @@ def from_env(ctl, env=os.environ, fuel=None) -> MqttPublisher | None:
         prefix=env.get("MQTT_PREFIX") or "estyma", device_id=env.get("MQTT_DEVICE_ID") or "boiler",
         disc_prefix=env.get("HA_DISCOVERY_PREFIX") or "homeassistant",
         stale=float(env.get("MQTT_STALE_SECONDS") or 300),
-        kwh_per_kg=float(kwh) if kwh else None, fuel=fuel,
+        kwh_per_kg=float(kwh) if kwh else None, fuel=fuel, burner=burner,
         writes=(env.get("MQTT_WRITES") or "").strip().lower() in ("1", "true", "yes", "on"))
     pub.start()
     return pub
