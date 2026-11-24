@@ -35,7 +35,7 @@ nav a.on { color: var(--text); font-weight: 600; }
 .intro { color: var(--text-2); font-size: .9rem; margin: .6rem 0 0; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .8rem .9rem; }
 .card + .card { margin-top: .6rem; }
-.form { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: .6rem 1rem; }
+.form { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: .6rem 1rem; }
 .form label { display: flex; flex-direction: column; gap: .2rem; font-size: .85rem; color: var(--text-2); min-width: 0; }
 .form label.wide { grid-column: 1 / -1; }
 input, textarea, select { font: inherit; padding: .35rem .5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); width: 100%; min-width: 0; }
@@ -55,6 +55,7 @@ textarea { resize: vertical; min-height: 4.2rem; }
 .snap-head { display: flex; flex-wrap: wrap; gap: .3rem 1rem; align-items: baseline; }
 .snap-head .date { font-weight: 600; font-variant-numeric: tabular-nums; }
 .snap-head .supplier { font-weight: 600; }
+.snap-head .price { font-variant-numeric: tabular-nums; color: var(--text-2); }
 .snap-head .meta { color: var(--muted); font-size: .82rem; }
 .snap-head .btns { margin-left: auto; display: flex; gap: .4rem; flex-wrap: wrap; }
 .comment { white-space: pre-wrap; margin: .4rem 0 0; color: var(--text-2); overflow-wrap: anywhere; }
@@ -85,8 +86,10 @@ tr.grp td { font-weight: 600; color: var(--text-2); background: var(--bg); }
   <div class="form">
     <label><span data-i18n="f.supplier">Supplier</span><input id="supplier" list="suppliers" maxlength="100" autocomplete="off"></label>
     <label><span data-i18n="f.date">Date</span><input id="date" type="date"></label>
+    <label><span><span data-i18n="f.price">Price per tonne</span> (<span class="cur">€</span>)</span><input id="price" inputmode="decimal" maxlength="12" autocomplete="off" data-i18n-ph="f.price.ph"></label>
     <label class="wide"><span data-i18n="f.comment">Comment</span><textarea id="comment" maxlength="4000" data-i18n-ph="f.comment.ph"></textarea></label>
   </div>
+  <p class="note" data-i18n="price.hint"></p>
   <datalist id="suppliers"></datalist>
   <div class="actions">
     <button class="btn primary" id="save" data-i18n="save">Save settings</button>
@@ -107,6 +110,7 @@ const I18N = {
     "title": "Pellet batches", "nav.monitor": "Monitor", "nav.settings": "Heating settings", "nav.batches": "Pellet batches", "nav.registers": "Registers", "nav.logs": "Logs", "nav.app": "Settings", "loading": "Loading…",
     "intro": "Keep a log of the heating settings you used with each pellet batch. Saving stores the values shown on \"Heating settings\" right now, with the supplier, a date and your comment. Nothing is written to the boiler.",
     "h.save": "Save current settings", "f.supplier": "Supplier", "f.date": "Date", "f.comment": "Comment", "f.comment.ph": "e.g. 6 mm, a bit more ash, lowered feeder time",
+    "f.price": "Price per tonne", "f.price.ph": "optional", "price": "{p}/t", "price.hint": "Used for the fuel cost on the monitor's fuel statistics from this date on. Leave empty for a later save of the same batch: the price before stays in effect.",
     "save": "Save settings", "saved": "Saved.", "h.saved": "Saved settings", "filter": "Supplier", "all": "All ({n})",
     "footer": "Kept in settings-snapshots.json in the log volume; the automatic log deletion and the Logs page's delete buttons leave it alone. Highlighted values differ from the batch saved before, or from the boiler's current value.",
     "cur": "{n} of {m} settings read, {ago}", "cur.never": "Settings not read yet: read them on \"Heating settings\" first", "cur.proxy": "the values the cloud's service panel read last",
@@ -124,6 +128,7 @@ const I18N = {
     "title": "Pelletchargen", "nav.monitor": "Monitor", "nav.settings": "Heizungseinstellungen", "nav.batches": "Pelletchargen", "nav.registers": "Register", "nav.logs": "Logs", "nav.app": "Einstellungen", "loading": "Lädt…",
     "intro": "Ein Protokoll der Heizungseinstellungen für jede Pelletcharge. Speichern übernimmt die Werte, die \"Heizungseinstellungen\" gerade zeigt, zusammen mit Lieferant, Datum und Kommentar. Am Kessel wird nichts geändert.",
     "h.save": "Aktuelle Einstellungen speichern", "f.supplier": "Lieferant", "f.date": "Datum", "f.comment": "Kommentar", "f.comment.ph": "z. B. 6 mm, etwas mehr Asche, Förderzeit verringert",
+    "f.price": "Preis pro Tonne", "f.price.ph": "optional", "price": "{p}/t", "price.hint": "Ab diesem Datum für die Brennstoffkosten in der Verbrauchsstatistik des Monitors verwendet. Bei einer späteren Speicherung derselben Charge leer lassen: der vorherige Preis gilt weiter.",
     "save": "Einstellungen speichern", "saved": "Gespeichert.", "h.saved": "Gespeicherte Einstellungen", "filter": "Lieferant", "all": "Alle ({n})",
     "footer": "Gespeichert in settings-snapshots.json im Log-Volume; das automatische Löschen alter Logs und die Löschknöpfe der Logs-Seite lassen die Datei in Ruhe. Hervorgehoben sind Werte, die sich von der vorher gespeicherten Charge oder vom aktuellen Wert des Kessels unterscheiden.",
     "cur": "{n} von {m} Einstellungen gelesen, {ago}", "cur.never": "Einstellungen noch nicht gelesen: zuerst unter \"Heizungseinstellungen\" lesen", "cur.proxy": "die Werte, die das Servicepanel der Cloud zuletzt gelesen hat",
@@ -144,6 +149,8 @@ const SERVER_MSG = {
     [/^supplier is required$/, "Lieferant fehlt"],
     [/^(supplier|comment) is too long \(max (\d+) characters\)$/, "$1 ist zu lang (höchstens $2 Zeichen)"],
     [/^date must be YYYY-MM-DD$/, "Datum muss JJJJ-MM-TT sein"],
+    [/^price must be a number$/, "Preis muss eine Zahl sein"],
+    [/^price must be between 0 and (\d+)$/, "Preis muss zwischen 0 und $1 liegen"],
     [/^no settings read yet, read the settings first$/, "Noch keine Einstellungen gelesen, zuerst die Einstellungen lesen"],
     [/^no such snapshot$/, "Eintrag nicht gefunden"],
     [/^too many snapshots \(max (\d+)\), delete old ones first$/, "Zu viele Einträge (höchstens $1), zuerst alte löschen"],
@@ -171,6 +178,9 @@ const ago = (s) => s < 90 ? T("ago.s", { n: Math.max(0, Math.round(s)) }) : s < 
 const L = (o, k = "label") => (lang === "de" && o[k + "_de"]) || o[k] || "";
 const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 const fmtDate = (iso) => { const [y, m, d] = String(iso).split("-").map(Number); return y ? new Date(y, m - 1, d).toLocaleDateString(lang) : iso; };
+const cur = () => (data && data.currency) || "EUR";
+const money = (v) => Number(v).toLocaleString(lang, { style: "currency", currency: cur() });
+const priceIn = (v) => v == null ? "" : String(v).replace(".", lang === "de" ? "," : ".");
 const fmtTime = (t) => t ? new Date(t * 1000).toLocaleString(lang) : "";
 
 // One value as shown on /heating; it.option is the [en, de] name of an enum value.
@@ -207,6 +217,8 @@ function render() {
   sn.textContent = nt ? (nt.err ? srvMsg(nt.text) : T("saved")) : "";
   if (error && !data) { $("list").innerHTML = `<p class="muted">${esc(T("unreachable", { e: error }))}</p>`; return; }
   if (!data) return;
+  const sym = (0).toLocaleString(lang, { style: "currency", currency: cur(), currencyDisplay: "narrowSymbol" }).replace(/[\d\s.,]/g, "") || cur();
+  document.querySelectorAll(".cur").forEach((el) => { el.textContent = sym; });
   $("suppliers").innerHTML = data.suppliers.map((s) => `<option value="${esc(s)}">`).join("");
   if (filter && !data.suppliers.includes(filter)) filter = "";
   $("filter").innerHTML = `<option value="">${esc(T("all", { n: data.snapshots.length }))}</option>`
@@ -229,11 +241,12 @@ function render() {
       head = `<div class="form">
         <label><span>${esc(T("f.supplier"))}</span><input data-e="supplier" list="suppliers" maxlength="100" value="${esc(s.supplier)}"></label>
         <label><span>${esc(T("f.date"))}</span><input data-e="date" type="date" value="${esc(s.date)}"></label>
+        <label><span>${esc(T("f.price"))} (${esc(sym)})</span><input data-e="price" inputmode="decimal" maxlength="12" value="${esc(priceIn(s.price))}" placeholder="${esc(T("f.price.ph"))}"></label>
         <label class="wide"><span>${esc(T("f.comment"))}</span><textarea data-e="comment" maxlength="4000">${esc(s.comment)}</textarea></label></div>
         <div class="actions"><button class="btn primary" data-store="${s.id}">${esc(T("store"))}</button><button class="btn" data-cancel="1">${esc(T("cancel"))}</button>
         <span class="note${nt && nt.err ? " err" : ""}">${esc(nt ? srvMsg(nt.text) : "")}</span></div>`;
     } else {
-      head = `<div class="snap-head"><span class="date">${esc(fmtDate(s.date))}</span><span class="supplier">${esc(s.supplier)}</span>${badge}
+      head = `<div class="snap-head"><span class="date">${esc(fmtDate(s.date))}</span><span class="supplier">${esc(s.supplier)}</span>${s.price != null ? `<span class="price">${esc(T("price", { p: money(s.price) }))}</span>` : ""}${badge}
         <span class="btns"><button class="btn" data-open="${s.id}">${esc(T(open[s.id] ? "hide" : "details"))}</button>
         <button class="btn" data-edit="${s.id}">${esc(T("edit"))}</button>
         <button class="btn danger" data-del="${s.id}"${data.ui_auth ? "" : ` disabled title="${esc(T("needauth"))}"`}>${esc(T("delete"))}</button></span></div>`
@@ -287,9 +300,9 @@ async function post(url, body, k) {
 
 $("save").addEventListener("click", async () => {
   const b = $("save"); b.disabled = true;
-  const ok = await post("/api/snapshots/save", { supplier: $("supplier").value, date: $("date").value, comment: $("comment").value }, "_save");
+  const ok = await post("/api/snapshots/save", { supplier: $("supplier").value, date: $("date").value, comment: $("comment").value, price: $("price").value }, "_save");
   b.disabled = false;
-  if (ok) { $("comment").value = ""; }
+  if (ok) { $("comment").value = ""; $("price").value = ""; }
   await load(); render();
 });
 document.addEventListener("click", async (e) => {
@@ -299,7 +312,7 @@ document.addEventListener("click", async (e) => {
   if (b.dataset.cancel) { editing = null; return render(); }
   if (b.dataset.store) {
     const id = b.dataset.store, v = (n) => document.querySelector(`[data-e="${n}"]`).value;
-    if (await post("/api/snapshots/update", { id, supplier: v("supplier"), date: v("date"), comment: v("comment") }, id)) editing = null;
+    if (await post("/api/snapshots/update", { id, supplier: v("supplier"), date: v("date"), comment: v("comment"), price: v("price") }, id)) editing = null;
     await load(); return render();
   }
   if (b.dataset.del) {

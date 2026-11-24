@@ -31,7 +31,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import auth as A
-from .batches import SnapshotError
+from .batches import CURRENCY, KEEP, SnapshotError
 from .controller import WriteError
 from .version import REVISION, VERSION, add_footer, footer_html
 
@@ -478,7 +478,8 @@ class WebHandler(BaseHTTPRequestHandler):
         self._json(200, {"ui_auth": self.auth, "ui_login": self.authn is not None,
                          "ui_role": None if self.user is None else self.user.role,
                          "can_save": self.controller is not None and (self.authn is None or self.auth),
-                         "suppliers": self.snapshots.suppliers(), "snapshots": self.snapshots.list()})
+                         "suppliers": self.snapshots.suppliers(), "snapshots": self.snapshots.list(),
+                         "currency": CURRENCY})
 
     def _health(self):
         out = {"ok": True, "version": VERSION, "revision": REVISION,
@@ -557,7 +558,7 @@ class WebHandler(BaseHTTPRequestHandler):
             return self._json(409, {"ok": False, "message": "no controller"})
         try:
             snap = self.snapshots.add(self.controller.settings_snapshot(), req.get("supplier"),
-                                      req.get("date"), req.get("comment"))
+                                      req.get("date"), req.get("comment"), req.get("price"))
         except SnapshotError as exc:
             return self._json(409, {"ok": False, "message": str(exc)})
         self._json(200, {"ok": True, "message": "saved", "snapshot": snap})
@@ -565,7 +566,8 @@ class WebHandler(BaseHTTPRequestHandler):
     def _post_snapshot_update(self, req):
         try:
             snap = self.snapshots.update(str(req.get("id", "")), req.get("supplier"),
-                                         req.get("date"), req.get("comment"))
+                                         req.get("date"), req.get("comment"),
+                                         req["price"] if "price" in req else KEEP)
         except KeyError:
             return self._json(404, {"ok": False, "message": "no such snapshot"})
         except SnapshotError as exc:
@@ -704,6 +706,8 @@ def start_web(host: str, port: int, log_dir: str,
     if snapshots is None and controller is not None:
         from .batches import SnapshotStore
         snapshots = SnapshotStore(log_dir)
+    if fuel is not None and snapshots is not None and getattr(fuel, "prices", 1) is None:
+        fuel.prices = snapshots.prices      # batch prices for the fuel cost
     handler = type("Handler", (WebHandler,), {"log_dir": os.path.abspath(log_dir), "authn": authn,
                                                 "trust_proxy": trust_proxy,
                                                 "monitor": monitor, "controller": controller,

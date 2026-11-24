@@ -56,11 +56,16 @@ discovery's `origin.sw_version`).
 - **Pellet batches** (`/batches`): a log of the heating settings used with
   each pellet batch. *Save settings* stores the values shown on
   `/heating` at that moment (read them there first) with a supplier, a date
-  (default today) and a free comment. Each saved entry shows how many values
+  (default today), an optional price per tonne and a free comment. Each saved entry shows how many values
   differ from the entry before it; *Show settings* lists every value next to
   the entry before and the boiler's current value, with differences
-  highlighted, and can be narrowed to the changed ones. Supplier, date and
-  comment can be edited later; the saved values cannot. Read only: nothing is
+  highlighted, and can be narrowed to the changed ones. Supplier, date, price
+  and comment can be edited later; the saved values cannot. The price holds
+  from the entry's date (local midnight) until the next entry with a price,
+  so leave it empty on a later save of the same batch; the fuel statistics
+  on the monitor (and `/api/fuel`) use it for the cost per day, week, month
+  and year. Fuel burnt before the first priced entry has no cost; a period
+  that is only partly priced shows "≈". Read only: nothing is
   written to the controller. Deleting an entry needs the admin login. The entries are kept in `settings-snapshots.json` in the log
   volume, which the log deletion leaves alone. JSON at `/api/snapshots`.
 - **Logs** (`/logs`): every log file in the volume with size and date, a

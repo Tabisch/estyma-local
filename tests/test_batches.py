@@ -76,6 +76,28 @@ class SnapshotStoreTest(unittest.TestCase):
         self.assertEqual(self.store.matching(controller_with({(8712, 1): 11}).settings_snapshot()), [])
         self.assertEqual(self.store.matching(controller_with().settings_snapshot()), [])  # nothing in common
 
+    def test_price_per_tonne(self):
+        snap = controller_with({(8712, 1): 10}).settings_snapshot()
+        with self.assertRaisesRegex(SnapshotError, "price must be a number"):
+            self.store.add(snap, "A", price="cheap")
+        with self.assertRaisesRegex(SnapshotError, "price must be between"):
+            self.store.add(snap, "A", price=-1)
+        a = self.store.add(snap, "A", "2026-10-01", price="389,50")
+        self.assertEqual(a["price"], 389.5)
+        self.t += 10
+        b = self.store.add(snap, "B", "2026-11-01")              # no price: keeps A's
+        self.assertIsNone(b["price"])
+        self.t += 10
+        self.store.add(snap, "C", "2026-11-01", price=400)
+        self.t += 10
+        self.store.add(snap, "D", "2026-11-01", price=410)       # same day, saved last wins
+        self.assertEqual(self.store.prices(), [("2026-10-01", 389.5, "A"), ("2026-11-01", 410.0, "D")])
+        self.store.update(b["id"], comment="x")                    # price untouched
+        self.assertIsNone(next(s for s in self.store.list() if s["id"] == b["id"])["price"])
+        self.store.update(a["id"], price=420)
+        self.store.update(b["id"], price="")
+        self.assertEqual(SnapshotStore(self.dir).prices()[0], ("2026-10-01", 420.0, "A"))
+
     def test_default_date_is_today(self):
         from datetime import date
         s = self.store.add(controller_with({(8712, 1): 10}).settings_snapshot(), "X")

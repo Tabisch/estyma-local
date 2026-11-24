@@ -145,19 +145,22 @@ def _start_history(cfg: Settings, log: ExchangeLog):
         return None
 
 
-def _fuel_stats(cfg: Settings, store):
-    """Fuel used per day/week/month/year, from the history store."""
+def _fuel_stats(cfg: Settings, store, snapshots=None):
+    """Fuel used per day/week/month/year, from the history store; its cost
+    from the prices of the pellet batches."""
     if store is None:
         return None
+    from .batches import CURRENCY
     from .fuel_stats import FuelStats
-    stats = FuelStats(store, load_tz(cfg.controller_tz))
+    stats = FuelStats(store, load_tz(cfg.controller_tz),
+                      prices=snapshots.prices if snapshots is not None else None, currency=CURRENCY)
     # The first read scans the whole history: do it now, not on a request.
     threading.Thread(target=stats.refresh, name="fuel-stats", daemon=True).start()
     return stats
 
 
 def _start_web(cfg: Settings, log: ExchangeLog, ctl: Controller, fallback=None,
-               store=None, fuel=None) -> None:
+               store=None, fuel=None, snapshots=None) -> None:
     """Monitor, optional cloud monitoring and the web UI on UI_PORT."""
     from .monitor import Monitor
     from .web import start_web
@@ -188,7 +191,7 @@ def _start_web(cfg: Settings, log: ExchangeLog, ctl: Controller, fallback=None,
                           cfg.ui_viewer_password, cfg.log_dir, cfg.ui_session_days)
     start_web(cfg.listen_host, cfg.ui_port, cfg.log_dir, monitor=mon, controller=ctl, cloud=cloud,
               retention=retention, fallback=fallback, raw_logs=log.raw, fuel=fuel,
-              authn=authn, trust_proxy=cfg.ui_trust_proxy)
+              snapshots=snapshots, authn=authn, trust_proxy=cfg.ui_trust_proxy)
     auth = "login on" + (", read-only user" if len(authn.users) > 1 else "")
     print(f"web UI on http://{cfg.listen_host}:{cfg.ui_port}/ ({auth})", flush=True)
 
@@ -233,9 +236,15 @@ def run(cfg: Settings) -> int:
               f"(change it in the web UI)", flush=True)
     print(f"raw traffic logs: {'on' if raw.enabled else 'off'} (change it in the web UI); "
           f"history in {store.path if store else 'memory only'}", flush=True)
-    fuel = _fuel_stats(cfg, store)
+    snapshots = None
+    try:
+        from .batches import SnapshotStore
+        snapshots = SnapshotStore(cfg.log_dir)
+    except Exception as exc:  # never keep the proxy from starting
+        print(f"pellet batches unavailable: {type(exc).__name__}: {exc}", flush=True)
+    fuel = _fuel_stats(cfg, store, snapshots)
     if cfg.ui_port:
-        _start_web(cfg, log, ctl, fallback, store, fuel)
+        _start_web(cfg, log, ctl, fallback, store, fuel, snapshots)
     mqtt = _start_mqtt(ctl, fuel) if cfg.mqtt_host else None
     try:
         server.serve_forever()
