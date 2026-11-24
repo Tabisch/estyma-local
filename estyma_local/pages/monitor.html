@@ -62,7 +62,7 @@ svg text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nu
 table { border-collapse: collapse; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 th, td { text-align: left; padding: .45rem .7rem; border-bottom: 1px solid var(--border); font-size: .9rem; }
 th { color: var(--text-2); font-weight: 600; }
-td.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .wrap { overflow-x: auto; }
 .muted { color: var(--muted); font-size: .85rem; }
 code { font-size: .85em; word-break: break-all; }
@@ -143,7 +143,7 @@ dialog.fuel::backdrop { background: rgba(0,0,0,.45); }
 <div class="legend"><span><i class="est"></i><span data-i18n="fu.est">estimated: the server was not recording for part of this period</span></span></div>
 <svg id="fuel-svg" role="img" aria-labelledby="fuel-ctitle"></svg>
 <div class="readout" id="fuel-read"></div></div>
-<details><summary data-i18n="fu.table">Show as table</summary><div class="wrap"><table><thead><tr><th data-i18n="fu.col.period">Period</th><th class="num">kg</th><th class="num">kWh</th><th class="num" data-i18n="fu.col.cost" style="text-align:right">Cost</th></tr></thead><tbody id="fuel-rows"></tbody></table></div></details>
+<details><summary data-i18n="fu.table">Show as table</summary><div class="wrap"><table><thead><tr><th data-i18n="fu.col.period">Period</th><th class="num">kg</th><th class="num">kWh</th><th class="num" data-i18n="fu.col.cost">Cost</th></tr></thead><tbody id="fuel-rows"></tbody></table></div></details>
 <p class="muted" id="fuel-note"></p>
 </div></dialog>
 
