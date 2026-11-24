@@ -66,6 +66,26 @@ nav a.on { color: var(--text); font-weight: 600; }
 table { border-collapse: collapse; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 th, td { text-align: left; padding: .35rem .7rem; border-bottom: 1px solid var(--border); font-size: .85rem; vertical-align: top; }
 th { color: var(--text-2); font-weight: 600; }
+.timer { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .6rem .8rem; }
+.tgrid { display: grid; grid-template-columns: 2.6rem repeat(24, minmax(0, 1fr)) 5.5rem; gap: 2px; align-items: center; user-select: none; touch-action: none; }
+.tgrid .h { font-size: .65rem; color: var(--muted); text-align: center; }
+.tgrid .d { font-size: .82rem; color: var(--text-2); }
+.tgrid .r { font-size: .75rem; color: var(--text-2); padding-left: .4rem; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tgrid .c { height: 1.6rem; border-radius: 3px; background: var(--border); cursor: pointer; }
+.tgrid .c.on { background: var(--accent); }
+.tgrid .c.dirty { outline: 2px solid var(--warn); outline-offset: -2px; }
+.tgrid .c.pend { background-image: repeating-linear-gradient(45deg, transparent 0 3px, rgba(255,255,255,.45) 3px 5px); }
+.tgrid.locked .c { cursor: default; }
+.tlegend { display: flex; flex-wrap: wrap; gap: .3rem 1rem; font-size: .8rem; color: var(--text-2); margin: .5rem 0 0; align-items: center; }
+.tlegend i { display: inline-block; width: .9rem; height: .9rem; border-radius: 3px; vertical-align: -2px; margin-right: .3rem; background: var(--border); }
+.tlegend i.on { background: var(--accent); }
+.tactions { display: flex; flex-wrap: wrap; gap: .4rem; margin: .6rem 0 0; align-items: center; }
+@media (max-width: 640px) {
+  .tgrid { grid-template-columns: 2rem repeat(24, minmax(0, 1fr)); gap: 1px; }
+  .tgrid .r { grid-column: 2 / -1; padding: 0 0 .3rem; }
+  .tgrid .c { height: 1.5rem; border-radius: 2px; }
+  .tgrid .h:nth-child(odd) { visibility: hidden; }
+}
 @media (max-width: 640px) {
   .item { grid-template-columns: minmax(0, 1fr) auto; }
   .edit { grid-column: 1 / -1; justify-content: flex-start; }
@@ -80,6 +100,8 @@ th { color: var(--text-2); font-weight: 600; }
 <div id="notices"></div>
 <p class="muted"><a href="/batches" data-i18n="savelink">Save these settings for a pellet batch</a></p>
 <div id="groups"></div>
+<h2 data-i18n="timer">Weekly timer, heating circuit 1</h2>
+<div class="timer" id="timer"></div>
 <h2 data-i18n="writes">Recent writes</h2>
 <table><thead><tr><th data-i18n="col.time">Time</th><th data-i18n="col.write">Write</th><th data-i18n="col.event">Event</th><th data-i18n="col.detail">Detail</th></tr></thead>
 <tbody id="writes"></tbody></table>
@@ -97,8 +119,8 @@ const I18N = {
     "st.read": "Settings read {ago}", "st.never": "Settings not read yet", "st.reading": "Reading settings…", "st.readnow": "Read settings now",
     "st.alarm": "Alarm active, only on/off can be written", "unreachable": "Not reachable ({e})",
     "n.proxy": "MODE=proxy: read only. The page shows the settings the cloud's service panel read last; set MODE=hybrid or MODE=local to read and change them here.",
-    "n.writesoff": "Writes are off. Set WRITES_ENABLED=1 (and UI_USER / UI_PASSWORD) to change settings.",
-    "n.noauth": "Set UI_USER and UI_PASSWORD to change settings from the web UI.",
+    "n.writesoff": "Writes are off. Set WRITES_ENABLED=1 to change settings.",
+    "n.noauth": "Only the admin login can change settings. The login is off (UI_AUTH=0) or you are logged in read only.",
     "n.untested": "Only the boiler target and on/off were seen being written on the real controller. The other settings are marked \"untested\" and stay locked unless ALLOW_UNTESTED_WRITES=1. Change them one at a time and check the result on the controller's own screen.",
     "n.untestedon": "ALLOW_UNTESTED_WRITES=1: settings marked \"untested\" can be written. Their write path was not tested on a real controller yet; change one at a time and check the result on the controller's own screen.",
     "untested": "untested", "untested.t": "Writing this register was not yet seen working on a real controller", "tested": "tested", "likely": "likely",
@@ -112,6 +134,12 @@ const I18N = {
     "nowrites": "No writes yet.", "was": "was {v}", "polls": "{n} polls",
     "ev.requested": "requested", "ev.sent": "sent", "ev.confirmed": "confirmed", "ev.failed": "failed", "ev.rejected": "rejected",
     "ev.cancelled": "cancelled", "ev.replaced": "replaced", "ev.superseded": "superseded by the cloud", "ev.noop": "no change",
+    "timer": "Weekly timer, heating circuit 1", "t.legend.on": "comfort", "t.legend.off": "eco", "t.legend.dirty": "changed, not saved", "t.legend.pend": "sent, waiting for the controller",
+    "t.help": "Click or drag over the hours to switch between comfort and eco. Each hour runs from the full hour to the next one.",
+    "t.save": "Save timer", "t.reset": "Undo changes", "t.copywd": "Copy Monday to Tue–Fri", "t.copyall": "Copy Monday to every day", "t.cancel": "Cancel",
+    "t.none": "eco all day", "t.notread": "The weekly timer has not been reported yet.", "t.pending": "Sending the weekly timer, poll {n}…",
+    "t.confirm": "Write the weekly timer for heating circuit 1?\n\n{l}", "t.locked": "Locked: {r}",
+    "day.mon": "Mon", "day.tue": "Tue", "day.wed": "Wed", "day.thu": "Thu", "day.fri": "Fri", "day.sat": "Sat", "day.sun": "Sun",
     "ago.s": "{n} s ago", "ago.min": "{n} min ago", "ago.h": "{n} h ago", "ago.d": "{n} d ago",
   },
   de: {
@@ -123,8 +151,8 @@ const I18N = {
     "st.read": "Einstellungen gelesen {ago}", "st.never": "Einstellungen noch nicht gelesen", "st.reading": "Einstellungen werden gelesen…", "st.readnow": "Einstellungen jetzt lesen",
     "st.alarm": "Alarm aktiv, nur An/Aus kann geschrieben werden", "unreachable": "Nicht erreichbar ({e})",
     "n.proxy": "MODE=proxy: nur lesen. Die Seite zeigt die Einstellungen, die das Servicepanel der Cloud zuletzt gelesen hat; MODE=hybrid oder MODE=local setzen, um sie hier zu lesen und zu ändern.",
-    "n.writesoff": "Schreiben ist aus. WRITES_ENABLED=1 (und UI_USER / UI_PASSWORD) setzen, um Einstellungen zu ändern.",
-    "n.noauth": "UI_USER und UI_PASSWORD setzen, um Einstellungen aus der Web-Oberfläche zu ändern.",
+    "n.writesoff": "Schreiben ist aus. WRITES_ENABLED=1 setzen, um Einstellungen zu ändern.",
+    "n.noauth": "Nur mit der Admin-Anmeldung lassen sich Einstellungen ändern. Die Anmeldung ist aus (UI_AUTH=0) oder du bist nur zum Lesen angemeldet.",
     "n.untested": "Nur Kessel-Soll und An/Aus wurden am echten Regler beim Schreiben beobachtet. Die anderen Einstellungen sind als \"ungetestet\" markiert und bleiben gesperrt, solange ALLOW_UNTESTED_WRITES nicht 1 ist. Einzeln ändern und das Ergebnis am Display des Reglers prüfen.",
     "n.untestedon": "ALLOW_UNTESTED_WRITES=1: als \"ungetestet\" markierte Einstellungen können geschrieben werden. Ihr Schreibweg wurde an einem echten Regler noch nicht getestet; einzeln ändern und das Ergebnis am Display des Reglers prüfen.",
     "untested": "ungetestet", "untested.t": "Schreiben dieses Registers wurde an einem echten Regler noch nicht beobachtet", "tested": "getestet", "likely": "wahrscheinlich",
@@ -138,12 +166,20 @@ const I18N = {
     "nowrites": "Noch keine Schreibvorgänge.", "was": "vorher {v}", "polls": "{n} Abfragen",
     "ev.requested": "angefordert", "ev.sent": "gesendet", "ev.confirmed": "bestätigt", "ev.failed": "fehlgeschlagen", "ev.rejected": "abgelehnt",
     "ev.cancelled": "abgebrochen", "ev.replaced": "ersetzt", "ev.superseded": "von der Cloud ersetzt", "ev.noop": "keine Änderung",
+    "timer": "Wochenprogramm, Heizkreis 1", "t.legend.on": "Komfort", "t.legend.off": "Eco", "t.legend.dirty": "geändert, nicht gespeichert", "t.legend.pend": "gesendet, wartet auf den Regler",
+    "t.help": "Stunden anklicken oder darüberziehen, um zwischen Komfort und Eco zu wechseln. Jede Stunde läuft von der vollen Stunde bis zur nächsten.",
+    "t.save": "Programm speichern", "t.reset": "Änderungen verwerfen", "t.copywd": "Montag auf Di–Fr kopieren", "t.copyall": "Montag auf alle Tage kopieren", "t.cancel": "Abbrechen",
+    "t.none": "ganztags Eco", "t.notread": "Das Wochenprogramm wurde noch nicht gemeldet.", "t.pending": "Sende das Wochenprogramm, Abfrage {n}…",
+    "t.confirm": "Wochenprogramm für Heizkreis 1 schreiben?\n\n{l}", "t.locked": "Gesperrt: {r}",
+    "day.mon": "Mo", "day.tue": "Di", "day.wed": "Mi", "day.thu": "Do", "day.fri": "Fr", "day.sat": "Sa", "day.sun": "So",
     "ago.s": "vor {n} s", "ago.min": "vor {n} min", "ago.h": "vor {n} h", "ago.d": "vor {n} T",
   },
 };
 // Server messages (controller.py / web.py) -> German.
 const SERVER_MSG = {
   de: [
+    [/^read-only login: (.+) needs the admin login$/, "Nur-Lesen-Anmeldung: dafür ist die Admin-Anmeldung nötig"],
+    [/^turn the login on \(UI_AUTH=1\) to allow (.+) from the web UI$/, "Anmeldung einschalten (UI_AUTH=1), um das aus der Web-Oberfläche zu erlauben"],
     [/^MODE=proxy \(set MODE=hybrid or local\)$/, "MODE=proxy (MODE=hybrid oder local setzen)"],
     [/^alarm active$/, "Alarm aktiv"],
     [/^'(.+)' is not writable$/, "'$1' ist nicht schreibbar"],
@@ -169,8 +205,12 @@ const SERVER_MSG = {
     [/^reported before it was sent$/, "gemeldet, bevor es gesendet wurde"],
     [/^no read-back within (\S+) s$/, "keine Bestätigung innerhalb von $1 s"],
     [/^cloud wrote (\S+) to the same register$/, "Cloud schrieb $1 in dasselbe Register"],
+    [/^weekly timer is already set$/, "Wochenprogramm ist bereits so eingestellt"],
+    [/^weekly timer already queued$/, "Wochenprogramm ist bereits eingereiht"],
+    [/^weekly timer \((\d+) days? changed\) queued, sent on the next poll$/, "Wochenprogramm ($1 Tag(e) geändert) eingereiht, wird bei der nächsten Abfrage gesendet"],
+    [/^(.+) has not been read yet, wait for the next report$/, "$1 wurde noch nicht gelesen, auf die nächste Meldung warten"],
+    [/^cloud wrote the weekly timer$/, "Cloud schrieb das Wochenprogramm"],
     [/^cancelled$/, "abgebrochen"], [/^nothing pending$/, "nichts ausstehend"],
-    [/^set UI_USER and UI_PASSWORD to allow writes from the web UI$/, "UI_USER und UI_PASSWORD setzen, um aus der Web-Oberfläche zu schreiben"],
     [/^(MODE=proxy|WRITES_ENABLED=0|ALLOW_POWER_WRITES=0|ALLOW_UNTESTED_WRITES=0)$/, "$1"],
   ],
 };
@@ -277,6 +317,7 @@ function render() {
       + `<div class="edit">${ctl}</div><div class="note${nt && nt.err ? " err" : ""}">${esc(note)}</div></div>`;
   }).join("")}</div>`).join("");
   if (focus) { const el = document.querySelector(`[data-in="${focus}"]`); if (el) el.focus(); }
+  renderTimer();
 
   $("writes").innerHTML = d.recent.map((r) => `<tr><td>${esc(new Date(r.time).toLocaleString(lang))}</td><td><code>${esc((r.register || r.key) + (r.value != null ? "=" + r.value : ""))}</code></td><td>${esc(T("ev." + r.event))}</td><td>${esc([r.source, srvMsg(r.reason), r.old != null ? T("was", { v: r.old }) : "", r.polls ? T("polls", { n: r.polls }) : ""].filter(Boolean).join(" · "))}</td></tr>`).join("")
     || `<tr><td colspan="4" class="muted">${T("nowrites")}</td></tr>`;
@@ -328,6 +369,112 @@ document.addEventListener("click", (e) => {
   if (!confirm(q)) return;
   post("/api/set", { key: k, value: v }, k);
 });
+
+// -- weekly timer -----------------------------------------------------------
+// tEdit: the masks being edited (null = showing the controller's).
+let tEdit = null, tDrag = null;
+const bit = (m, h) => (m >> h) & 1;
+function tText(m) {
+  const out = [];
+  for (let h = 0; h < 24;) {
+    if (bit(m, h)) { const s = h; while (h < 24 && bit(m, h)) h++; out.push(String(s).padStart(2, "0") + "–" + String(h).padStart(2, "0")); }
+    else h++;
+  }
+  return out.length ? out.join(", ") : T("t.none");
+}
+function tCan() { const t = data && data.timers; return !!(t && t.allowed && data.ui_auth); }
+function tCurrent() {
+  const t = data && data.timers;
+  return t ? t.days.map((d) => d.pending ?? d.value) : [];
+}
+function renderTimer() {
+  if (tDrag) return;   // do not redraw under the pointer
+  const t = data && data.timers, box = $("timer");
+  if (!t) { box.innerHTML = ""; return; }
+  if (t.days.some((d) => d.value == null)) { box.innerHTML = `<p class="muted">${esc(T("t.notread"))}</p>`; return; }
+  const cur = tCurrent(), shown = tEdit || cur, can = tCan();
+  const pend = t.days.find((d) => d.pending != null);
+  let h = `<div class="tgrid${can ? "" : " locked"}" id="tgrid"><span></span>`;
+  for (let i = 0; i < 24; i++) h += `<span class="h">${i}</span>`;
+  h += `<span class="r"></span>`;
+  t.days.forEach((d, di) => {
+    h += `<span class="d">${esc(T("day." + d.day))}</span>`;
+    for (let i = 0; i < 24; i++) {
+      const on = bit(shown[di], i), dirty = tEdit && on !== bit(cur[di], i), p = d.pending != null && bit(d.pending, i) !== bit(d.value, i);
+      h += `<span class="c${on ? " on" : ""}${dirty ? " dirty" : ""}${p ? " pend" : ""}" data-d="${di}" data-h="${i}" title="${esc(T("day." + d.day))} ${i}:00–${i + 1}:00"></span>`;
+    }
+    h += `<span class="r">${esc(tText(shown[di]))}</span>`;
+  });
+  h += `</div><div class="tlegend"><span><i class="on"></i>${T("t.legend.on")}</span><span><i></i>${T("t.legend.off")}</span>`
+    + (tEdit ? `<span><i class="on" style="outline:2px solid var(--warn);outline-offset:-2px"></i>${T("t.legend.dirty")}</span>` : "")
+    + (pend ? `<span><i class="on" style="background-image:repeating-linear-gradient(45deg,transparent 0 3px,rgba(255,255,255,.45) 3px 5px)"></i>${T("t.legend.pend")}</span>` : "")
+    + `</div>`;
+  if (can) h += `<p class="muted">${esc(T("t.help"))}</p>`;
+  h += `<div class="tactions">`;
+  if (can) {
+    h += `<button class="btn primary" id="tsave"${tEdit ? "" : " disabled"}>${T("t.save")}</button>`
+      + `<button class="btn" id="treset"${tEdit ? "" : " disabled"}>${T("t.reset")}</button>`
+      + `<button class="btn" id="tcopywd">${T("t.copywd")}</button><button class="btn" id="tcopyall">${T("t.copyall")}</button>`;
+  }
+  if (pend && data.ui_auth) h += `<button class="btn" id="tcancel">${T("t.cancel")}</button>`;
+  const nt = notes._timer;
+  const note = nt ? srvMsg(nt.text) : pend ? T("t.pending", { n: pend.sent }) : !t.allowed && data.writes_enabled && data.mode !== "proxy" ? T("t.locked", { r: srvMsg(t.reason) }) : "";
+  h += `<span class="note${nt && nt.err ? " err" : ""}">${esc(note)}</span></div>`;
+  box.innerHTML = h;
+}
+function tSet(m) {
+  const cur = tCurrent();
+  tEdit = m.every((v, i) => v === cur[i]) ? null : m;
+}
+function tPaint(el) {
+  const di = +el.dataset.d, hr = +el.dataset.h, m = (tEdit || tCurrent()).slice();
+  const want = tDrag.on;
+  m[di] = want ? m[di] | (1 << hr) : m[di] & ~(1 << hr);
+  tSet(m);
+  el.classList.toggle("on", !!want);
+  const cur = tCurrent();
+  el.classList.toggle("dirty", bit(m[di], hr) !== bit(cur[di], hr));
+  const row = el.parentNode.querySelectorAll(`.c[data-d="${di}"]`);
+  const r = row[row.length - 1].nextElementSibling;
+  if (r) r.textContent = tText(m[di]);
+}
+$("timer").addEventListener("pointerdown", (e) => {
+  const el = e.target.closest(".c"); if (!el || !tCan()) return;
+  e.preventDefault();
+  tDrag = { on: !el.classList.contains("on") };
+  tPaint(el);
+});
+$("timer").addEventListener("pointermove", (e) => {
+  if (!tDrag) return;
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  if (el && el.classList.contains("c") && el.closest("#timer") && el.classList.contains("on") !== tDrag.on) tPaint(el);
+});
+document.addEventListener("pointerup", () => { if (tDrag) { tDrag = null; renderTimer(); } });
+document.addEventListener("pointercancel", () => { if (tDrag) { tDrag = null; renderTimer(); } });
+$("timer").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  e.stopPropagation();
+  const cur = tCurrent(), m = (tEdit || cur).slice();
+  if (b.id === "treset") { tEdit = null; return renderTimer(); }
+  if (b.id === "tcopywd") { for (let i = 1; i < 5; i++) m[i] = m[0]; tSet(m); return renderTimer(); }
+  if (b.id === "tcopyall") { for (let i = 1; i < 7; i++) m[i] = m[0]; tSet(m); return renderTimer(); }
+  if (b.id === "tcancel") { tEdit = null; return postTimer("/api/cancel", { key: data.timers.days[0].key }); }
+  if (b.id === "tsave" && tEdit) {
+    const lines = data.timers.days.map((d, i) => `${T("day." + d.day)}: ${tText(tEdit[i])}`).join("\n");
+    if (!confirm(T("t.confirm", { l: lines }))) return;
+    postTimer("/api/timer", { days: tEdit }, true);
+  }
+});
+async function postTimer(url, body, clear) {
+  try {
+    const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({ message: "HTTP " + r.status }));
+    notes._timer = { text: j.message, err: !r.ok || j.ok === false };
+    if (clear && r.ok && j.ok !== false) tEdit = null;
+  } catch (e) { notes._timer = { text: e.message, err: true }; }
+  setTimeout(() => { delete notes._timer; render(); }, 8000);
+  refresh();
+}
 
 function applyLang() {
   document.documentElement.lang = lang;

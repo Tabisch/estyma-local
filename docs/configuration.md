@@ -23,8 +23,13 @@ The `estyma-proxy` service, default command of the image.
 | `ESTYMA_VERSION` | (empty) |  | Version shown in the web UI footer, `/api/health` and the MQTT discovery. Set by the image build (tag such as `v1.0.0`, or branch name); empty = `git describe`, else `dev` |
 | `ESTYMA_REVISION` | (empty) |  | Commit SHA shown next to the version. Set by the image build |
 | `UI_PORT` | `8089` | yes | Web UI port. Inside the container `0` turns the UI off; in `docker-compose.yml` it is the host port (inside it stays 8089) |
-| `UI_USER` | (empty) | yes | Basic auth user for the web UI. Also needed for writes, switching cloud monitoring and deleting logs |
-| `UI_PASSWORD` | (empty) | yes | Basic auth password; auth is on only when user and password are both set |
+| `UI_AUTH` | `1` | yes | `1` = the web UI needs a login (default). `0` = open to everyone on the network and read only (no writes, no settings changes) |
+| `UI_USER` | (empty) | yes | Admin user of the web UI (may change everything). Empty = `admin` |
+| `UI_PASSWORD` | (empty) | yes | Admin password. Empty = a password is created on first start, printed to the container log and kept in `.ui-password` in the logs volume |
+| `UI_VIEWER_USER` | (empty) | yes | Optional read-only user: sees every page, cannot change anything or download logs |
+| `UI_VIEWER_PASSWORD` | (empty) | yes | Password of the read-only user |
+| `UI_SESSION_DAYS` | `30` |  | Days a browser stays logged in |
+| `UI_TRUST_PROXY` | `0` | yes | `1` = the UI is behind a reverse proxy (HTTPS): take the client address for the failed-login limit from `X-Forwarded-For`. Only set it when the UI port is reachable through the proxy alone, see [https.md](https.md) |
 | `LOG_RETENTION_DAYS` | `0` | yes | Delete `.jsonl` / `.jsonl.gz` logs older than this many days, `0` = keep them all. Only the initial state: once it is changed on the settings page, the page's choice is kept in `log-retention.json` |
 | `RAW_LOGS` | `0` | yes | `1` = write the raw traffic logs `exchanges-*.jsonl` (for debugging, ~0.6 MB a day gzipped). The register history in `history.sqlite3` is kept either way. Only the initial state: once it is switched on the settings page, the page's choice is kept in `raw-logs.json` |
 | `MONITOR_HISTORY_HOURS` | `48` |  | Hours of decoded values the monitor keeps in memory for its charts (reloaded from `history.sqlite3` on start) |
@@ -80,6 +85,7 @@ Same service, see [home-assistant.md](home-assistant.md).
 | `MQTT_DEVICE_ID` | `boiler` | yes | Second part of the topics and of the unique IDs; change only for a second boiler |
 | `HA_DISCOVERY_PREFIX` | `homeassistant` | yes | Home Assistant's discovery prefix |
 | `MQTT_STALE_SECONDS` | `300` | yes | Seconds without a controller report until the device is unavailable. Keep it well above 100 s: after a slow or failed cloud reply the controller waits about 100 s before its next report |
+| `MQTT_WRITES` | `0` | yes | `1` = Home Assistant may change the tested settings (boiler target, heating program, room and buffer targets, weekly timer; on/off with `ALLOW_POWER_WRITES=1`). Also needs `MODE=hybrid`/`local` and `WRITES_ENABLED=1`. Anyone who can publish on the broker can then change them: give the broker a login |
 | `FUEL_KWH_PER_KG` | (empty) | yes | Calorific value (kWh/kg) for the energy sensor and the fuel statistics; empty = controller setting, else 4.8 |
 
 ## Standalone cloud recorder

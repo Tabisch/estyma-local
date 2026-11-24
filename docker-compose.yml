@@ -17,9 +17,14 @@ services:
       # controller, so the provider's normal hostname works here.
       UPSTREAM: "http://igneo.pl:80"
       UPSTREAM_TIMEOUT: "30"
-      # Optional basic auth for the log UI (set both in .env)
-      UI_USER: "${UI_USER:-}"
+      # Web UI login (on by default). Without UI_PASSWORD a password is
+      # created on first start and printed to the container log.
+      UI_AUTH: "${UI_AUTH:-1}"                     # 0 = no login, UI open and read only
+      UI_USER: "${UI_USER:-}"                      # admin user, empty = admin
       UI_PASSWORD: "${UI_PASSWORD:-}"
+      UI_VIEWER_USER: "${UI_VIEWER_USER:-}"        # optional read-only user
+      UI_VIEWER_PASSWORD: "${UI_VIEWER_PASSWORD:-}"
+      UI_TRUST_PROXY: "${UI_TRUST_PROXY:-0}"       # 1 = behind an HTTPS reverse proxy, see docs/https.md
       LOG_RETENTION_DAYS: "${LOG_RETENTION_DAYS:-0}" # delete logs older than n days, 0 = keep; initial state until changed in the UI
       RAW_LOGS: "${RAW_LOGS:-0}" # 1 = keep raw traffic logs for debugging (gzipped); initial state until changed in the UI
       # Local server, see docs/operating-modes.md. Defaults keep today's
@@ -40,7 +45,7 @@ services:
       ESTYMA_PASSWORD_B64: "${ESTYMA_PASSWORD_B64:-}"  # use if the password starts/ends with a space
       CLOUD_MONITOR: "${CLOUD_MONITOR:-0}"         # initial state until switched in the UI
       CLOUD_INTERVAL: "${CLOUD_INTERVAL:-30}"      # seconds between cloud polls
-      # Optional MQTT publisher for Home Assistant (read-only, auto discovery).
+      # Optional MQTT publisher for Home Assistant (auto discovery).
       # Off while MQTT_HOST is empty. See docs/home-assistant.md.
       MQTT_HOST: "${MQTT_HOST:-}"                  # broker address, e.g. 192.168.1.10
       MQTT_PORT: "${MQTT_PORT:-1883}"
@@ -51,6 +56,7 @@ services:
       MQTT_DEVICE_ID: "${MQTT_DEVICE_ID:-boiler}"
       MQTT_STALE_SECONDS: "${MQTT_STALE_SECONDS:-300}"
       HA_DISCOVERY_PREFIX: "${HA_DISCOVERY_PREFIX:-homeassistant}"
+      MQTT_WRITES: "${MQTT_WRITES:-0}"             # 1 = Home Assistant may change the tested settings
       FUEL_KWH_PER_KG: "${FUEL_KWH_PER_KG:-}"      # empty = controller setting, else 4.8
     volumes:
       - estyma-logs:/logs

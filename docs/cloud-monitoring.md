@@ -14,7 +14,7 @@ the ones the controller reported locally.
   `ESTYMA_PASSWORD_FILE`). The web UI cannot see, enter or store them.
   Without them the settings page shows *Not configured* and the button is
   disabled.
-- Switching needs `UI_USER` / `UI_PASSWORD`, like deleting logs.
+- Switching needs the admin login, like deleting logs.
 - The choice is saved in `cloud-monitor.json` in the logs volume and kept
   across restarts and image updates. Until it is first switched in the UI,
   `CLOUD_MONITOR` decides (default `0` = off).
@@ -23,7 +23,7 @@ the ones the controller reported locally.
   it fails; the reason is shown on the settings page and the monitor page.
 
 As JSON: `GET /api/cloud`, and `POST /api/cloud` with `{"enabled": true}` or
-`false` (`Content-Type: application/json`, basic auth).
+`false` (`Content-Type: application/json`, admin login or basic auth).
 
 The wrapper is installed into the image automatically from
 `requirements.txt` (pinned version); nothing to install by hand.

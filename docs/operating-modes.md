@@ -18,13 +18,21 @@ from the cloud:
 | Boiler on/off | `8197,1` | 0 / 1 | `WRITES_ENABLED=1` and `ALLOW_POWER_WRITES=1` |
 | Every other setting on the heating settings page | see [registers.md](registers.md) | the cloud panel's range, within the controller's own min/max | `WRITES_ENABLED=1` and `ALLOW_UNTESTED_WRITES=1` |
 
-Only `8195` and `8197` were seen being written on the real controller. The
-other settings use the same `ZAPIS` path and the cloud panel's ranges, but
+Boiler target and on/off (`8195`, `8197`), the heating program (`8292`),
+the room comfort / eco targets (`8242`, `8264`), the buffer targets (`8468`,
+`8469`) and the weekly timer (`8486..8510`) were seen being written on the
+real controller (by the cloud) and are marked *tested*. The other settings
+use the same `ZAPIS` path and the cloud panel's ranges, but
 are marked *untested* on the page and stay locked unless
 `ALLOW_UNTESTED_WRITES=1`. Change them one at a time and check the result on
 the controller's own screen. Air correction (`8819`) is limited to 0..40 %
-because the encoding of negative values is not known; weekly timers are not
-offered yet.
+because the encoding of negative values is not known.
+
+The **weekly timer** of heating circuit 1 is written like the cloud writes
+it: all 7 day masks in one `ZAPIS` (Sunday `8510` first, Monday `8486`
+last), repeated on every poll until every changed day reads back. Bit *i*
+of a day's mask is comfort in hour *i* (`0x3FFFC0` = comfort 06:00 to
+22:00). Changing one day still sends all 7, with the other days unchanged.
 
 The settings are not part of the controller's normal report. In `hybrid` and
 `local` mode the server adds them to the register list (`ODCZYT`), the same
@@ -36,15 +44,15 @@ read.
 
 How a write works:
 
-- Set it on the **Heating settings** page (`:8089/heating`). Writing from
-  the page also needs `UI_USER` / `UI_PASSWORD`, so nobody on the LAN can
-  change the heating without logging in.
+- Set it on the **Heating settings** page (`:8089/heating`), logged in as
+  the admin (see [web-ui.md](web-ui.md#login)), or from Home Assistant with
+  `MQTT_WRITES=1` (see [home-assistant.md](home-assistant.md#controls)).
 - The write is sent like the cloud does it, `ZAPIS&;8195,1=62;4112,1=1;&KONIEC`,
   on every poll until the controller reports the new value (read-back), then
   it is done. If the value does not show up within `WRITE_TIMEOUT` seconds
   the write is marked failed. The panel always shows the reported value, not
   the requested one.
-- One register per poll, at most one pending write per register (a new
+- One register per poll (the weekly timer: its 7 days), at most one pending write per register (a new
   request replaces it), and at most one request per register every
   `WRITE_MIN_INTERVAL` seconds.
 - While an alarm is active only on/off is sent (switching off and on is how
@@ -97,7 +105,10 @@ the controller reports the new value. Exchanges answered this way carry
 
 The write state is also available as JSON: `GET /api/control`, and
 `POST /api/set` with `{"key": "boiler_target", "value": 62}` (or
-`boiler_on`, 0/1) and `POST /api/cancel` with `{"key": ...}`; both need
-`Content-Type: application/json` and basic auth.
+`boiler_on`, 0/1) and `POST /api/cancel` with `{"key": ...}`. The weekly
+timer: `POST /api/timer` with `{"days": [m, m, m, m, m, m, m]}` (Monday to
+Sunday, 24-bit masks), or `{"days": {"sat": "08-20"}}` to change single days
+(comfort hours, end hour exclusive). All need `Content-Type:
+application/json` and the admin login (basic auth works for scripts).
 
 All variables mentioned here are listed in [configuration.md](configuration.md).

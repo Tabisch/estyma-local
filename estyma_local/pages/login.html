@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estyma login</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f6f6f4; --surface: #fcfcfb; --border: #e3e2de;
+  --text: #0b0b0b; --text-2: #52514e; --muted: #7d7c77;
+  --accent: #2a78d6; --bad: #c62828;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #111110; --surface: #1a1a19; --border: #2e2e2c;
+    --text: #f0efec; --text-2: #c3c2b7; --muted: #8f8e88;
+    --accent: #3987e5; --bad: #ef6b6b;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 system-ui, sans-serif; }
+main { max-width: 24rem; margin: 0 auto; padding: 12vh 16px 3rem; }
+h1 { font-size: 1.35rem; margin: 0 0 1rem; }
+form { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; display: grid; gap: .8rem; }
+label { display: grid; gap: .25rem; font-size: .9rem; color: var(--text-2); }
+input { font: inherit; padding: .45rem .55rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); width: 100%; }
+input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+button { font: inherit; padding: .5rem .8rem; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+button:disabled { opacity: .5; cursor: wait; }
+#msg { color: var(--bad); min-height: 1.3em; font-size: .9rem; margin: 0; }
+.muted { color: var(--muted); font-size: .82rem; margin: .8rem 0 0; }
+.range { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; float: right; }
+.range button { background: var(--surface); color: var(--text-2); border: 0; padding: .25rem .6rem; font-size: .8rem; border-radius: 0; }
+.range button.on { background: var(--accent); color: #fff; }
+</style></head><body><main>
+<span class="range" id="lang" role="group" aria-label="Language"><button type="button" data-l="en" lang="en">EN</button><button type="button" data-l="de" lang="de">DE</button></span>
+<h1 data-i18n="title">Estyma heating</h1>
+<form id="f" autocomplete="on">
+  <label><span data-i18n="user">User</span><input id="user" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+  <label><span data-i18n="pw">Password</span><input id="pw" name="password" type="password" autocomplete="current-password" required></label>
+  <p id="msg" role="alert"></p>
+  <button id="go" type="submit" data-i18n="login">Log in</button>
+</form>
+<p class="muted" data-i18n="hint">The password is UI_PASSWORD, or the one the server created on its first start (see the container log or .ui-password in the logs volume).</p>
+</main>
+<script>
+"use strict";
+const I18N = {
+  en: { title: "Estyma heating", user: "User", pw: "Password", login: "Log in",
+    hint: "The password is UI_PASSWORD, or the one the server created on its first start (see the container log or .ui-password in the logs volume).",
+    wrong: "Wrong user name or password.", locked: "Too many failed logins, try again in {n} min." },
+  de: { title: "Estyma-Heizung", user: "Benutzer", pw: "Passwort", login: "Anmelden",
+    hint: "Das Passwort ist UI_PASSWORD oder das, das der Server beim ersten Start erzeugt hat (siehe Container-Log oder .ui-password im Logs-Volume).",
+    wrong: "Benutzername oder Passwort falsch.", locked: "Zu viele fehlgeschlagene Anmeldungen, in {n} min erneut versuchen." },
+};
+let lang = "";
+try { lang = localStorage.getItem("estyma-lang") || ""; } catch (e) {}
+if (!I18N[lang]) lang = (navigator.languages || [navigator.language || "en"]).map((l) => String(l).slice(0, 2).toLowerCase()).find((l) => I18N[l]) || "en";
+const $ = (id) => document.getElementById(id);
+const T = (k, v) => (I18N[lang][k] || I18N.en[k] || k).replace("{n}", v ?? "");
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = T(el.dataset.i18n); });
+  for (const b of $("lang").children) b.classList.toggle("on", b.dataset.l === lang);
+}
+$("lang").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  lang = b.dataset.l;
+  try { localStorage.setItem("estyma-lang", lang); } catch (err) {}
+  applyLang();
+});
+applyLang();
+$("user").focus();
+$("f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("go").disabled = true; $("msg").textContent = "";
+  const next = new URLSearchParams(location.search).get("next") || "/";
+  try {
+    const r = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user: $("user").value, password: $("pw").value, next }) });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok && j.ok) { location.replace(j.next || "/"); return; }
+    const wait = r.headers.get("Retry-After");
+    $("msg").textContent = r.status === 429 ? T("locked", Math.max(1, Math.ceil((+wait || 60) / 60))) : r.status === 401 ? T("wrong") : (j.message || "HTTP " + r.status);
+    $("pw").value = ""; $("pw").focus();
+  } catch (err) { $("msg").textContent = String(err.message || err); }
+  $("go").disabled = false;
+});
+</script>
+</body></html>

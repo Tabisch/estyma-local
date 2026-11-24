@@ -4,8 +4,13 @@ settings, saved settings per pellet batch, app settings and log downloads, plus 
 Every page and API call is one entry in ``WebHandler.GET`` / ``POST``; the
 HTML pages are in ``pages/``. Runs in the server process on its own port,
 never on the proxy port. Files are only served from directly inside LOG_DIR.
-Optional HTTP basic auth via UI_USER / UI_PASSWORD; writes, switching cloud
-monitoring and deleting logs or saved settings need it.
+
+Login (auth.py): every page and API call needs a logged-in user, except
+``/login`` and ``/api/health``. The admin may do everything; the viewer may
+look but not change anything or download logs. Browsers get a session
+cookie from ``/login``; scripts may send HTTP basic auth instead. Without a
+login (``UI_AUTH=0``) the UI is open and read only. POST bodies must be JSON
+and a cross-site ``Origin`` is refused, so other web pages cannot post to it.
 
 Logs contain whatever the controller sends (device IDs, PINs, ...). Keep the
 port on your LAN.
@@ -13,8 +18,6 @@ port on your LAN.
 
 from __future__ import annotations
 
-import base64
-import hmac
 import html
 import io
 import json
@@ -26,9 +29,21 @@ import zipfile
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from . import auth as A
 from .batches import SnapshotError
 from .controller import WriteError
-from .version import REVISION, VERSION, add_footer
+from .version import REVISION, VERSION, add_footer, footer_html
+
+# Sent with every response: no framing, no MIME sniffing, no referrer to
+# other sites.
+SECURITY_HEADERS = [
+    ("X-Content-Type-Options", "nosniff"),
+    ("X-Frame-Options", "DENY"),
+    ("Content-Security-Policy", "frame-ancestors 'none'"),
+    ("Referrer-Policy", "same-origin"),
+]
+# The only POST a viewer may send (it only adds reads, changes nothing).
+VIEWER_POSTS = {"/api/read-settings"}
 
 STARTED = time.time()
 PAGES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pages")
@@ -59,7 +74,7 @@ PAGE = """<!doctype html>
 <table><thead><tr><th data-i18n="file">File</th><th data-i18n="size">Size</th><th data-i18n="modified">Modified</th><th></th></tr></thead>
 <tbody>{rows}</tbody></table>
 <script>
-// Delete buttons: POST JSON (needs UI_USER / UI_PASSWORD on the server).
+// Delete buttons: POST JSON (needs the admin login).
 (function () {{
   function ask(names) {{
     var de = document.documentElement.lang === "de";
@@ -85,7 +100,7 @@ PAGE = """<!doctype html>
 (function () {{
   var de = {{ monitor: "Monitor", settings: "Heizungseinstellungen", batches: "Pelletchargen", registers: "Register", logs: "Logs", app: "Einstellungen", title: "Estyma-Logs", files: "{{n}} Dateien", "in": "in",
     file: "Datei", size: "Größe", modified: "Geändert", nologs: "Noch keine Logs.", zip: "Alle herunterladen (zip)",
-    del: "Löschen", delall: "Alle Logs löschen", needauth: "Zum Löschen UI_USER und UI_PASSWORD setzen." }};
+    del: "Löschen", delall: "Alle Logs löschen", needauth: "Zum Löschen als Admin anmelden." }};
   var lang = "";
   try {{ lang = localStorage.getItem("estyma-lang") || ""; }} catch (e) {{}}
   if (!lang) lang = String((navigator.languages || [navigator.language || "en"])[0]).slice(0, 2).toLowerCase();
@@ -113,7 +128,9 @@ def human_size(n: int) -> str:
 class WebHandler(BaseHTTPRequestHandler):
     server_version = "estyma-web"
     log_dir: str
-    auth: bytes | None  # expected "user:password" or None
+    authn = None        # auth.Auth, or None when the login is off (UI_AUTH=0)
+    trust_proxy = False # UI_TRUST_PROXY: client address from X-Forwarded-For
+    user = None         # auth.User of this request
     monitor = None      # monitor.Monitor or None
     controller = None   # controller.Controller or None
     cloud = None        # cloud_monitor.CloudMonitor or None
@@ -127,17 +144,34 @@ class WebHandler(BaseHTTPRequestHandler):
 
     # -- helpers ------------------------------------------------------------
 
-    def _authorized(self) -> bool:
-        if self.auth is None:
-            return True
-        header = self.headers.get("Authorization", "")
-        if not header.startswith("Basic "):
-            return False
-        try:
-            given = base64.b64decode(header[6:].strip())
-        except ValueError:
-            return False
-        return hmac.compare_digest(given, self.auth)
+    @property
+    def auth(self) -> bool:
+        """True if this request may change things (logged in as the admin)."""
+        return self.authn is not None and self.user is not None and self.user.role == A.ADMIN
+
+    def _client(self) -> str:
+        addr = self.client_address[0]
+        if self.trust_proxy:
+            fwd = (self.headers.get("X-Forwarded-For") or "").split(",")[-1].strip()
+            if fwd:
+                return fwd
+        return addr
+
+    def _cookie(self) -> str | None:
+        for part in (self.headers.get("Cookie") or "").split(";"):
+            k, _, v = part.strip().partition("=")
+            if k == A.COOKIE and v:
+                return v
+        return None
+
+    def _identify(self):
+        if self.authn is None:
+            return None
+        return (self.authn.session(self._cookie())
+                or self.authn.basic(self.headers.get("Authorization", ""), self._client()))
+
+    def _https(self) -> bool:
+        return (self.headers.get("X-Forwarded-Proto") or "").strip().lower() == "https"
 
     def _files(self):
         try:
@@ -157,11 +191,14 @@ class WebHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
-        for k, v in extra:
+        for k, v in [*SECURITY_HEADERS, *extra]:
             self.send_header(k, v)
         self.end_headers()
         if self.command != "HEAD":
             self.wfile.write(body)
+
+    def _redirect(self, where: str, extra=()) -> None:
+        self._send(303, b"", "text/plain", [("Location", where), *extra])
 
     # -- routes -------------------------------------------------------------
     # path -> (method name, part it needs or None). Paths with a trailing
@@ -197,6 +234,7 @@ class WebHandler(BaseHTTPRequestHandler):
         "/api/raw-logs": ("_post_raw_logs", "raw_logs", "switching raw logs"),
         "/api/set": ("_post_set", "controller", "writes"),
         "/api/cancel": ("_post_cancel", "controller", "writes"),
+        "/api/timer": ("_post_timer", "controller", "writes"),
         "/api/snapshots/save": ("_post_snapshot_save", "snapshots", None),
         "/api/snapshots/update": ("_post_snapshot_update", "snapshots", None),
         "/api/snapshots/delete": ("_post_snapshot_delete", "snapshots", "deleting saved settings"),
@@ -210,12 +248,24 @@ class WebHandler(BaseHTTPRequestHandler):
             return None
         return entry
 
-    def _deny(self) -> bool:
-        if self._authorized():
+    def _deny(self, path: str, query: str = "") -> bool:
+        """Answer (and return True) when this GET needs a login it lacks."""
+        if self.authn is None:
             return False
-        self._send(401, b"authentication required\n", "text/plain",
-                   [("WWW-Authenticate", 'Basic realm="estyma logs"')])
-        return True
+        self.user = self._identify()
+        if self.user is None:
+            if self.authn.locked_for(self._client()):
+                self._json(429, {"ok": False, "message": "too many failed logins, try again later"})
+            elif path.startswith(("/api/", "/files/")) or path == "/all.zip":
+                self._json(401, {"ok": False, "message": "login required"})
+            else:
+                nxt = path + ("?" + query if query else "")
+                self._redirect("/login?next=" + urllib.parse.quote(nxt, safe=""))
+            return True
+        if self.user.role != A.ADMIN and (path.startswith("/files/") or path == "/all.zip"):
+            self._json(403, {"ok": False, "message": "read-only login: downloading logs needs the admin login"})
+            return True
+        return False
 
     def do_HEAD(self):
         self.do_GET()
@@ -224,7 +274,11 @@ class WebHandler(BaseHTTPRequestHandler):
         url = urllib.parse.urlsplit(self.path)
         if url.path == "/api/health":   # for Docker's HEALTHCHECK: no login, no details
             return self._health()
-        if self._deny():
+        if url.path in ("/login", "/login/"):
+            return self._login_page(url.query)
+        if url.path in ("/logout", "/logout/"):
+            return self._logout()
+        if self._deny(url.path, url.query):
             return
         if url.path.startswith("/files/"):
             return self._file(urllib.parse.unquote(url.path[len("/files/"):]))
@@ -233,35 +287,122 @@ class WebHandler(BaseHTTPRequestHandler):
             return self._send(404, b"not found\n", "text/plain")
         getattr(self, entry[0])(url.query)
 
+    def _cross_site(self) -> bool:
+        """A browser POST from another site (Origin not this host)."""
+        origin = self.headers.get("Origin")
+        if not origin:
+            return False
+        host = urllib.parse.urlsplit(origin).netloc.lower()
+        mine = {(self.headers.get(h) or "").split(",")[0].strip().lower()
+                for h in ("Host", "X-Forwarded-Host")}
+        return host not in mine
+
     def do_POST(self):
-        if self._deny():
-            return
-        entry = self._route(self.POST, urllib.parse.urlsplit(self.path).path)
+        path = urllib.parse.urlsplit(self.path).path
+        if self._cross_site():
+            return self._json(403, {"ok": False, "message": "cross-site request refused"})
+        if path in ("/api/login", "/api/login/"):
+            req = self._read_json()
+            return None if req is None else self._post_login(req)
+        if self.authn is not None:
+            self.user = self._identify()
+            if self.user is None:
+                return self._json(401, {"ok": False, "message": "login required"})
+        entry = self._route(self.POST, path)
         if entry is None:
             return self._send(404, b"not found\n", "text/plain")
         name, _, needs_auth = entry
+        if self.authn is not None and self.user.role != A.ADMIN and path.rstrip("/") not in VIEWER_POSTS:
+            what = needs_auth or "changing this"
+            return self._json(403, {"ok": False, "message": f"read-only login: {what} needs the admin login"})
+        if needs_auth and self.authn is None:
+            return self._json(403, {"ok": False, "message":
+                                    f"turn the login on (UI_AUTH=1) to allow {needs_auth} from the web UI"})
+        req = self._read_json()
+        if req is not None:
+            getattr(self, name)(req)
+
+    def _read_json(self):
         # A JSON content type cannot be sent cross-site without a CORS
         # preflight, which we never answer: a simple CSRF guard.
         ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
         if ctype != "application/json":
-            return self._json(415, {"ok": False, "message": "Content-Type must be application/json"})
-        if needs_auth and self.auth is None:
-            return self._json(403, {"ok": False, "message":
-                                    f"set UI_USER and UI_PASSWORD to allow {needs_auth} from the web UI"})
+            self._json(415, {"ok": False, "message": "Content-Type must be application/json"})
+            return None
         try:
             length = int(self.headers.get("Content-Length") or 0)
             req = json.loads(self.rfile.read(min(length, 65536)) or b"{}")
             if not isinstance(req, dict):
                 raise ValueError
         except ValueError:
-            return self._json(400, {"ok": False, "message": "invalid JSON"})
-        getattr(self, name)(req)
+            self._json(400, {"ok": False, "message": "invalid JSON"})
+            return None
+        return req
+
+    # -- login --------------------------------------------------------------
+
+    @staticmethod
+    def _safe_next(nxt: str) -> str:
+        """Only local paths, never //host or a scheme (open redirect)."""
+        if not nxt.startswith("/") or nxt.startswith("//") or "\\" in nxt or "://" in nxt:
+            return "/"
+        return nxt
+
+    def _login_page(self, query: str):
+        if self.authn is None:
+            return self._redirect("/")
+        nxt = self._safe_next(urllib.parse.parse_qs(query).get("next", ["/"])[0])
+        if self._identify() is not None:
+            return self._redirect(nxt)
+        with open(os.path.join(PAGES, "login.html"), "rb") as fh:
+            self._send(200, add_footer(fh.read()), "text/html; charset=utf-8")
+
+    def _post_login(self, req):
+        if self.authn is None:
+            return self._json(409, {"ok": False, "message": "the login is off (UI_AUTH=0)"})
+        try:
+            user = self.authn.attempt(str(req.get("user") or ""), str(req.get("password") or ""),
+                                      self._client())
+        except A.LoginError as exc:
+            code = 429 if exc.retry_after else 401
+            extra = [("Retry-After", str(int(exc.retry_after) + 1))] if exc.retry_after else []
+            body = json.dumps({"ok": False, "message": str(exc)}).encode()
+            return self._send(code, body, "application/json", extra)
+        token = self.authn.login(user)
+        cookie = (f"{A.COOKIE}={token}; Path=/; HttpOnly; SameSite=Strict; "
+                  f"Max-Age={int(self.authn.session_seconds)}" + ("; Secure" if self._https() else ""))
+        print(f"web UI: {user.name} ({user.role}) logged in from {self._client()}", flush=True)
+        body = json.dumps({"ok": True, "role": user.role,
+                           "next": self._safe_next(str(req.get("next") or "/"))}).encode()
+        self._send(200, body, "application/json", [("Set-Cookie", cookie)])
+
+    def _logout(self):
+        if self.authn is not None:
+            self.authn.logout(self._cookie())
+        self._redirect("/login" if self.authn is not None else "/",
+                       [("Set-Cookie", f"{A.COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0")])
+
+    def _footer(self) -> str:
+        """Version footer, plus who is logged in and a log out link."""
+        foot = footer_html()
+        if self.authn is None or self.user is None:
+            return foot
+        role = "" if self.user.role == A.ADMIN else ' <span data-ro="1">(read only)</span>'
+        who = (f' · <span data-user>{html.escape(self.user.name)}</span>{role}'
+               ' · <a href="/logout" data-logout style="color:inherit">Log out</a>'
+               '<script>(function(){var l="";try{l=localStorage.getItem("estyma-lang")||"";}catch(e){}'
+               'if(!l)l=String((navigator.languages||[navigator.language||"en"])[0]).slice(0,2).toLowerCase();'
+               'if(l!=="de")return;var a=document.querySelector("[data-logout]");if(a)a.textContent="Abmelden";'
+               'var r=document.querySelector("[data-ro]");if(r)r.textContent="(nur lesen)";})();</script>')
+        return foot.replace("</footer>", who + "</footer>")
 
     def _json(self, code: int, obj) -> None:
         self._send(code, json.dumps(obj, separators=(",", ":")).encode(), "application/json")
 
     def _with_auth(self, snap: dict) -> dict:
-        snap["ui_auth"] = self.auth is not None
+        snap["ui_auth"] = self.auth
+        snap["ui_role"] = None if self.user is None else self.user.role
+        snap["ui_login"] = self.authn is not None
         return snap
 
     # -- GET handlers -------------------------------------------------------
@@ -333,7 +474,9 @@ class WebHandler(BaseHTTPRequestHandler):
                                            kwh_per_kg=calorific_value(self.controller)))
 
     def _api_snapshots(self, _query):
-        self._json(200, {"ui_auth": self.auth is not None, "can_save": self.controller is not None,
+        self._json(200, {"ui_auth": self.auth, "ui_login": self.authn is not None,
+                         "ui_role": None if self.user is None else self.user.role,
+                         "can_save": self.controller is not None and (self.authn is None or self.auth),
                          "suppliers": self.snapshots.suppliers(), "snapshots": self.snapshots.list()})
 
     def _health(self):
@@ -401,6 +544,13 @@ class WebHandler(BaseHTTPRequestHandler):
             return self._json(409, {"ok": False, "message": str(exc)})
         self._json(200, {"ok": True, **res})
 
+    def _post_timer(self, req):
+        try:
+            res = self.controller.request_timer(req.get("days"), source="web")
+        except WriteError as exc:
+            return self._json(409, {"ok": False, "message": str(exc)})
+        self._json(200, {"ok": True, **res})
+
     def _post_snapshot_save(self, req):
         if self.controller is None:
             return self._json(409, {"ok": False, "message": "no controller"})
@@ -434,9 +584,11 @@ class WebHandler(BaseHTTPRequestHandler):
 
     def _index(self, _query=None):
         files = self._files()
+        link = self.authn is None or self.auth   # the viewer may not download logs
         rows = "".join(
-            f'<tr><td><a href="/files/{urllib.parse.quote(n)}">{html.escape(n)}</a></td>'
-            f'<td class="num">{human_size(s)}</td>'
+            (f'<tr><td><a href="/files/{urllib.parse.quote(n)}">{html.escape(n)}</a></td>' if link
+             else f'<tr><td>{html.escape(n)}</td>')
+            + f'<td class="num">{human_size(s)}</td>'
             f'<td>{datetime.fromtimestamp(m):%Y-%m-%d %H:%M:%S}</td>'
             f'<td>{self._del_button(n)}</td></tr>'
             for n, s, m in files
@@ -446,14 +598,15 @@ class WebHandler(BaseHTTPRequestHandler):
             delall=('<button class="delall" data-i18n="delall"%s>Delete all logs</button>'
                     % ("" if self.auth else " disabled")) if deletable else "",
             delnote=('' if self.auth or not deletable else
-                     '<span data-i18n="needauth">Set UI_USER and UI_PASSWORD to delete files.</span>'),
+                     '<span data-i18n="needauth">Log in as the admin to delete files.</span>'),
             count=len(files),
             total=human_size(sum(s for _, s, _ in files)),
             logdir=html.escape(self.log_dir),
-            zip_link='<a class="button" href="/all.zip" data-i18n="zip">Download all (zip)</a>' if files else "",
+            zip_link=('<a class="button" href="/all.zip" data-i18n="zip">Download all (zip)</a>'
+                      if files and (self.authn is None or self.auth) else ""),
             rows=rows,
         ).encode()
-        self._send(200, add_footer(body), "text/html; charset=utf-8")
+        self._send(200, add_footer(body, self._footer()), "text/html; charset=utf-8")
 
     def _del_button(self, name: str) -> str:
         if not is_log(name):
@@ -486,7 +639,7 @@ class WebHandler(BaseHTTPRequestHandler):
 
     def _page(self, name: str):
         with open(os.path.join(PAGES, name), "rb") as fh:
-            self._send(200, add_footer(fh.read()), "text/html; charset=utf-8")
+            self._send(200, add_footer(fh.read(), self._footer()), "text/html; charset=utf-8")
 
     def _file(self, name: str):
         # Only plain file names directly inside LOG_DIR.
@@ -501,6 +654,8 @@ class WebHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(size))
         self.send_header("Content-Disposition", f'attachment; filename="{name}"')
         self.send_header("Cache-Control", "no-store")
+        for k, v in SECURITY_HEADERS:
+            self.send_header(k, v)
         self.end_headers()
         if self.command == "HEAD":
             return
@@ -530,16 +685,23 @@ def is_log(name: str) -> bool:
 
 
 def start_web(host: str, port: int, log_dir: str,
-                 user: str | None = None, password: str | None = None,
-                 monitor=None, controller=None, cloud=None, retention=None,
-                 snapshots=None, fallback=None, raw_logs=None, fuel=None) -> ThreadingHTTPServer:
+              user: str | None = None, password: str | None = None,
+              monitor=None, controller=None, cloud=None, retention=None,
+              snapshots=None, fallback=None, raw_logs=None, fuel=None,
+              authn=None, trust_proxy: bool = False) -> ThreadingHTTPServer:
     """Start the UI in a background thread and return the server. Without
-    ``snapshots`` a store in ``log_dir`` is made when there is a controller."""
-    auth = f"{user}:{password}".encode() if user and password else None
+    ``snapshots`` a store in ``log_dir`` is made when there is a controller.
+
+    ``authn``: an auth.Auth (app.py builds it from the configuration). For
+    tests and scripts, ``user``/``password`` alone make a single admin; with
+    neither the UI is open and read only."""
+    if authn is None and user and password:
+        authn = A.Auth([A.User(user, password, A.ADMIN)])
     if snapshots is None and controller is not None:
         from .batches import SnapshotStore
         snapshots = SnapshotStore(log_dir)
-    handler = type("Handler", (WebHandler,), {"log_dir": os.path.abspath(log_dir), "auth": auth,
+    handler = type("Handler", (WebHandler,), {"log_dir": os.path.abspath(log_dir), "authn": authn,
+                                                "trust_proxy": trust_proxy,
                                                 "monitor": monitor, "controller": controller,
                                                 "cloud": cloud, "retention": retention,
                                                 "fallback": fallback, "raw_logs": raw_logs,

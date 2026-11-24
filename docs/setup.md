@@ -83,7 +83,9 @@ provider's normal hostname works there.
    `refs/heads/main` and compose path `docker-compose.yml`.
 2. Under *Environment variables* add what you need (see
    [docs/configuration.md](configuration.md)),
-   typically `UI_USER` / `UI_PASSWORD` to protect the log UI, and
+   typically `UI_PASSWORD` for the web UI login (without it a password is
+   created and printed to the container log, see
+   [web-ui.md](web-ui.md#login)), and
    `ESTYMA_EMAIL` / `ESTYMA_PASSWORD` if you want cloud monitoring.
 3. *Deploy the stack*.
 4. To update after a new image was built: open the stack, *Update the stack*

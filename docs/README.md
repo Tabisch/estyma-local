@@ -3,9 +3,10 @@
 ## Using it
 
 - [setup.md](setup.md): redirecting the controller's traffic (firewall NAT rule or DNS rewrite), deploying with Portainer / compose
-- [web-ui.md](web-ui.md): monitor, raw registers, heating settings and log download pages
+- [web-ui.md](web-ui.md): monitor, raw registers, heating settings, weekly timer, login and log download pages
 - [operating-modes.md](operating-modes.md): `proxy`, `hybrid` and `local` mode, how writes work, write API
-- [home-assistant.md](home-assistant.md): MQTT publisher with Home Assistant discovery
+- [home-assistant.md](home-assistant.md): MQTT publisher with Home Assistant discovery and controls
+- [https.md](https.md): HTTPS for the web UI with a reverse proxy (Caddy, nginx)
 - [cloud-monitoring.md](cloud-monitoring.md): polling the Estyma cloud next to the local data
 - [configuration.md](configuration.md): every environment variable *(generated)*
 

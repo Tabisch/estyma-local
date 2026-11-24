@@ -247,6 +247,8 @@ const I18N = {
 // Messages the server sends in English (controller.py); translated by pattern.
 const SERVER_MSG = {
   de: [
+    [/^read-only login: (.+) needs the admin login$/, "Nur-Lesen-Anmeldung: dafür ist die Admin-Anmeldung nötig"],
+    [/^turn the login on \(UI_AUTH=1\) to allow (.+) from the web UI$/, "Anmeldung einschalten (UI_AUTH=1), um das aus der Web-Oberfläche zu erlauben"],
     [/^MODE=proxy \(set MODE=hybrid or local\)$/, "MODE=proxy (MODE=hybrid oder local setzen)"],
     [/^alarm active$/, "Alarm aktiv"],
     [/^'(.+)' is not writable$/, "'$1' ist nicht schreibbar"],
@@ -263,7 +265,6 @@ const SERVER_MSG = {
     [/^no read-back within (\S+) s$/, "keine Bestätigung innerhalb von $1 s"],
     [/^cloud wrote (\S+) to the same register$/, "Cloud schrieb $1 in dasselbe Register"],
     [/^cancelled$/, "abgebrochen"], [/^nothing pending$/, "nichts ausstehend"],
-    [/^set UI_USER and UI_PASSWORD to allow writes from the web UI$/, "UI_USER und UI_PASSWORD setzen, um aus der Web-Oberfläche zu schreiben"],
     [/^Content-Type must be application\/json$/, "Content-Type muss application/json sein"],
     [/^invalid JSON$/, "ungültiges JSON"],
     [/^set ESTYMA_EMAIL and ESTYMA_PASSWORD in the container environment$/, "ESTYMA_EMAIL und ESTYMA_PASSWORD in der Container-Umgebung setzen"],
