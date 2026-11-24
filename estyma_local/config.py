@@ -53,6 +53,11 @@ ENV = [
         compose=False, example=False),
     Env("MAX_BODY_LOG", "0", "proxy", "Max bytes of each body kept in the log, `0` = unlimited",
         compose=False, example=False),
+    Env("ESTYMA_VERSION", "", "proxy", "Version shown in the web UI footer, `/api/health` and the MQTT "
+        "discovery. Set by the image build (tag such as `v1.0.0`, or branch name); empty = `git describe`, else `dev`",
+        compose=False, example=False),
+    Env("ESTYMA_REVISION", "", "proxy", "Commit SHA shown next to the version. Set by the image build",
+        compose=False, example=False),
     Env("UI_PORT", "8089", "proxy", "Web UI port. Inside the container `0` turns the UI off; in "
         "`docker-compose.yml` it is the host port (inside it stays 8089)"),
     Env("UI_USER", "", "proxy", "Basic auth user for the web UI. Also needed for writes, switching "

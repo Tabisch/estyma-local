@@ -48,6 +48,7 @@ from . import decode as D
 from . import fuel_stats as FS
 from . import monitor as M
 from . import protocol as P
+from .version import label as version_label
 
 REPO_URL = "https://github.com/Tabisch/estyma-local"
 DEFAULT_KWH_PER_KG = FS.DEFAULT_KWH_PER_KG
@@ -231,7 +232,7 @@ def discovery(device_id: str, base: str, disc_prefix: str) -> list[tuple[str, st
     node = f"estyma_{device_id}"
     device = {"identifiers": [node], "name": "Estyma boiler", "manufacturer": "Estyma",
               "model": "Boiler controller (local server)"}
-    origin = {"name": "estyma-local", "url": REPO_URL}
+    origin = {"name": "estyma-local", "sw_version": version_label(), "url": REPO_URL}
     out = []
     for comp, key, name, extra in ENTITIES:
         cfg = {"name": name, "unique_id": f"{node}_{key}", "state_topic": f"{base}/state",

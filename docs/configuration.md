@@ -20,6 +20,8 @@ The `estyma-proxy` service, default command of the image.
 | `LISTEN_PORT` | `80` |  | Proxy port inside the container (the host port is `PROXY_PORT`) |
 | `LOG_DIR` | `/logs` |  | Where the logs and state files are written (the `estyma-logs` volume) |
 | `MAX_BODY_LOG` | `0` |  | Max bytes of each body kept in the log, `0` = unlimited |
+| `ESTYMA_VERSION` | (empty) |  | Version shown in the web UI footer, `/api/health` and the MQTT discovery. Set by the image build (tag such as `v1.0.0`, or branch name); empty = `git describe`, else `dev` |
+| `ESTYMA_REVISION` | (empty) |  | Commit SHA shown next to the version. Set by the image build |
 | `UI_PORT` | `8089` | yes | Web UI port. Inside the container `0` turns the UI off; in `docker-compose.yml` it is the host port (inside it stays 8089) |
 | `UI_USER` | (empty) | yes | Basic auth user for the web UI. Also needed for writes, switching cloud monitoring and deleting logs |
 | `UI_PASSWORD` | (empty) | yes | Basic auth password; auth is on only when user and password are both set |
