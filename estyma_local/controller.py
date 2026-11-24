@@ -142,6 +142,14 @@ class Writable:
             return signed16(raw)
         return low16(raw)
 
+    def to_raw(self, value: int) -> int:
+        """Value as sent in ``ZAPIS``: negative signed 16-bit values go out in
+        two's complement, the way the controller reports them (-10 -> 65526,
+        also its own 8819 minimum, seen 2026-11-24)."""
+        if self.decode == "s16" and value < 0:
+            return value & 0xFFFF
+        return value
+
     def show(self, raw: int | None):
         """Raw (write units) -> shown value."""
         if raw is None:
@@ -219,9 +227,9 @@ _SETTINGS = [
     _setting("pump_min_temp", 8711, "boiler"),
     _setting("pump_overrun", 14088, "boiler"),
     _setting("return_min_temp", 8556, "boiler"),
-    # Burner (service panel "Palnik"). Air correction goes down to -10 %, but
-    # how negative values are written is unknown, so only 0..40 is offered.
-    _setting("air_correction", 8819, _B, 0, 40),
+    # Burner (service panel "Palnik"). Air correction is -10..40 %; negative
+    # values are written in two's complement (Writable.to_raw).
+    _setting("air_correction", 8819, _B),
     _setting("power_min", 8816, _B),
     _setting("power_max", 8817, _B),
     *[_setting(f"blower_{p}", 8800 + i, _B) for i, p in enumerate((20, 40, 60, 80, 100), 1)],
@@ -432,8 +440,8 @@ class Controller:
         if w.limit_regs:
             cmin = w.readback(self.raw(*w.limit_regs[0]))
             cmax = w.readback(self.raw(*w.limit_regs[1]))
-            nlo = max(lo, cmin) if cmin is not None and 0 <= cmin <= 1000 else lo
-            nhi = min(hi, cmax) if cmax is not None and 0 <= cmax <= 1000 else hi
+            nlo = max(lo, cmin) if cmin is not None and -1000 <= cmin <= 1000 else lo
+            nhi = min(hi, cmax) if cmax is not None and -1000 <= cmax <= 1000 else hi
             if nlo <= nhi:  # implausible limits (e.g. min > max) are ignored
                 lo, hi = nlo, nhi
         return lo, hi
@@ -601,7 +609,7 @@ class Controller:
                     pw.first_sent = now
                     if not (pw.batch and pw.old == pw.value):
                         self._audit("sent", pw.key, pw.value, source=pw.source)
-                out.append((w.reg, w.idx, pw.value))
+                out.append((w.reg, w.idx, w.to_raw(pw.value)))
             return out
 
     # -- requests from the UI / API ----------------------------------------

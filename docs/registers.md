@@ -70,7 +70,7 @@ page use the same definitions (`estyma_local/catalog.py`).
 
 | Register | Function | Encoding | Range / values | Panel name (Polish) |
 |---|---|---|---|---|
-| 8819 | Air correction, added to the blower power | signed 16-bit | -10..40 % (-10 reads as 65526) | Korekta powietrza |
+| 8819 | Air correction, added to the blower power | signed 16-bit | -10..40 % (-10 reads and is written as 65526) | Korekta powietrza |
 | 8816 | Minimum burner power during modulation | 8-bit | 30..100 % | Moc min |
 | 8817 | Maximum burner power during modulation | 8-bit | 30..100 % | Moc max |
 | 8801 | Blower power at 20 % burner power | 8-bit | 0..100 % | Moc dmuchawy modulacja 20% |

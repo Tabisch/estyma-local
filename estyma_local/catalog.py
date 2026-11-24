@@ -127,7 +127,7 @@ REGS = [
 
     # -- service settings: burner (panel "Palnik") --------------------------
     Reg(8819, "Air correction, added to the blower power", "Luftkorrektur", "s16", "%", "burner",
-        range=(-10, 40), panel="Korekta powietrza", note="-10..40 % (-10 reads as 65526)"),
+        range=(-10, 40), panel="Korekta powietrza", note="-10..40 % (-10 reads and is written as 65526)"),
     Reg(8816, "Minimum burner power during modulation", "Min. Leistung", "u8", "%", "burner",
         range=(30, 100), panel="Moc min"),
     Reg(8817, "Maximum burner power during modulation", "Max. Leistung", "u8", "%", "burner",

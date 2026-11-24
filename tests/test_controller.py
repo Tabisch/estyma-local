@@ -232,6 +232,21 @@ class SettingsTest(unittest.TestCase):
         c.observe_report(report(**dict(SETTINGS_REPORT, r8526_3=0x100 + 150, r8526_4=0x100 + 60)))
         self.assertEqual(c.limits("o2_30"), (50, 150))  # min > max: ignored
 
+    def test_negative_air_correction(self):
+        # Report as seen 2026-11-24: -10 % with the controller's own min -10 / max 40.
+        c, _, _ = make(allow_untested_writes=True)
+        c.observe_report(report(**dict(SETTINGS_REPORT, r8819_1=65526, r8819_3=65526,
+                                       r8819_4=40)))
+        self.assertEqual(c.current("air_correction"), -10)
+        self.assertEqual(c.limits("air_correction"), (-10, 40))
+        with self.assertRaisesRegex(WriteError, "between -10 and 40"):
+            c.request_write("air_correction", -11)
+        c.request_write("air_correction", -5)
+        self.assertEqual(c.next_writes(local_reply=False), [(8819, 1, 65531)])
+        c.observe_report(report(**dict(SETTINGS_REPORT, r8819_1=65531, r8819_3=65526,
+                                       r8819_4=40)))
+        self.assertEqual(c.pending, {})
+
     def test_needs_a_read_first(self):
         c, _, _ = make(allow_untested_writes=True)
         c.observe_report(report())
