@@ -23,6 +23,41 @@ def ts(*args) -> float:
     return datetime(*args, tzinfo=TZ).timestamp()
 
 
+class PriceApiTest(unittest.TestCase):
+    def test_batch_price_reaches_fuel_api(self):
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        store = HistoryStore(d)
+        self.addCleanup(store.close)
+        t = datetime.now(TZ).replace(hour=0, minute=30, second=0, microsecond=0).timestamp()
+        store.record(t, report(r8484_1=10000))
+        store.record(t + 600, report(r8484_1=10100))       # 10 kg today
+        ctl = Controller("hybrid", d, state_file=f"{d}/state.json")
+        ctl.registers[(8712, 1)] = (t, 10)
+        stats = F.FuelStats(store, TZ)
+        srv = start_web("127.0.0.1", 0, d, controller=ctl, fuel=stats)
+        self.addCleanup(srv.server_close)
+        self.addCleanup(srv.shutdown)
+        base = f"http://127.0.0.1:{srv.server_address[1]}"
+
+        def post(path, body):
+            req = urllib.request.Request(base + path, json.dumps(body).encode(),
+                                         {"Content-Type": "application/json"})
+            with urllib.request.urlopen(req) as r:
+                return json.load(r)
+        day = datetime.fromtimestamp(t, TZ).date().isoformat()
+        snap = post("/api/snapshots/save", {"supplier": "A", "date": day, "price": "350"})["snapshot"]
+        self.assertEqual(snap["price"], 350.0)
+        with urllib.request.urlopen(base + "/api/fuel?period=day&count=1") as r:
+            out = json.load(r)
+        self.assertEqual(out["buckets"][0]["cost"], 3.5)
+        self.assertEqual(out["cost_summary"]["today"], {"cost": 3.5, "partial": False})
+        self.assertEqual(out["price"]["price"], 350.0)
+        post("/api/snapshots/update", {"id": snap["id"], "price": ""})
+        with urllib.request.urlopen(base + "/api/fuel?period=day&count=1") as r:
+            self.assertIsNone(json.load(r)["buckets"][0]["cost"])
+
+
 class StatsTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()
@@ -105,19 +140,56 @@ class StatsTest(unittest.TestCase):
         self.assertEqual(self.stats.summary()["today"], None)
         self.assertTrue(all(b["kg"] is None for b in self.stats.buckets("month")))
 
+    def test_cost_uses_batch_in_effect(self):
+        prices = [("2027-01-15", 400.0, "A"), ("2027-01-16", 300.0, "B")]
+        stats = F.FuelStats(self.store, TZ, prices=lambda: prices)
+        self.counter(ts(2027, 1, 14, 8), 1000)
+        self.counter(ts(2027, 1, 14, 9), 1010)      # before any price
+        self.counter(ts(2027, 1, 15, 8), 1010)
+        self.counter(ts(2027, 1, 15, 9), 1030)      # 20 kg at 400/t = 8.00
+        self.counter(ts(2027, 1, 16, 8), 1030)
+        self.counter(ts(2027, 1, 16, 9), 1040)      # 10 kg at 300/t = 3.00
+        now = ts(2027, 1, 16, 10)
+        days = stats.buckets("day", 4, now)
+        self.assertEqual([(d["kg"], d["cost"], d["cost_partial"]) for d in days],
+                         [(None, None, False), (10.0, None, False), (20.0, 8.0, False), (10.0, 3.0, False)])
+        month = stats.buckets("month", 1, now)[0]
+        self.assertEqual((month["kg"], month["cost"], month["cost_partial"]), (40.0, 11.0, True))
+        cs = stats.cost_summary(now)
+        self.assertEqual((cs["today"], cs["yesterday"]), ({"cost": 3.0, "partial": False},
+                                                          {"cost": 8.0, "partial": False}))
+        self.assertEqual(stats.price_at(now), {"price": 300.0, "supplier": "B", "since": "2027-01-16"})
+
+    def test_cost_in_spread_gap_is_split_at_price_change(self):
+        stats = F.FuelStats(self.store, TZ, prices=lambda: [("2027-01-14", 200.0, "A"),
+                                                             ("2027-01-15", 400.0, "B")])
+        self.counter(ts(2027, 1, 14, 12), 1000)
+        self.counter(ts(2027, 1, 15, 12), 1040)  # 20 kg each side of midnight
+        week = stats.buckets("week", 1, ts(2027, 1, 15, 13))[0]
+        self.assertEqual((week["kg"], week["cost"]), (40.0, 12.0))
+
+    def test_no_prices_no_cost(self):
+        self.counter(ts(2027, 1, 15, 8), 1000)
+        self.counter(ts(2027, 1, 15, 9), 1002)
+        day = self.stats.buckets("day", 1, ts(2027, 1, 15, 10))[0]
+        self.assertEqual((day["cost"], day["cost_partial"]), (None, False))
+        self.assertIsNone(self.stats.price_at())
+
     def test_mqtt_state_has_today_and_yesterday(self):
         t = ts(2027, 1, 15, 8)
         self.counter(t - 3600 * 9, 990)       # 23:00 the day before
         self.counter(t - 3600 * 9 + 60, 1000)
         self.counter(t - 3600 * 8 - 60, 1000)   # 00:59
         self.counter(t - 3600 * 8 + 60, 1012)
-        stats = F.FuelStats(self.store, TZ, clock=lambda: t + 60)
+        stats = F.FuelStats(self.store, TZ, clock=lambda: t + 60,
+                            prices=lambda: [("2027-01-01", 500.0, "A")])
         ctl = Controller("proxy", self.dir, state_file=f"{self.dir}/state.json", clock=lambda: t)
         ctl.observe_report(report(r8484_1=10120))
         st, _ = MP.StateBuilder(fuel=stats).build(ctl)
         self.assertEqual((st["fuel_today"], st["fuel_yesterday"]), (12.0, 10.0))
+        self.assertEqual((st["fuel_cost_today"], st["fuel_cost_yesterday"]), (6.0, 5.0))
         keys = {k for _, k, _, _ in MP.ENTITIES}
-        self.assertTrue({"fuel_today", "fuel_yesterday"} <= keys)
+        self.assertTrue({"fuel_today", "fuel_yesterday", "fuel_cost_today", "fuel_cost_yesterday"} <= keys)
 
     def test_api(self):
         self.counter(ts(2027, 1, 15, 8), 1000)
@@ -131,6 +203,9 @@ class StatsTest(unittest.TestCase):
         self.assertEqual(out["period"], "month")
         self.assertEqual(len(out["buckets"]), 3)
         self.assertEqual(out["counter"], 1002.0)
+        self.assertEqual(out["currency"], "EUR")
+        self.assertIsNone(out["price"])
+        self.assertIn("cost", out["buckets"][-1])
         with self.assertRaises(urllib.error.HTTPError) as cm:
             urllib.request.urlopen(f"http://127.0.0.1:{port}/api/fuel?period=hour")
         self.assertEqual(cm.exception.code, 400)

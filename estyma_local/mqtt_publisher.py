@@ -11,7 +11,9 @@ Topics (``<p>`` = ``MQTT_PREFIX``/``MQTT_DEVICE_ID``, default ``estyma/boiler``)
                        values are ``null``
 * ``<p>/alarm``        the newest alarm slot as JSON (retained)
   (``fuel_today`` / ``fuel_yesterday``: kg burnt per calendar day in
-  ``CONTROLLER_TZ``, from the history store, see fuel_stats.py)
+  ``CONTROLLER_TZ``, from the history store, see fuel_stats.py;
+  ``fuel_cost_today`` / ``fuel_cost_yesterday``: their cost in EUR from the
+  pellet batch prices, null without a price)
 * ``<p>/availability`` ``online`` / ``offline`` (retained). Offline when the
                        controller has not reported for ``MQTT_STALE_SECONDS``,
                        and as last will when the server goes away.
@@ -89,6 +91,13 @@ ENTITIES = [
                                                          "unit_of_measurement": "kg",
                                                          "suggested_display_precision": 0,
                                                          "icon": "mdi:calendar-arrow-left"}),
+    ("sensor", "fuel_cost_today", "Fuel cost today", {"device_class": "monetary", "unit_of_measurement": "EUR",
+                                                       "suggested_display_precision": 2,
+                                                       "icon": "mdi:cash"}),
+    ("sensor", "fuel_cost_yesterday", "Fuel cost yesterday", {"device_class": "monetary",
+                                                               "unit_of_measurement": "EUR",
+                                                               "suggested_display_precision": 2,
+                                                               "icon": "mdi:cash"}),
     ("sensor", "energy", "Fuel energy", {"device_class": "energy", "unit_of_measurement": "kWh",
                                          "state_class": "total_increasing",
                                          "suggested_display_precision": 0}),
@@ -200,6 +209,9 @@ class StateBuilder:
         day = self.fuel.summary() if self.fuel is not None else {}
         st["fuel_today"] = day.get("today")
         st["fuel_yesterday"] = day.get("yesterday")
+        cost = self.fuel.cost_summary() if self.fuel is not None else {}
+        st["fuel_cost_today"] = (cost.get("today") or {}).get("cost")
+        st["fuel_cost_yesterday"] = (cost.get("yesterday") or {}).get("cost")
         st["alarm"] = "ON" if alarm["active"] else "OFF"
         st["alarm_code"] = alarm["code"] if alarm["active"] else 0
         if not alarm["active"]:
