@@ -1,6 +1,6 @@
 # Monitor and logs web UI
 
-Open `http://<proxy_host>:8089/`.
+Open `http://<proxy_host>:8089/` and log in (see [Login](#login) below).
 
 Every page ends with a footer showing the running version, e.g.
 `estyma-local v1.0.0 (3f2a9c1)` (also in `/api/health` and the MQTT
@@ -46,7 +46,12 @@ discovery's `origin.sw_version`).
   heating circuits CO1 / CO2 (mode, manual target, weather curve). Each shows
   the reported value, its register, when it was read and the allowed range.
   Changing them works like the boiler target (see [operating-modes.md](operating-modes.md))
-  and asks for confirmation first. This is the only page that writes to the
+  and asks for confirmation first. Below the settings, the **weekly timer**
+  of heating circuit 1 shows one row per day with the 24 hours: blue hours
+  are comfort, grey ones eco. Click or drag over hours to change them,
+  copy Monday to the work days or to every day, then *Save timer*; all 7
+  days are written in one go, like the cloud does, and hatched hours wait
+  for the controller's read-back. This is the only page that writes to the
   controller; the monitor page only shows values. JSON at `/api/settings`.
 - **Pellet batches** (`/batches`): a log of the heating settings used with
   each pellet batch. *Save settings* stores the values shown on
@@ -61,13 +66,12 @@ discovery's `origin.sw_version`).
   on the monitor (and `/api/fuel`) use it for the cost per day, week, month
   and year. Fuel burnt before the first priced entry has no cost; a period
   that is only partly priced shows "≈". Read only: nothing is
-  written to the controller. Deleting an entry needs `UI_USER` /
-  `UI_PASSWORD`. The entries are kept in `settings-snapshots.json` in the log
+  written to the controller. Deleting an entry needs the admin login. The entries are kept in `settings-snapshots.json` in the log
   volume, which the log deletion leaves alone. JSON at `/api/snapshots`.
 - **Logs** (`/logs`): every log file in the volume with size and date, a
   download link per file and a "Download all (zip)" button. Each `.jsonl`
   or `.jsonl.gz` file has a *Delete* button, and *Delete all logs* clears
-  them all (both ask first). Deleting only works when `UI_USER` / `UI_PASSWORD` are set;
+  them all (both ask first). Downloading and deleting need the admin login;
   `state.json` (the server's register state), `registers.json` (the
   register table), `history.sqlite3` (the register history) and `settings-snapshots.json` (the pellet batches) cannot
   be deleted from here.
@@ -81,30 +85,55 @@ discovery's `origin.sw_version`).
   The register history in `history.sqlite3` is kept either way, so this is
   only needed to debug or to decode new registers. The choice is kept in
   `raw-logs.json`; until it is first changed, `RAW_LOGS` decides (default
-  `0`). Switching it needs `UI_USER` / `UI_PASSWORD`.
+  `0`). Switching it needs the admin login.
   The same card has *Keep logs for N days (0 = forever)*: with N from 1 to
   3650, every `.jsonl` / `.jsonl.gz` log (`exchanges-*`, `cloud-*`, `writes-*`)
   last written more than N days ago is deleted, right after the change and then
   every hour. `state.json`, `registers.json`, `history.sqlite3` and the
   other state files are never touched. The choice is kept in `log-retention.json` in the log volume;
   until it is first changed, `LOG_RETENTION_DAYS` decides (default `0` = keep
-  all logs). Changing it needs `UI_USER` / `UI_PASSWORD`, like deleting logs.
+  all logs). Changing it needs the admin login, like deleting logs.
   *Answer when the cloud is slow* sets how many seconds (1 to 60) the proxy
   waits for the cloud before it answers the controller itself, see
   [operating-modes.md](operating-modes.md#cloud-timeout-fallback); switching
   it off waits for the cloud as before. The choice is kept in
   `cloud-fallback.json`; until it is first changed, `CLOUD_FALLBACK_SECONDS`
-  decides (default `12`, `0` = off). Changing it needs `UI_USER` /
-  `UI_PASSWORD`.
+  decides (default `12`, `0` = off). Changing it needs the admin login.
 
 The UI is available in English and German. It follows the browser language;
 the EN / DE switch at the top right overrides it and is remembered in the
 browser. To add a language, copy the `en` block of `I18N` in
 `estyma_local/pages/monitor.html`, translate it and add a button to `#lang`.
 
+## Login
+
+Every page needs a login (only `/api/health`, for Docker's healthcheck,
+answers without one):
+
+- **Admin**: `UI_USER` / `UI_PASSWORD`. If you set neither, the server
+  creates a password for the user `admin` on its first start, prints it to
+  the container log (`web UI: no UI_USER / UI_PASSWORD set, created a
+  login: ...`) and keeps it in `.ui-password` in the logs volume, so it stays
+  the same after restarts and updates. Read it again with
+  `docker exec <container> cat /logs/.ui-password`. The admin may change
+  everything: heating settings, app settings, deleting and downloading logs.
+- **Viewer** (optional): `UI_VIEWER_USER` / `UI_VIEWER_PASSWORD`. Sees every
+  page and value, but cannot change anything and cannot download logs (they
+  hold the controller's IDs). The footer says *(read only)*.
+
+The browser stays logged in for `UI_SESSION_DAYS` (30) days; *Log out* is in
+the footer of every page. Sessions survive restarts (`.ui-sessions.json`,
+only hashes of the tokens). After 5 failed logins within 15 minutes from one
+address, that address is refused for 15 minutes. Scripts can send HTTP basic
+auth with each request instead of logging in, e.g.
+`curl -u admin:PASSWORD http://host:8089/api/settings`.
+
+The login cannot be switched off.
+
 The logs contain whatever the controller sends (device IDs, PINs, ...). Keep
-port 8089 reachable from your LAN only and set `UI_USER` / `UI_PASSWORD`
-(they protect the monitor too).
+port 8089 reachable from your LAN only. To reach the UI over HTTPS (for
+example from your phone), put it behind a reverse proxy, see
+[https.md](https.md).
 
 To analyse the logs inside the container instead:
 

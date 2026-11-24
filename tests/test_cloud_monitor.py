@@ -133,7 +133,7 @@ class CloudApiTest(unittest.TestCase):
 
     def ui(self, auth):
         user, pw = auth or (None, None)
-        srv = start_web("127.0.0.1", 0, self.dir, user, pw, cloud=self.mon)
+        srv = start_web("127.0.0.1", 0, self.dir, user, pw, no_login_for_tests=not (user and pw), cloud=self.mon)
         self.servers.append(srv)
         return srv.server_address[1]
 

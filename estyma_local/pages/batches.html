@@ -120,7 +120,7 @@ const I18N = {
     "savedat": "saved {t}", "editedat": "edited {t}", "readat": "settings read {t}",
     "col.setting": "Setting", "col.this": "This batch", "col.prev": "Batch before", "col.now": "Now",
     "onlydiff": "Only changed values", "confirm.del": "Delete the settings saved on {d} ({s}) for good?",
-    "needauth": "Set UI_USER and UI_PASSWORD to delete saved settings.", "unreachable": "Not reachable ({e})",
+    "needauth": "Only the admin login can delete saved settings.", "unreachable": "Not reachable ({e})",
     "on": "on", "off": "off",
     "ago.s": "{n} s ago", "ago.min": "{n} min ago", "ago.h": "{n} h ago", "ago.d": "{n} d ago",
   },
@@ -138,13 +138,14 @@ const I18N = {
     "savedat": "gespeichert {t}", "editedat": "bearbeitet {t}", "readat": "Einstellungen gelesen {t}",
     "col.setting": "Einstellung", "col.this": "Diese Charge", "col.prev": "Charge davor", "col.now": "Jetzt",
     "onlydiff": "Nur geänderte Werte", "confirm.del": "Die am {d} gespeicherten Einstellungen ({s}) endgültig löschen?",
-    "needauth": "UI_USER und UI_PASSWORD setzen, um gespeicherte Einstellungen zu löschen.", "unreachable": "Nicht erreichbar ({e})",
+    "needauth": "Nur mit der Admin-Anmeldung können gespeicherte Einstellungen gelöscht werden.", "unreachable": "Nicht erreichbar ({e})",
     "on": "an", "off": "aus",
     "ago.s": "vor {n} s", "ago.min": "vor {n} min", "ago.h": "vor {n} h", "ago.d": "vor {n} T",
   },
 };
 const SERVER_MSG = {
   de: [
+    [/^read-only login: (.+) needs the admin login$/, "Nur-Lesen-Anmeldung: dafür ist die Admin-Anmeldung nötig"],
     [/^supplier is required$/, "Lieferant fehlt"],
     [/^(supplier|comment) is too long \(max (\d+) characters\)$/, "$1 ist zu lang (höchstens $2 Zeichen)"],
     [/^date must be YYYY-MM-DD$/, "Datum muss JJJJ-MM-TT sein"],
@@ -154,7 +155,6 @@ const SERVER_MSG = {
     [/^no such snapshot$/, "Eintrag nicht gefunden"],
     [/^too many snapshots \(max (\d+)\), delete old ones first$/, "Zu viele Einträge (höchstens $1), zuerst alte löschen"],
     [/^cannot save: (.+)$/, "Speichern fehlgeschlagen: $1"],
-    [/^set UI_USER and UI_PASSWORD to allow deleting saved settings from the web UI$/, "UI_USER und UI_PASSWORD setzen, um gespeicherte Einstellungen zu löschen"],
   ],
 };
 

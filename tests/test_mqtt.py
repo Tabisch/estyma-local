@@ -176,8 +176,13 @@ class StateTest(unittest.TestCase):
 
 class DiscoveryTest(unittest.TestCase):
     def test_configs(self):
-        cfgs = MP.discovery("boiler", "estyma/boiler", "homeassistant")
-        self.assertEqual(len(cfgs), len(MP.ENTITIES))
+        all_cfgs = MP.discovery("boiler", "estyma/boiler", "homeassistant")
+        cfgs = [(t, p) for t, p in all_cfgs if p]
+        ro = [k for k in MP.CONTROLS if k not in MP._IN_ENTITIES]
+        self.assertEqual(len(cfgs), len(MP.ENTITIES) + len(ro))
+        # the command variants are cleared
+        self.assertEqual(len(all_cfgs) - len(cfgs), len(MP.CONTROLS))
+        self.assertIn(("homeassistant/number/estyma_boiler/boiler_target/config", ""), all_cfgs)
         ids = set()
         for topic, payload in cfgs:
             cfg = json.loads(payload)
@@ -197,8 +202,121 @@ class DiscoveryTest(unittest.TestCase):
         # Read-only: no command topics.
         self.assertFalse(any("command_topic" in p for _, p in cfgs))
 
+    def test_control_configs(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        ctl = Controller("hybrid", tmp, state_file=f"{tmp}/state.json", clock=Clock(),
+                         writes_enabled=True)
+        ctl.observe_report(report(r8242_1=210, r8242_3=150, r8242_4=300, r8292_1=259))
+        pub = MP.MqttPublisher(ctl, "127.0.0.1", writes=True)
+        controls = pub.controls()
+        self.assertNotIn("boiler_on", controls)           # ALLOW_POWER_WRITES=0
+        self.assertIn("co1_timer_mon", controls)
+        self.assertEqual(controls["room_comfort_1"], {"min": 15.0, "max": 30.0, "step": 0.1})
+        self.assertEqual(controls["boiler_target"], {"min": 60, "max": 80, "step": 1})
+        self.assertEqual(controls["circuit1_program"]["options"], ["off", "economical", "comfortable"])
+        cfgs = dict(MP.discovery("boiler", "estyma/boiler", "homeassistant", controls))
+        num = json.loads(cfgs["homeassistant/number/estyma_boiler/boiler_target/config"])
+        self.assertEqual(num["command_topic"], "estyma/boiler/set/boiler_target")
+        self.assertEqual((num["min"], num["max"], num["mode"]), (60, 80, "box"))
+        self.assertEqual(cfgs["homeassistant/sensor/estyma_boiler/boiler_target/config"], "")
+        sel = json.loads(cfgs["homeassistant/select/estyma_boiler/circuit1_program/config"])
+        self.assertNotIn("unit_of_measurement", sel)
+        txt = json.loads(cfgs["homeassistant/text/estyma_boiler/co1_timer_mon/config"])
+        self.assertEqual(txt["entity_category"], "config")
+        self.assertRegex("06-22", txt["pattern"])
+        self.assertRegex("06-09, 16-22", txt["pattern"])
+        self.assertRegex("", txt["pattern"])
+        self.assertNotRegex("6 to 22", txt["pattern"])
+        # on/off still a binary sensor
+        self.assertTrue(cfgs["homeassistant/binary_sensor/estyma_boiler/boiler_on/config"])
+        self.assertEqual(cfgs["homeassistant/switch/estyma_boiler/boiler_on/config"], "")
+        # read-only without MQTT_WRITES
+        self.assertEqual(MP.MqttPublisher(ctl, "127.0.0.1").controls(), {})
+
     def test_from_env_off_without_host(self):
         self.assertIsNone(MP.from_env(None, {}))
+
+
+class CommandTest(unittest.TestCase):
+    """Commands without a broker: the publisher's results are collected."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.clock = Clock()
+        self.ctl = Controller("hybrid", self.tmp, state_file=f"{self.tmp}/state.json",
+                              clock=self.clock, writes_enabled=True, allow_power_writes=True)
+        regs = {f"r{8486 + 4 * d}_1": 0x3FFFC0 for d in range(7)}
+        self.ctl.observe_report(report(r8292_1=259, r8242_1=210, **regs))
+        self.pub = MP.MqttPublisher(self.ctl, "127.0.0.1", writes=True)
+        self.results = []
+        self.pub._result = lambda *a: self.results.append(a)
+
+    def pending(self):
+        return {k: p.value for k, p in self.ctl.pending.items()}
+
+    def test_number(self):
+        self.pub.command("boiler_target", "62")
+        self.assertEqual(self.pending(), {"boiler_target": 62})
+        self.assertTrue(self.results[-1][2])
+        self.assertEqual(self.pending()["boiler_target"], 62)
+        self.pub.command("room_comfort_1", "21.5")
+        self.assertEqual(self.pending()["room_comfort_1"], 215)
+        self.assertEqual(self.ctl.pending["boiler_target"].source, "mqtt")
+
+    def test_out_of_range_rejected(self):
+        self.pub.command("boiler_target", "95")
+        self.assertEqual(self.pending(), {})
+        key, _, ok, status, msg = self.results[-1]
+        self.assertFalse(ok)
+        self.assertIn("between", msg)
+
+    def test_switch_and_select(self):
+        self.pub.command("boiler_on", "OFF")
+        self.pub.command("circuit1_program", "economical")
+        self.assertEqual(self.pending(), {"boiler_on": 0, "circuit1_program": 1})
+        self.pub.command("circuit1_program", "temporary")     # never tested: not offered
+        self.assertFalse(self.results[-1][2])
+
+    def test_timer_day(self):
+        self.pub.command("co1_timer_sat", "08-20")
+        self.assertEqual(self.pending()["co1_timer_sat"], 0xFFF00)
+        self.assertEqual(len(self.pending()), 7)                # sent with the other days
+        self.pub.command("co1_timer_sun", "nonsense")
+        self.assertFalse(self.results[-1][2])
+
+    def test_rate_limited_command_waits_and_keeps_latest(self):
+        self.pub.command("boiler_target", "62")
+        self.pub.command("boiler_target", "63")                 # within WRITE_MIN_INTERVAL
+        self.pub.command("boiler_target", "64")
+        self.assertEqual(self.pending(), {"boiler_target": 62})
+        self.assertEqual(self.pub._cmds, {"boiler_target": 64})
+        self.clock.t += 11
+        self.pub.apply_commands()
+        self.assertEqual(self.pending(), {"boiler_target": 64})
+        self.assertEqual(self.pub._cmds, {})
+
+    def test_two_timer_days_quickly_are_merged(self):
+        self.pub.command("co1_timer_mon", "")
+        self.pub.command("co1_timer_tue", "")
+        self.clock.t += 11
+        self.pub.apply_commands()
+        self.assertEqual((self.pending()["co1_timer_mon"], self.pending()["co1_timer_tue"]), (0, 0))
+
+    def test_unknown_or_locked_key(self):
+        self.pub.command("hyst_on", "5")
+        self.assertIn("can be changed over MQTT", self.results[-1][4])
+        ro = MP.MqttPublisher(self.ctl, "127.0.0.1", writes=False)
+        ro._result = lambda *a: self.results.append(a)
+        ro.command("boiler_target", "62")
+        self.assertEqual(self.pending(), {})
+
+    def test_state_has_settings(self):
+        st, _ = MP.StateBuilder().build(self.ctl)
+        self.assertEqual(st["circuit1_program"], "comfortable")
+        self.assertEqual(st["room_comfort_1"], 21.0)
+        self.assertEqual(st["co1_timer_mon"], "06-22")
 
 
 def _free_port():
@@ -252,8 +370,9 @@ class BrokerTest(unittest.TestCase):
         pub = MP.MqttPublisher(ctl, "127.0.0.1", self.port, interval=0.1, stale=1)
         pub.start()
         self.addCleanup(pub.stop)
-        n = len(MP.ENTITIES)
-        self.wait_for(lambda m: sum(t.startswith("homeassistant/") for t in m) == n
+        n = len(MP.ENTITIES) + len([k for k in MP.CONTROLS if k not in MP._IN_ENTITIES])
+        self.wait_for(lambda m: sum(t.startswith("homeassistant/") and bool(p)
+                                    for t, p in m.items()) == n
                       and m.get("estyma/boiler/availability") == "offline")
         self.assertNotIn("estyma/boiler/state", self.msgs)
 
@@ -273,6 +392,27 @@ class BrokerTest(unittest.TestCase):
                 del self.msgs[t]
         self.sub.publish("homeassistant/status", "online")
         self.wait_for(lambda m: sum(t.startswith("homeassistant/sensor/") for t in m) > 5)
+
+    def test_commands(self):
+        ctl = Controller("hybrid", self.tmp, state_file=f"{self.tmp}/state.json",
+                         writes_enabled=True)
+        ctl.observe_report(report())
+        # A command left retained on the broker is not applied on connect.
+        self.sub.publish("estyma/boiler/set/boiler_target", "70", retain=True).wait_for_publish(2)
+        self.addCleanup(lambda: self.sub.publish("estyma/boiler/set/boiler_target", "", retain=True))
+        pub = MP.MqttPublisher(ctl, "127.0.0.1", self.port, interval=0.1, writes=True)
+        pub.start()
+        self.addCleanup(pub.stop)
+        self.wait_for(lambda m: m.get("homeassistant/number/estyma_boiler/boiler_target/config"))
+        cfg = json.loads(self.msgs["homeassistant/number/estyma_boiler/boiler_target/config"])
+        time.sleep(0.5)
+        self.assertEqual(ctl.pending, {})
+        self.sub.publish(cfg["command_topic"], "63")
+        self.wait_for(lambda m: "estyma/boiler/write" in m)
+        res = json.loads(self.msgs["estyma/boiler/write"])
+        self.assertEqual((res["key"], res["ok"], res["status"]), ("boiler_target", True, "pending"))
+        self.assertEqual(ctl.pending["boiler_target"].value, 63)
+        self.assertEqual(ctl.pending["boiler_target"].source, "mqtt")
 
 
 if __name__ == "__main__":

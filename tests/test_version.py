@@ -31,7 +31,7 @@ class FooterServedTest(unittest.TestCase):
         import urllib.request
         from estyma_local.web import start_web
         d = tempfile.mkdtemp()
-        ui = start_web("127.0.0.1", 0, d, "", "")
+        ui = start_web("127.0.0.1", 0, d, no_login_for_tests=True)
         self.addCleanup(ui.shutdown)
         port = ui.server_address[1]
         for path in ("/", "/logs", "/settings"):

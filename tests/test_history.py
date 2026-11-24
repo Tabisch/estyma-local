@@ -186,7 +186,7 @@ class WebTest(unittest.TestCase):
             return e.code, json.loads(e.read())
 
     def test_switch_needs_auth(self):
-        srv = start_web("127.0.0.1", 0, self.dir, raw_logs=self.raw)
+        srv = start_web("127.0.0.1", 0, self.dir, no_login_for_tests=True, raw_logs=self.raw)
         self.addCleanup(srv.shutdown)
         st, j = self.call(srv)
         self.assertEqual((st, j["enabled"], j["ui_auth"]), (200, False, False))

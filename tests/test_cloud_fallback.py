@@ -67,7 +67,7 @@ class CloudFallbackApiTest(unittest.TestCase):
 
     def ui(self, auth):
         user, pw = auth or (None, None)
-        srv = start_web("127.0.0.1", 0, self.dir, user, pw, fallback=self.fb)
+        srv = start_web("127.0.0.1", 0, self.dir, user, pw, no_login_for_tests=not (user and pw), fallback=self.fb)
         self.servers.append(srv)
         return srv.server_address[1]
 
@@ -106,7 +106,7 @@ class CloudFallbackApiTest(unittest.TestCase):
         self.assertEqual((code, res["enabled"]), (200, False))
 
     def test_missing_without_fallback(self):
-        srv = start_web("127.0.0.1", 0, self.dir)
+        srv = start_web("127.0.0.1", 0, self.dir, no_login_for_tests=True)
         self.servers.append(srv)
         code, _ = self.call(srv.server_address[1], "GET")
         self.assertEqual(code, 404)

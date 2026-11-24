@@ -58,6 +58,10 @@ class Settings:
     ui_port: int
     ui_user: str | None
     ui_password: str | None
+    ui_viewer_user: str | None
+    ui_viewer_password: str | None
+    ui_session_days: float
+    ui_trust_proxy: bool
     monitor_history_hours: float
     mode: str
     state_file: str | None
@@ -108,6 +112,8 @@ def load_config(argv=None, environ=None) -> Settings:
                    allow_power_writes=flag("ALLOW_POWER_WRITES"),
                    allow_untested_writes=flag("ALLOW_UNTESTED_WRITES"),
                    local_fallback=flag("LOCAL_FALLBACK"), cloud_mirror=flag("CLOUD_MIRROR"),
+                   ui_viewer_user=e("UI_VIEWER_USER"), ui_viewer_password=e("UI_VIEWER_PASSWORD"),
+                   ui_session_days=float(e("UI_SESSION_DAYS")), ui_trust_proxy=flag("UI_TRUST_PROXY"),
                    mqtt_host=e("MQTT_HOST"))
     if not cfg.upstream and (cfg.mode != "local" or cfg.cloud_mirror or cfg.local_fallback):
         p.error("UPSTREAM is required (env var or --upstream) unless MODE=local")
@@ -180,10 +186,13 @@ def _start_web(cfg: Settings, log: ExchangeLog, ctl: Controller, fallback=None,
               f"(change it in the web UI)", flush=True)
     except Exception as exc:  # never keep the proxy from starting
         print(f"log auto delete unavailable: {type(exc).__name__}: {exc}", flush=True)
-    start_web(cfg.listen_host, cfg.ui_port, cfg.log_dir, cfg.ui_user, cfg.ui_password,
-              monitor=mon, controller=ctl, cloud=cloud, retention=retention,
-              fallback=fallback, raw_logs=log.raw, fuel=fuel, snapshots=snapshots)
-    auth = "basic auth on" if cfg.ui_user and cfg.ui_password else "no auth"
+    from .auth import from_settings
+    authn = from_settings(cfg.ui_user, cfg.ui_password, cfg.ui_viewer_user,
+                          cfg.ui_viewer_password, cfg.log_dir, cfg.ui_session_days)
+    start_web(cfg.listen_host, cfg.ui_port, cfg.log_dir, monitor=mon, controller=ctl, cloud=cloud,
+              retention=retention, fallback=fallback, raw_logs=log.raw, fuel=fuel,
+              snapshots=snapshots, authn=authn, trust_proxy=cfg.ui_trust_proxy)
+    auth = "login on" + (", read-only user" if len(authn.users) > 1 else "")
     print(f"web UI on http://{cfg.listen_host}:{cfg.ui_port}/ ({auth})", flush=True)
 
 

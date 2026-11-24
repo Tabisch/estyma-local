@@ -194,7 +194,7 @@ One HA device "Estyma boiler" (model from `8485` device type, firmware from
 | Alarm active | binary_sensor, problem | 16460 counter + slot state | |
 | Alarm code / since | sensor | alarm slot | code text table to build |
 | Last report / connection | sensor timestamp, diagnostic; availability | server | |
-| Weekly timers circuit 1 | later: attributes or a custom card | 8486..8510 | encoding still unknown |
+| Weekly timers circuit 1 | text per day (`06-22`), with `MQTT_WRITES=1` | 8486..8510 | done: bit i = comfort hour i, all 7 days in one write |
 
 Rules:
 
@@ -274,6 +274,8 @@ The existing HA integration uses EstymaApi against the cloud. Plan:
 2. Register model + validation + tests (phase 2), can run in parallel.
 3. MQTT publisher read-only (phase 4 steps 1-3): useful immediately, even in
    proxy mode.
-4. Hybrid writes with safety layer, then MQTT command topics.
+4. Hybrid writes with safety layer, then MQTT command topics (done:
+   `MQTT_WRITES=1`, tested settings and the weekly timer, see
+   [home-assistant.md](home-assistant.md#controls)).
 5. Local mode, then cloud off.
 6. Native integration / EstymaApi local backend if still wanted.

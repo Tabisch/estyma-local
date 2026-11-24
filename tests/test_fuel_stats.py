@@ -1,5 +1,6 @@
 """Fuel consumption per period (fuel_stats.py) and its API / MQTT values."""
 
+import base64
 import json
 import shutil
 import tempfile
@@ -35,26 +36,30 @@ class PriceApiTest(unittest.TestCase):
         ctl = Controller("hybrid", d, state_file=f"{d}/state.json")
         ctl.registers[(8712, 1)] = (t, 10)
         stats = F.FuelStats(store, TZ)
-        srv = start_web("127.0.0.1", 0, d, controller=ctl, fuel=stats)
+        srv = start_web("127.0.0.1", 0, d, "u", "p", controller=ctl, fuel=stats)
         self.addCleanup(srv.server_close)
         self.addCleanup(srv.shutdown)
         base = f"http://127.0.0.1:{srv.server_address[1]}"
+        login = {"Authorization": "Basic " + base64.b64encode(b"u:p").decode()}
+
+        def get(path):
+            return urllib.request.urlopen(urllib.request.Request(base + path, headers=login))
 
         def post(path, body):
             req = urllib.request.Request(base + path, json.dumps(body).encode(),
-                                         {"Content-Type": "application/json"})
+                                         {"Content-Type": "application/json", **login})
             with urllib.request.urlopen(req) as r:
                 return json.load(r)
         day = datetime.fromtimestamp(t, TZ).date().isoformat()
         snap = post("/api/snapshots/save", {"supplier": "A", "date": day, "price": "350"})["snapshot"]
         self.assertEqual(snap["price"], 350.0)
-        with urllib.request.urlopen(base + "/api/fuel?period=day&count=1") as r:
+        with get("/api/fuel?period=day&count=1") as r:
             out = json.load(r)
         self.assertEqual(out["buckets"][0]["cost"], 3.5)
         self.assertEqual(out["cost_summary"]["today"], {"cost": 3.5, "partial": False})
         self.assertEqual(out["price"]["price"], 350.0)
         post("/api/snapshots/update", {"id": snap["id"], "price": ""})
-        with urllib.request.urlopen(base + "/api/fuel?period=day&count=1") as r:
+        with get("/api/fuel?period=day&count=1") as r:
             self.assertIsNone(json.load(r)["buckets"][0]["cost"])
 
 
@@ -194,7 +199,7 @@ class StatsTest(unittest.TestCase):
     def test_api(self):
         self.counter(ts(2027, 1, 15, 8), 1000)
         self.counter(ts(2027, 1, 15, 9), 1002)
-        srv = start_web("127.0.0.1", 0, self.dir, fuel=self.stats)
+        srv = start_web("127.0.0.1", 0, self.dir, no_login_for_tests=True, fuel=self.stats)
         self.addCleanup(srv.server_close)
         self.addCleanup(srv.shutdown)
         port = srv.server_address[1]

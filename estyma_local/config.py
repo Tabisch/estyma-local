@@ -60,10 +60,16 @@ ENV = [
         compose=False, example=False),
     Env("UI_PORT", "8089", "proxy", "Web UI port. Inside the container `0` turns the UI off; in "
         "`docker-compose.yml` it is the host port (inside it stays 8089)"),
-    Env("UI_USER", "", "proxy", "Basic auth user for the web UI. Also needed for writes, switching "
-        "cloud monitoring and deleting logs"),
-    Env("UI_PASSWORD", "", "proxy", "Basic auth password; auth is on only when user and password are "
-        "both set", secret=True),
+    Env("UI_USER", "", "proxy", "Admin user of the web UI (may change everything). Empty = `admin`"),
+    Env("UI_PASSWORD", "", "proxy", "Admin password. Empty = a password is created on first start, "
+        "printed to the container log and kept in `.ui-password` in the logs volume", secret=True),
+    Env("UI_VIEWER_USER", "", "proxy", "Optional read-only user: sees every page, cannot change "
+        "anything or download logs"),
+    Env("UI_VIEWER_PASSWORD", "", "proxy", "Password of the read-only user", secret=True),
+    Env("UI_SESSION_DAYS", "30", "proxy", "Days a browser stays logged in", compose=False, example=False),
+    Env("UI_TRUST_PROXY", "0", "proxy", "`1` = the UI is behind a reverse proxy (HTTPS): take the "
+        "client address for the failed-login limit from `X-Forwarded-For`. Only set it when the UI "
+        "port is reachable through the proxy alone, see [https.md](https.md)"),
     Env("LOG_RETENTION_DAYS", "0", "proxy", "Delete `.jsonl` / `.jsonl.gz` logs older than this many days, "
         "`0` = keep them all. Only the initial state: once it is changed on the settings page, "
         "the page's choice is kept in `log-retention.json`"),
@@ -131,6 +137,10 @@ ENV = [
     Env("MQTT_STALE_SECONDS", "300", "mqtt", "Seconds without a controller report until the device is "
         "unavailable. Keep it well above 100 s: after a slow or failed cloud reply the controller "
         "waits about 100 s before its next report"),
+    Env("MQTT_WRITES", "0", "mqtt", "`1` = Home Assistant may change the tested settings (boiler "
+        "target, heating program, room and buffer targets, weekly timer; on/off with "
+        "`ALLOW_POWER_WRITES=1`). Also needs `MODE=hybrid`/`local` and `WRITES_ENABLED=1`. Anyone "
+        "who can publish on the broker can then change them: give the broker a login"),
     Env("FUEL_KWH_PER_KG", "", "mqtt", "Calorific value (kWh/kg) for the energy sensor and the fuel "
         "statistics; empty = controller setting, else 4.8"),
     # -- standalone recorder ------------------------------------------------
