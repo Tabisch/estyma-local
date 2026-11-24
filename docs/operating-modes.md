@@ -21,13 +21,14 @@ from the cloud:
 Boiler target and on/off (`8195`, `8197`), the heating program (`8292`),
 the room comfort / eco targets (`8242`, `8264`), the buffer targets (`8468`,
 `8469`) and the weekly timer (`8486..8510`) were seen being written on the
-real controller (by the cloud) and are marked *tested*. The other settings
+real controller (by the cloud) and are marked *tested*, as is air correction
+(`8819`), written by the local server. The other settings
 use the same `ZAPIS` path and the cloud panel's ranges, but
 are marked *untested* on the page and stay locked unless
 `ALLOW_UNTESTED_WRITES=1`. Change them one at a time and check the result on
 the controller's own screen. Negative air correction (`8819`, -10..40 %) is
-written in two's complement (-10 as `65526`), the same way the controller
-reports it and its own minimum.
+written in two's complement (-5 as `65531`, confirmed 2026-11-24), the same
+way the controller reports it and its own minimum.
 
 The **weekly timer** of heating circuit 1 is written like the cloud writes
 it: all 7 day masks in one `ZAPIS` (Sunday `8510` first, Monday `8486`

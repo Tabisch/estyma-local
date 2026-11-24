@@ -208,7 +208,8 @@ GROUPS = {
 
 # Ranges are the ones the cloud panels offer (docs/registers.md). Only 8195,
 # 8197 (2026-11-08), 8292 (2026-11-16) and 8468, 8469, 8242, 8264
-# (2026-11-17) were seen being written by the cloud and taking effect; every other
+# (2026-11-17) were seen being written by the cloud and taking effect, 8819
+# (2026-11-24, 5, -5 and 0) by the local server; every other
 # write is untested and needs ALLOW_UNTESTED_WRITES=1 as well.
 _B = "burner"
 _SETTINGS = [
@@ -229,7 +230,7 @@ _SETTINGS = [
     _setting("return_min_temp", 8556, "boiler"),
     # Burner (service panel "Palnik"). Air correction is -10..40 %; negative
     # values are written in two's complement (Writable.to_raw).
-    _setting("air_correction", 8819, _B),
+    _setting("air_correction", 8819, _B, tested=True),
     _setting("power_min", 8816, _B),
     _setting("power_max", 8817, _B),
     *[_setting(f"blower_{p}", 8800 + i, _B) for i, p in enumerate((20, 40, 60, 80, 100), 1)],
